@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
 
+    #: Размышление модели (thinking-режим). У reasoning-моделей
+    #: (``qwen3``, ``deepseek-r1``) оно включается по умолчанию: модель
+    #: тратит токены на рассуждение и может вернуть его вместо JSON.
+    #: Агенту нужен строгий JSON, поэтому режим выключается явно.
+    ollama_think: bool = False
+
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
@@ -52,6 +58,39 @@ class Settings(BaseSettings):
     #: Сколько подтверждённых оснований считается достаточным, чтобы не
     #: идти в веб.
     web_min_citations: int = 2
+
+    #: Домены, с которых разрешено брать страницы. Пустой список — брать
+    #: можно отовсюду (кроме правил сайта в robots.txt). Домены пишутся
+    #: без ``www.`` — сравнение идёт по нормализованному имени.
+    allowed_domains: frozenset[str] = frozenset(
+        {
+            "ru.wikipedia.org",
+            "eprussia.ru",
+            "megafon.ru",
+            "mts.ru",
+            "beeline.ru",
+            "tass.ru",
+            "rbc.ru",
+            "vedomosti.ru",
+            "kommersant.ru",
+            "rg.ru",
+            "interfax.ru",
+            "cfo.ru",
+            "forbes.ru",
+            "vc.ru",
+            "habr.com",
+        }
+    )
+
+    #: Заголовок запроса к внешним сайтам. В нём указан контакт — без
+    #: этого Википедия и часть сайтов отвечают отказом.
+    user_agent: str = "product-factory-strategist/0.1 (contact@example.org)"
+
+    #: Сколько страниц разбирать за один выход в веб.
+    web_fetch_limit: int = 3
+
+    #: Сколько результатов поиска запрашивать у поисковика.
+    web_search_limit: int = 5
 
     #: Сколько подтверждённых оснований считается достаточным. Меньше —
     #: план исследования расширяется хуком.

@@ -15,8 +15,10 @@ import pytest
 
 from pf.ground import SupportStatus
 from pf.web import (
-    ALLOWED_DOMAINS,
+    SearchHit,
     WebSource,
+    allowed_domains,
+    decode_bing_url,
     is_allowed,
     verify_web_quote,
 )
@@ -49,8 +51,16 @@ def test_allowed_domains_are_restricted() -> None:
 
 def test_allowed_domains_list_is_not_empty() -> None:
     """Список разрешённых доменов задан."""
-    assert ALLOWED_DOMAINS
-    assert "ru.wikipedia.org" in ALLOWED_DOMAINS
+    domains = allowed_domains()
+    assert domains
+    assert "ru.wikipedia.org" in domains
+
+
+def test_www_prefix_is_normalized() -> None:
+    """``www.`` не делает домен другим."""
+    assert is_allowed("https://www.mts.ru/tariffs")
+    assert is_allowed("https://mts.ru/tariffs")
+    assert not is_allowed("https://example.com/page")
 
 
 def test_web_quote_is_never_confirmed() -> None:
@@ -85,8 +95,32 @@ def test_web_source_id_is_marked_as_external() -> None:
     assert source.source_id.startswith("web/")
 
 
-@pytest.mark.parametrize("domain", sorted(ALLOWED_DOMAINS))
+@pytest.mark.parametrize("domain", sorted(allowed_domains()))
 def test_every_allowed_domain_is_valid(domain: str) -> None:
     """Все разрешённые домены имеют осмысленный вид."""
     assert "." in domain
     assert " " not in domain
+    assert not domain.startswith("www.")
+
+
+def test_bing_redirect_is_decoded() -> None:
+    """Настоящий адрес достаётся из редиректа Bing.
+
+    Без этого в выдаче лежит адрес самой выдачи, а не сайта — и разбор
+    страницы бессмыслен.
+    """
+    # Bing кладёт в параметр "u" префикс "a1" и base64url адреса
+    encoded = "a1" + "aHR0cHM6Ly9leGFtcGxlLmNvbS9wYWdl"
+    href = f"https://www.bing.com/ck/a?!&&p=abc&u={encoded}"
+    assert decode_bing_url(href) == "https://example.com/page"
+
+
+def test_plain_url_is_not_decoded() -> None:
+    """Обычная ссылка не трогается."""
+    assert decode_bing_url("https://example.com/page") == "https://example.com/page"
+
+
+def test_search_hit_reports_domain() -> None:
+    """Домен результата известен без ``www.``."""
+    hit = SearchHit(url="https://www.mts.ru/tariffs", title="Тарифы")
+    assert hit.domain == "mts.ru"

@@ -384,12 +384,44 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
 
 def cmd_web(args: argparse.Namespace) -> int:
-    """Найти внешние источники по запросу.
+    """Найти внешние источники по запросу и разобрать найденные страницы.
 
     Внешние источники никогда не становятся подтверждёнными основаниями:
     их статус — «требует проверки».
     """
-    from pf.web import collect_web
+    from pf.web import collect_web, search_web
+    from pf.webfetch import fetch_pages
+
+    if args.parse:
+        hits = search_web(args.query, limit=args.limit)
+        if not hits:
+            _out("Ничего не найдено в интернете.")
+            return 1
+        _rule(f"Найдено в интернете: {args.query}")
+        _out(f"Результатов: {len(hits)}. Разбираю страницы…")
+        _out()
+        pages = fetch_pages(hits, limit=args.limit)
+        for hit in hits:
+            mark = CHECK if any(page.url == hit.url for page in pages) else "-"
+            _out(f"{mark} {hit.title}")
+            _out(f"    {hit.url}")
+            _out(f"    канал: {hit.provider}")
+            if hit.snippet:
+                _out(f"    {hit.snippet[:150]}")
+            _out()
+        if not pages:
+            _out("Страницы не разобраны: пустой текст или запрет robots.txt.")
+            return 1
+        _rule("Разобранные страницы")
+        for page in pages:
+            _out(f"{ARROW} {page.title}")
+            _out(f"    {page.url}")
+            _out(f"    абзацев: {len(page.paragraphs)}  статус: {page.status}")
+            if page.paragraphs:
+                _out(f"    {page.paragraphs[0][:180]}")
+            _out()
+        _out("Статус любого внешнего источника — «требует проверки».")
+        return 0
 
     sources = collect_web(args.query, limit=args.limit)
     if not sources:
@@ -479,6 +511,11 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser = subparsers.add_parser("web", help="найти внешние источники (требуют проверки)")
     web_parser.add_argument("query", help="поисковый запрос")
     web_parser.add_argument("--limit", type=int, default=3, help="сколько источников")
+    web_parser.add_argument(
+        "--parse",
+        action="store_true",
+        help="искать в интернете и разбирать найденные страницы",
+    )
     web_parser.set_defaults(func=cmd_web)
 
     return parser

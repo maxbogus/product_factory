@@ -178,6 +178,10 @@ class OllamaClient:
                 {"role": "user", "content": user},
             ],
         }
+        # Thinking-режим: reasoning-модели (qwen3, deepseek-r1) по умолчанию
+        # пишут рассуждение и могут вернуть его вместо JSON. Агент разбирает
+        # строгий JSON, поэтому режим выключается явно, а не «как получится».
+        payload["think"] = self.config.ollama_think
         url = f"{self.config.effective_base_url.rstrip('/')}/api/chat"
 
         try:

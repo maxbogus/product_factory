@@ -382,6 +382,42 @@ def test_human_answer_reaches_role_context() -> None:
     assert "Ответ человека" in context
 
 
+def test_web_context_reaches_role_context() -> None:
+    """Внешние источники попадают в контекст роли.
+
+    Раньше агент выходил в интернет, складывал материалы в состояние — и
+    модель их не видела. Теперь видят, но отдельным блоком: их статус
+    «требует проверки», и путать их с подтверждёнными основаниями нельзя.
+    """
+    workflow = _workflow()
+    state = _state()
+    bundle = _bundle()
+
+    state.phase = Phase.COLLECTING
+    state.results["web_context"] = "[web/Новости | https://example.com] Текст статьи."
+    _role, _payload, context = workflow._step_inputs(state, bundle)
+
+    assert "Новости" in context
+    assert "требует проверки" in context
+    # Локальные материалы не теряются.
+    assert "Транзитный" in context
+
+
+def test_local_and_web_materials_are_separated() -> None:
+    """Локальные и внешние материалы не смешиваются в один список."""
+    workflow = _workflow()
+    state = _state()
+    bundle = _bundle()
+
+    state.phase = Phase.COLLECTING
+    state.results["web_context"] = "ВНЕШНИЙ ТЕКСТ"
+    _role, _payload, context = workflow._step_inputs(state, bundle)
+
+    local_part, _, web_part = context.partition("ВНЕШНИЕ ИСТОЧНИКИ")
+    assert "Транзитный" in local_part
+    assert "ВНЕШНИЙ ТЕКСТ" in web_part
+
+
 def test_state_survives_process_restart() -> None:
     """Работа продолжается после перерыва: состояние читается с диска."""
     workflow = _workflow()

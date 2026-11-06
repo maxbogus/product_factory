@@ -441,7 +441,7 @@ class Workflow:
         return result
 
     def _search_web(self, state: SessionState) -> list[Any]:
-        """Выйти в веб, если локальных оснований не хватает.
+        """Выйти в интернет, если локальных оснований не хватает.
 
         Внешние источники никогда не становятся подтверждёнными: их
         статус — «требует проверки». Поэтому в журнале видно, что
@@ -455,15 +455,21 @@ class Workflow:
         """
         if not self.config.enable_web:
             return []
-        from pf.web import as_context, collect_web, summarize
+        from pf import webfetch
+        from pf.web import as_context, collect_web, search_web, summarize
+        from pf.webfetch import fetch_pages
 
         query = state.question
         sources = collect_web(query)
-        if not sources:
+        pages = fetch_pages(search_web(query, limit=self.config.web_search_limit))
+        if not sources and not pages:
             return []
-        state.results["web_sources"] = summarize(sources)
-        state.results["web_context"] = as_context(sources)
-        return sources
+
+        state.results["web_sources"] = summarize(sources) + webfetch.summarize(pages)
+        # Веб-контекст попадает в модель вместе с локальными абзацами:
+        # иначе агент выходит в интернет, но не видит, что там нашёл.
+        state.results["web_context"] = as_context(sources) + "\n\n" + webfetch.as_context(pages)
+        return pages
 
     def _apply_hooks(self, state: SessionState, result: StepResult) -> None:
         """Применить хуки к результату шага.
@@ -550,13 +556,15 @@ class Workflow:
             # абзацы, и его дело — взять из них то, что есть.
             # Сборщик обязан видеть материалы: без них он не может выбрать
             # основания и сочиняет цитаты. Контекст — те же абзацы, что
-            # потом получит аналитик.
-            context = self._bundle_context(bundle)
+            # потом получит аналитик. Внешние источники идут отдельным
+            # блоком: их статус — «требует проверки», и смешивать их с
+            # локальными основаниями нельзя.
+            context = self._materials(bundle, state)
             return "collector", {"query": query}, context
 
         if phase is Phase.ANALYZING:
             collector = state.results.get(Phase.COLLECTING.value, {})
-            context = self._bundle_context(bundle)
+            context = self._materials(bundle, state)
             return "analyst", {"collected": collector}, context
 
         if phase is Phase.OPTIONS:
@@ -574,7 +582,7 @@ class Workflow:
             redteam = state.results.get(Phase.REDTEAM.value, {})
             analysis = state.results.get(Phase.ANALYZING.value, {})
             frame = state.results.get(Phase.INTAKE.value, {})
-            context = self._bundle_context(bundle)
+            context = self._materials(bundle, state)
             return (
                 "strategy",
                 {
@@ -605,6 +613,50 @@ class Workflow:
         if bundle is None:
             return ""
         return bundle.context(limit=cls.CONTEXT_PASSAGES)
+
+    @staticmethod
+    def _web_context(state: SessionState) -> str:
+        """Собрать контекст из внешних источников.
+
+        Веб-материалы лежат отдельно от локальных: у них другой статус
+        подтверждения, и смешивать их нельзя — иначе агент перестаёт
+        различать «подтверждено» и «требует проверки».
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Текст внешних источников либо пустая строка.
+        """
+        context = state.results.get("web_context")
+        return context if isinstance(context, str) else ""
+
+    @classmethod
+    def _materials(cls, bundle: SourceBundle | None, state: SessionState) -> str:
+        """Собрать все материалы для роли: локальные и внешние.
+
+        Разделены намеренно: подтверждённые основания приходят из
+        локального среза, внешние материалы требуют проверки человеком.
+        Если смешать их в один список, агент перестанет различать, где
+        правда, а где гипотеза.
+
+        Args:
+            bundle: Локальные источники.
+            state: Состояние сессии.
+
+        Returns:
+            Текст материалов.
+        """
+        local = cls._bundle_context(bundle)
+        web = cls._web_context(state)
+        parts = []
+        if local:
+            parts.append(local)
+        if web:
+            parts.append(
+                "ВНЕШНИЕ ИСТОЧНИКИ (статус: требует проверки человеком, не подтверждено):\n" + web
+            )
+        return "\n\n".join(parts)
 
     @staticmethod
     def _human_context(state: SessionState) -> str:
