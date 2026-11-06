@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
+    ollama_model: str = "qwen3:8b"
 
     #: Размышление модели (thinking-режим). У reasoning-моделей
     #: (``qwen3``, ``deepseek-r1``) оно включается по умолчанию: модель
