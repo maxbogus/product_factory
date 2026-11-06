@@ -161,3 +161,20 @@ def test_next_step_requires_role() -> None:
     """Маршрут без роли — не маршрут."""
     with pytest.raises(ValidationError):
         NextStep(role="")
+
+
+def test_variants_accept_bare_list() -> None:
+    """Голый список вариантов принимается.
+
+    Модель часто отвечает именно так — и раньше это давало ошибку
+    валидации вместо принятого ответа.
+    """
+    variants = Variants.model_validate(
+        [
+            {"title": "А", "summary": "с", "objections": ["о"]},
+            {"title": "Б", "summary": "с", "objections": ["о"]},
+            {"title": "В", "summary": "с", "objections": ["о"]},
+        ]
+    )
+    assert len(variants.variants) == 3
+    assert all(item.objections for item in variants.variants)

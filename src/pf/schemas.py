@@ -418,6 +418,11 @@ class Variants(BaseModel):
         Модель может вернуть: список вариантов, одиночный вариант,
         либо объект с ключом ``variants``/``options``/``alternatives``.
         """
+        if isinstance(data, list):
+            # Ответ — голый список вариантов. Оборачиваем: иначе модель
+            # получает ошибку валидации, вместо которой можно было бы
+            # просто принять ответ.
+            return {"variants": data}
         if isinstance(data, dict):
             data = dict(data)
             raw = data.get("variants")
