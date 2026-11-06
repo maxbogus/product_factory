@@ -1,0 +1,63 @@
+name: CI
+
+# Проверки запускаются на каждом коммите: репозиторий должен оставаться
+# запускаемым, иначе требование «запуск по инструкции» перестаёт
+# выполняться.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установить зависимости
+        run: uv sync --extra dev --frozen
+
+      - name: Проверить стиль (ruff)
+        run: uv run ruff check src/ tests/ scripts/
+
+      - name: Проверить форматирование
+        run: uv run ruff format --check src/ tests/ scripts/
+
+      - name: Проверить типы (mypy --strict)
+        run: uv run mypy src/
+
+      - name: Детерминированные тесты
+        run: uv run pytest tests/ -m "not slow" -q
+
+      - name: Eval-сценарии
+        run: uv run pf eval
+
+  live-model:
+    # Живые тесты бьют по локальной модели: тяжёлый шаг, поэтому он
+    # запускается отдельно и не блокирует быстрые проверки.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установить зависимости
+        run: uv sync --extra dev --frozen
+
+      - name: Поднять Ollama с моделью
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          ollama pull qwen2.5:7b
+
+      - name: Живые тесты с моделью
+        run: uv run pytest tests/ -m slow -q

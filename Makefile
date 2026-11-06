@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON ?= python3
 
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
-        typecheck ci sources log cost clean wiki-index
+        typecheck ci sources log cost clean wiki-index bench mcp web
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -87,6 +87,16 @@ cost: ## Показать расход
 
 wiki-index: ## Показать статистику корпуса
 	@$(PYTHON) -c "import sys; sys.path.insert(0,'src'); from pf.corpus import get_corpus; c=get_corpus(); print(f'статей: {len(c)}'); from collections import Counter; [print(f'  {s}: {n}') for s, n in Counter(a.section for a in c.articles).most_common()]"
+
+bench: ## Замеры: агент против обычного чата (make bench MODELS="qwen3:8b")
+	@$(UV) run python scripts/bench.py $(if $(MODELS),--models $(MODELS),) $(if $(REPEATS),--repeats $(REPEATS),)
+
+mcp: ## Инструменты MCP-сервера (make mcp SERVER=static-parser)
+	@$(UV) run pf mcp $(or $(SERVER),static-parser)
+
+web: ## Поиск в интернете и разбор страниц (make web QUERY="отток абонентов")
+	@test -n "$(QUERY)" || (echo "Укажите запрос: make web QUERY=\"...\"" && exit 1)
+	@$(UV) run pf web "$(QUERY)" --parse --limit 3
 
 clean: ## Удалить кэши и артефакты прогона
 	@rm -rf .pytest_cache .ruff_cache .mypy_cache
