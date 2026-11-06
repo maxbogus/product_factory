@@ -97,9 +97,10 @@ def test_collect_returns_bundle_for_real_query() -> None:
     bundle = collect("удержание абонентов оператора связи тариф")
     assert bundle.articles
     assert bundle.passages
-    # В отобранном срезе не должно быть статей из несвязанных разделов.
+    # В отобранном срезе не должно быть статей из несвязанных разделов:
+    # доменный фильтр отсекает химию, математику и лингвистику.
     for passage in bundle.passages:
-        assert passage.section in {"security", "economics", "law"}
+        assert passage.section in {"security", "economics", "law", "telecom"}
 
 
 def test_verify_claim_rejects_irrelevant_but_real_source() -> None:

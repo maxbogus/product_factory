@@ -44,7 +44,7 @@
       "review_condition": "при каком факте пересмотреть",
       "review_by": "когда пересмотреть",
       "basis": [
-        {"source_id": "security/Мегафон (компания)", "paragraph": 126,
+        {"source_id": "<раздел>/<Заголовок>", "paragraph": 0,
          "quote": "основание"}
       ]
     }

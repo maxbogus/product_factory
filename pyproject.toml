@@ -53,3 +53,8 @@ python_version = "3.11"
 strict = true
 warn_unreachable = true
 mypy_path = "src"
+
+[dependency-groups]
+dev = [
+    "wikipedia>=1.4.0",
+]

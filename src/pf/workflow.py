@@ -40,6 +40,73 @@ from pf.sources import SourceBundle, collect
 from pf.state import Phase, SessionState, save
 
 
+def _describe_fields(
+    spec: dict[str, Any],
+    defs: dict[str, Any],
+    indent: int,
+) -> list[str]:
+    """Описать поля объекта схемы, развернув ссылки на модели.
+
+    Args:
+        spec: Описание поля или объекта.
+        defs: Определения моделей из ``$defs``.
+        indent: Отступ для выравнивания.
+
+    Returns:
+        Строки описания полей.
+    """
+    pad = " " * indent
+    ref = spec.get("$ref")
+    if isinstance(ref, str):
+        name = ref.rsplit("/", 1)[-1]
+        resolved = defs.get(name)
+        if resolved is None:
+            return [f"{pad}(модель {name})"]
+        spec = resolved
+
+    properties = spec.get("properties")
+    if not properties:
+        return [f"{pad}{_type_name(spec)}"]
+
+    required = set(spec.get("required", []))
+    lines: list[str] = []
+    for name, name_spec in properties.items():
+        mark = "" if name in required else " (необязательное)"
+        nested = name_spec.get("properties") or (
+            defs.get(name_spec.get("$ref", "").rsplit("/", 1)[-1], {}).get("properties")
+            if name_spec.get("$ref")
+            else None
+        )
+        if nested:
+            lines.append(f"{pad}{name}:")
+            lines.extend(_describe_fields(name_spec, defs, indent + 2))
+        else:
+            lines.append(f"{pad}{name}: {_type_name(name_spec)}{mark}")
+    return lines
+
+
+def _type_name(spec: dict[str, Any]) -> str:
+    """Описать тип поля схемы в человекочитаемом виде.
+
+    Args:
+        spec: Описание поля из JSON-схемы.
+
+    Returns:
+        Название типа.
+    """
+    kind = spec.get("type", "any")
+    if kind == "array":
+        return f"list[{_type_name(spec.get('items', {}))}]"
+    return {
+        "string": "str",
+        "integer": "int",
+        "number": "float",
+        "boolean": "bool",
+        "object": "object",
+        "null": "null",
+    }.get(str(kind), str(kind))
+
+
 @dataclass(slots=True)
 class StepResult:
     """Результат одного шага.
@@ -109,7 +176,7 @@ class Workflow:
             LLMError: Модель не ответила или ответ не прошёл проверку.
         """
         system = roles.load_prompt(role_name)
-        user = self._build_user(payload, context)
+        user = self._build_user(payload, context, role_name)
 
         last_error = ""
         attempts = 3
@@ -152,12 +219,23 @@ class Workflow:
         )
 
     @staticmethod
-    def _build_user(payload: dict[str, Any], context: str) -> str:
+    def _build_user(
+        payload: dict[str, Any],
+        context: str,
+        role_name: str = "",
+    ) -> str:
         """Собрать текст задачи для модели.
+
+        В запрос входит **схема ответа** — из той же схемы, по которой
+        потом проверяется результат. Это не украшение: при длинном входе
+        модель возвращает структуру того, что видела (ключи «variants»,
+        «analysis»), вместо требуемой. Схема в промпте при этом
+        вытесняется объёмом данных и перестаёт работать.
 
         Args:
             payload: Данные роли.
             context: Текстовый контекст.
+            role_name: Роль, для которой строится запрос.
 
         Returns:
             Текст запроса.
@@ -166,8 +244,42 @@ class Workflow:
         if context:
             parts.append(f"МАТЕРИАЛЫ:\n{context}")
         parts.append("ДАННЫЕ:\n" + json.dumps(payload, ensure_ascii=False, indent=2))
-        parts.append("Верни ТОЛЬКО JSON по схеме из инструкции, без пояснений.")
+        if role_name:
+            parts.append(Workflow._schema_hint(role_name))
+        parts.append("Верни ТОЛЬКО JSON по схеме выше, без пояснений.")
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _schema_hint(role_name: str) -> str:
+        """Собрать подсказку со схемой ответа роли.
+
+        Вложенные модели разворачиваются: в JSON-схеме они лежат в
+        ``$defs`` под именем класса и подставляются ссылкой ``$ref``.
+        Без развёртки подсказка показывала бы пустые блоки — ровно то,
+        из-за чего модель возвращала не те поля.
+
+        Args:
+            role_name: Идентификатор роли.
+
+        Returns:
+            Текст с перечнем полей ответа.
+        """
+        try:
+            schema = roles.schema_for(role_name).model_json_schema()
+        except KeyError:
+            return ""
+        defs = schema.get("$defs", {})
+        lines = [
+            "СХЕМА ОТВЕТА (строго эти ключи, других не возвращай):",
+        ]
+        for name, spec in schema.get("properties", {}).items():
+            lines.append(f"  {name}:")
+            lines.extend(_describe_fields(spec, defs, indent=2))
+        lines.append(
+            "Ключи из блока ДАННЫЕ — это входные данные, их не нужно "
+            "возвращать. Верни только поля своей схемы."
+        )
+        return "\n".join(lines)
 
     # ── Проверка оснований ──────────────────────────────────────────────────
 
@@ -280,11 +392,11 @@ class Workflow:
         phase = state.phase
 
         if phase is Phase.INTAKE:
-            return "intake", {"question": state.question}, ""
+            return "intake", {"question": state.question}, self._human_context(state)
 
         if phase is Phase.PLANNING:
             frame = state.results.get(Phase.INTAKE.value, {})
-            return "planner", {"task": frame}, ""
+            return "planner", {"task": frame}, self._human_context(state)
 
         if phase is Phase.COLLECTING:
             plan = state.results.get(Phase.PLANNING.value, {})
@@ -296,7 +408,11 @@ class Workflow:
                     " ".join(plan.get("questions", [])[:5]),
                 ]
             )
-            return "collector", {"query": query, "plan": plan}, ""
+            # Сборщик обязан видеть материалы: без них он не может выбрать
+            # основания и сочиняет цитаты. Контекст — те же абзацы, что
+            # потом получит аналитик.
+            context = self._bundle_context(bundle)
+            return "collector", {"query": query, "plan": plan}, context
 
         if phase is Phase.ANALYZING:
             collector = state.results.get(Phase.COLLECTING.value, {})
@@ -349,6 +465,26 @@ class Workflow:
         if bundle is None:
             return ""
         return bundle.context(limit=cls.CONTEXT_PASSAGES)
+
+    @staticmethod
+    def _human_context(state: SessionState) -> str:
+        """Собрать ответы человека для роли.
+
+        Ответ, который человек дал на вопрос агента, должен попасть в
+        контекст следующего шага. Иначе агент спрашивает, человек
+        отвечает — и ответ теряется: работа продолжается вслепую.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Текст ответов либо пустая строка.
+        """
+        answers = state.results.get("human_answers") or []
+        if not answers:
+            return ""
+        lines = [f"Ответ человека: {text}" for text in answers]
+        return "\n".join(lines)
 
     @staticmethod
     def _serialize(data: Any) -> dict[str, Any]:

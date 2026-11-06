@@ -72,7 +72,7 @@
     "deliberate_omissions": ["от чего отказались и почему"],
     "value_to_cost": "связь пользы с затратами и доходами",
     "evidence": [
-      {"source_id": "security/Мегафон (компания)", "paragraph": 126,
+      {"source_id": "<раздел>/<Заголовок>", "paragraph": 0,
        "quote": "основание выбора"}
     ]
   },
