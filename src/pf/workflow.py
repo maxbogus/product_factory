@@ -500,6 +500,11 @@ class Workflow:
             frame = state.results.get(Phase.INTAKE.value, {})
             return "planner", {"task": frame}, self._human_context(state)
 
+        if phase is Phase.ROUTING:
+            frame = state.results.get(Phase.INTAKE.value, {})
+            plan = state.results.get(Phase.PLANNING.value, {})
+            return "router", {"task": frame, "plan": plan}, self._human_context(state)
+
         if phase is Phase.COLLECTING:
             plan = state.results.get(Phase.PLANNING.value, {})
             frame = state.results.get(Phase.INTAKE.value, {})

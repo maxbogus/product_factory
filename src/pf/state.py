@@ -29,6 +29,8 @@ class Phase(StrEnum):
     INTAKE = "intake"
     #: План исследования: какие вопросы могут изменить решение.
     PLANNING = "planning"
+    #: Маршрутизация: проверка, что работа идёт верным путём.
+    ROUTING = "routing"
     #: Сбор источников.
     COLLECTING = "collecting"
     #: Разбор: факты, гипотезы, пробелы.
@@ -50,6 +52,7 @@ class Phase(StrEnum):
         return {
             Phase.INTAKE: "Постановка задачи",
             Phase.PLANNING: "План исследования",
+            Phase.ROUTING: "Маршрутизация",
             Phase.COLLECTING: "Сбор источников",
             Phase.ANALYZING: "Разбор источников",
             Phase.OPTIONS: "Варианты решения",

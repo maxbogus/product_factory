@@ -104,7 +104,8 @@ def test_missing_session_returns_none() -> None:
 def test_phase_order_is_sequential() -> None:
     """Фазы идут в заданном порядке — это и есть рабочий процесс."""
     assert Phase.INTAKE.next is Phase.PLANNING
-    assert Phase.PLANNING.next is Phase.COLLECTING
+    assert Phase.PLANNING.next is Phase.ROUTING
+    assert Phase.ROUTING.next is Phase.COLLECTING
     assert Phase.COLLECTING.next is Phase.ANALYZING
     assert Phase.ANALYZING.next is Phase.OPTIONS
     assert Phase.OPTIONS.next is Phase.REDTEAM
@@ -112,6 +113,23 @@ def test_phase_order_is_sequential() -> None:
     assert Phase.STRATEGY.next is Phase.KEEPER
     assert Phase.KEEPER.next is Phase.DONE
     assert Phase.DONE.next is Phase.DONE
+
+
+def test_every_phase_has_a_role() -> None:
+    """У каждой фазы есть роль, которая её выполняет.
+
+    Фаза без роли — это фаза, которая молча ничего не делает: работа
+    проходит мимо неё, а человек этого не видит.
+    """
+    from pf.workflow import Workflow
+
+    state = SessionState(session_id="roles")
+    for phase in Phase:
+        if phase is Phase.DONE:
+            continue
+        state.phase = phase
+        role, _payload, _context = Workflow()._step_inputs(state, None)
+        assert role != "", f"у фазы {phase.value} нет роли"
 
 
 def test_work_can_resume_from_saved_phase() -> None:

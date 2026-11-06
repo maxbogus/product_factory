@@ -124,9 +124,12 @@ def prompts_root() -> Path:
     return settings.prompts_dir / "roles"
 
 
-@lru_cache(maxsize=32)
 def load_prompt(role_name: str) -> str:
-    """Загрузить промпт роли.
+    """Загрузить промпт роли вместе с методическими знаниями.
+
+    Кэширование — по времени изменения файлов, а не по имени роли. Иначе
+    правка промпта или методики не подхватывалась бы до перезапуска, а
+    обещание «правится без перезапуска» оказалось бы неправдой.
 
     Args:
         role_name: Идентификатор роли.
@@ -145,7 +148,62 @@ def load_prompt(role_name: str) -> str:
             f"не найден файл промпта роли «{role.title_ru}»: {path}. "
             "Без него агент не знает, что делать."
         )
-    return path.read_text(encoding="utf-8")
+    prompt = path.read_text(encoding="utf-8")
+    return _with_methods(prompt, role_name)
+
+
+def _prompt_stamp(role_name: str) -> tuple[float, ...]:
+    """Отметка времени изменения файлов знаний роли.
+
+    Args:
+        role_name: Идентификатор роли.
+
+    Returns:
+        Временные метки файлов: промпт и его методики.
+    """
+    role = ROLES.get(role_name)
+    if role is None:
+        return ()
+    path = prompts_root() / role.prompt_file
+    stamps = [path.stat().st_mtime if path.exists() else 0.0]
+    from pf.knowledge import ROLE_METHODS
+
+    for name in ROLE_METHODS.get(role_name, ()):
+        method = settings.methods_dir / f"{name}.md"
+        stamps.append(method.stat().st_mtime if method.exists() else 0.0)
+    return tuple(stamps)
+
+
+def _with_methods(prompt: str, role_name: str) -> str:
+    """Дополнить инструкцию роли методическими знаниями.
+
+    Методики из ``methods/`` — второй слой знаний по брифу: постоянные
+    инструкции говорят «что делать», методики — «по каким правилам».
+    До подключения они лежали в файлах, но модель их не видела.
+
+    Объём ограничен: локальная модель небольшого размера теряет формат
+    ответа на длинной инструкции. Методики — самый дешёвый способ это
+    испортить, поэтому они подставляются последними и коротко.
+
+    Args:
+        prompt: Текст инструкции роли.
+        role_name: Идентификатор роли.
+
+    Returns:
+        Инструкция с методиками.
+    """
+    from pf.knowledge import knowledge_for
+
+    methods = knowledge_for(role_name)
+    if not methods:
+        return prompt
+    return (
+        f"{prompt}\n\n---\n\n"
+        "## Методические знания\n\n"
+        "Это правила работы, общие для всех ролей. Они уточняют инструкцию "
+        "выше, но не отменяют её.\n\n"
+        f"{methods}"
+    )
 
 
 def schema_for(role_name: str) -> type[BaseModel]:

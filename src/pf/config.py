@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     prompts_dir: Path = Path("prompts")
     methods_dir: Path = Path("methods")
     hooks_dir: Path = Path("hooks")
+    skills_dir: Path = Path("skills")
 
     @property
     def effective_base_url(self) -> str:
