@@ -28,6 +28,7 @@ def _project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     directory = tmp_path / "project"
     directory.mkdir()
     monkeypatch.setattr("pf.config.settings.project_dir", directory)
+    monkeypatch.setattr("pf.config.settings.knowledge_dir", tmp_path / "knowledge")
     return directory
 
 
@@ -239,3 +240,60 @@ def test_csv_value_with_comma_stays_whole(_project: Path) -> None:
     assert any("11,923 млн абонентов" in row for row in rows), (
         f"значение с запятой должно остаться целым, получено: {rows}"
     )
+
+
+def test_knowledge_manifest_records_source_and_date(tmp_path: Path) -> None:
+    """Манифест должен хранить источник, дату и хеш.
+
+    По манифесту видно, на какие данные опирался вывод. При пересмотре
+    выводов первое, что нужно проверить, — та ли это была версия.
+    """
+    from pf.knowledge_store import read_manifest, write_manifest
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "cbr.xml").write_text("<xml>данные</xml>", encoding="utf-8")
+
+    entries = write_manifest(
+        raw,
+        [
+            {
+                "name": "cbr.xml",
+                "url": "https://www.cbr.ru/",
+                "retrieved": "2026-11-06",
+                "kind": "xml",
+                "note": "Ключевая ставка",
+            }
+        ],
+    )
+    assert len(entries) == 1
+    manifest = read_manifest(raw)
+    assert manifest
+    entry = manifest[0]
+    assert entry["url"] == "https://www.cbr.ru/"
+    assert entry["retrieved"] == "2026-11-06"
+    assert len(entry["sha256"]) == 64
+
+
+def test_knowledge_manifest_survives_missing_file(tmp_path: Path) -> None:
+    """Файл, которого уже нет, не должен ломать чтение манифеста."""
+    from pf.knowledge_store import read_manifest, write_manifest
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "a.txt").write_text("данные", encoding="utf-8")
+    write_manifest(raw, [{"name": "a.txt", "url": "https://example.org/"}])
+    (raw / "a.txt").unlink()
+
+    manifest = read_manifest(raw)
+    assert manifest
+    assert manifest[0]["name"] == "a.txt"
+
+
+def test_knowledge_manifest_is_not_empty_for_empty_dir(tmp_path: Path) -> None:
+    """Пустой каталог — пустой манифест, без ошибки."""
+    from pf.knowledge_store import read_manifest
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    assert read_manifest(raw) == []

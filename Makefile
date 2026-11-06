@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON ?= python3
 
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
-        typecheck ci sources log cost clean wiki-index bench mcp web materials
+        typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -95,6 +95,12 @@ ci: ## Полный прогон проверок
 
 materials: ## Показать материалы проекта (документы, таблицы, данные)
 	@$(UV) run pf materials
+
+knowledge: ## Показать хранилище знаний (выгрузки, источники, хеши)
+	@$(UV) run pf knowledge
+
+fetch-data: ## Собрать открытые данные в хранилище знаний
+	@$(UV) run python scripts/fetch_open_data.py
 
 sources: ## Показать источники: make sources QUERY="запрос"
 	@test -n "$(QUERY)" || (echo "Укажите запрос: make sources QUERY=\"...\"" && exit 1)

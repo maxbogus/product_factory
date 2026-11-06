@@ -165,6 +165,11 @@ class Settings(BaseSettings):
     #: слой знаний — он относится к конкретной задаче и не попадает
     #: в инструкции ролей.
     project_dir: Path = Path("project")
+
+    #: Хранилище знаний: сырые выгрузки открытых данных и манифест
+    #: с provenance. Отдельно от материалов проекта: здесь лежит то,
+    #: что агент скачал сам, с датой и хешем версии.
+    knowledge_dir: Path = Path("knowledge")
     prompts_dir: Path = Path("prompts")
     methods_dir: Path = Path("methods")
     hooks_dir: Path = Path("hooks")

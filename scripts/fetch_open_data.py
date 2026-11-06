@@ -18,12 +18,10 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import sys
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -33,8 +31,9 @@ CBR_KEY_RATE_URL = (
     "?date_req1=01/01/2026&date_req2=31/03/2026&VAL_NM_RQ=R01235"
 )
 
-#: Куда складывать материалы.
-OUTPUT_DIR = Path("project/data")
+#: Куда складывать сырые выгрузки. По дате: каждая выгрузка — версия
+#: данных, и по манифесту видно, чем она отличается от предыдущей.
+RAW_DIR = Path("knowledge/raw")
 
 #: Идентификатор источника — он попадёт в цитаты агента.
 SOURCE_ID = "cbr.ru/key-rate"
@@ -87,43 +86,20 @@ def write_csv(rows: list[dict[str, str]], path: Path) -> None:
     path.write_text(buffer.getvalue(), encoding="utf-8")
 
 
-def write_metadata(
-    path: Path,
-    *,
-    title: str,
-    url: str,
-    retrieved: str,
-    rows: int,
-    note: str,
-) -> None:
-    """Записать метаданные материала.
-
-    Args:
-        path: Путь к файлу метаданных.
-        title: Заголовок материала.
-        url: Адрес источника.
-        retrieved: Дата получения.
-        rows: Сколько записей в материале.
-        note: Пояснение для человека.
-    """
-    payload: dict[str, Any] = {
-        "title": title,
-        "url": url,
-        "retrieved": retrieved,
-        "rows": rows,
-        "note": note,
-    }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 def main() -> int:
-    """Собрать открытые данные и записать их в материалы проекта.
+    """Собрать открытые данные в хранилище знаний.
+
+    Выгрузка кладётся в ``knowledge/raw/<дата>/`` и описывается в
+    манифесте: адрес источника, дата получения, хеш содержимого. По
+    хешу видно, изменились ли данные с момента, когда на них опирался
+    вывод.
 
     Returns:
         Код возврата.
     """
     retrieved = datetime.now(UTC).date().isoformat()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    target = RAW_DIR / retrieved
+    target.mkdir(parents=True, exist_ok=True)
 
     try:
         rows = fetch_key_rate()
@@ -135,24 +111,31 @@ def main() -> int:
         print("ОШИБКА: Банк России вернул пустой документ", file=sys.stderr)
         return 1
 
-    csv_path = OUTPUT_DIR / "cbr_key_rate_2026_q1.csv"
+    csv_path = target / "cbr_key_rate.csv"
     write_csv(rows, csv_path)
-    write_metadata(
-        OUTPUT_DIR / "cbr_key_rate_2026_q1.json",
-        title="Ключевая ставка Банка России, январь-март 2026",
-        url=CBR_KEY_RATE_URL,
-        retrieved=retrieved,
-        rows=len(rows),
-        note=(
-            "Открытые данные Банка России. Макро-контекст для продуктовых "
-            "решений: стоимость денег влияет на решение абонента отключить "
-            "дополнительные услуги."
-        ),
+
+    from pf.knowledge_store import write_manifest
+
+    entries = write_manifest(
+        target,
+        [
+            {
+                "name": csv_path.name,
+                "url": CBR_KEY_RATE_URL,
+                "retrieved": retrieved,
+                "kind": "csv",
+                "note": (
+                    "Ключевая ставка Банка России. Макро-контекст: стоимость "
+                    "денег влияет на решение абонента отключить допуслуги."
+                ),
+            }
+        ],
     )
 
     values = [float(row["значение_процентов"]) for row in rows]
     change = (values[-1] - values[0]) / values[0] * 100
     print(f"Сохранено: {csv_path} ({len(rows)} записей)")
+    print(f"sha256: {entries[0]['sha256'][:16]}…")
     print(f"Ключевая ставка: {values[0]:.2f}% → {values[-1]:.2f}% ({change:+.2f}% за период)")
     return 0
 

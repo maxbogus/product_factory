@@ -337,6 +337,44 @@ def cmd_materials(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── knowledge ───────────────────────────────────────────────────────────────
+
+
+def cmd_knowledge(args: argparse.Namespace) -> int:
+    """Показать хранилище знаний: сырые выгрузки и их provenance.
+
+    Для каждой выгрузки — адрес источника, дата получения и хеш. По
+    хешу видно, изменились ли данные с момента, когда на них опирался
+    вывод: это первое, что проверяется при пересмотре выводов.
+    """
+    from pf.knowledge_store import list_snapshots, raw_dir, read_manifest
+
+    snapshots = list_snapshots()
+    if not snapshots:
+        _out("Хранилище знаний пусто.")
+        _out("Собрать открытые данные: uv run python scripts/fetch_open_data.py")
+        return 0
+
+    _rule(f"Хранилище знаний: {len(snapshots)} выгрузок")
+    for date in snapshots:
+        directory = raw_dir(date)
+        entries = read_manifest(directory)
+        _out(f"{ARROW} {date}  файлов: {len(entries)}")
+        for entry in entries:
+            _out(f"    {entry.get('name', '?')}")
+            if entry.get("url"):
+                _out(f"        источник: {entry['url']}")
+            if entry.get("retrieved"):
+                _out(f"        получено: {entry['retrieved']}")
+            digest = str(entry.get("sha256", ""))
+            if digest:
+                _out(f"        sha256: {digest[:16]}…")
+            if entry.get("note"):
+                _out(f"        {entry['note'][:110]}")
+        _out()
+    return 0
+
+
 # ── log / cost ──────────────────────────────────────────────────────────────
 
 
@@ -612,6 +650,11 @@ def build_parser() -> argparse.ArgumentParser:
         "materials", help="показать материалы проекта (документы и таблицы)"
     )
     materials.set_defaults(func=cmd_materials)
+
+    knowledge = subparsers.add_parser(
+        "knowledge", help="показать хранилище знаний (выгрузки и их источники)"
+    )
+    knowledge.set_defaults(func=cmd_knowledge)
 
     sessions = subparsers.add_parser("sessions", help="список сохранённых сессий")
     sessions.set_defaults(func=cmd_sessions)
