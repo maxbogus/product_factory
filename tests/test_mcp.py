@@ -81,3 +81,55 @@ def test_server_spec_carries_env() -> None:
     """Описание сервера умеет хранить переменные окружения."""
     spec = ServerSpec(name="x", command="npx", env={"TOKEN": "abc"})
     assert spec.env["TOKEN"] == "abc"
+
+
+def test_all_servers_are_configured() -> None:
+    """В конфигурации должны быть все заявленные серверы.
+
+    Заявленные серверы — это то, что агент обещает уметь: разбор
+    страниц, документы, слепки интерфейсов, поисковый спрос.
+    """
+    servers = load_config()
+    expected = {
+        "static-parser",
+        "parser-storage",
+        "document-transformer",
+        "ux-snapshot",
+        "vision",
+        "wordstat",
+    }
+    assert expected <= set(servers), f"не хватает серверов: {expected - set(servers)}"
+
+
+def test_cursor_config_matches_server_config() -> None:
+    """Конфиг для Cursor должен описывать те же серверы, что и основной."""
+    root = Path(__file__).resolve().parent.parent
+    cursor = json.loads((root / "docs" / "mcp" / "cursor-mcp.json").read_text(encoding="utf-8"))
+    servers = load_config()
+    assert set(cursor["mcpServers"]) == set(servers), (
+        "конфиг для Cursor разошёлся с основной конфигурацией"
+    )
+
+
+def test_gigacode_config_matches_server_config() -> None:
+    """Конфиг для GigaCode должен описывать те же серверы, что и основной."""
+    root = Path(__file__).resolve().parent.parent
+    gigacode = json.loads((root / ".gigacode_vsc" / "gigacode.jsonc").read_text(encoding="utf-8"))
+    servers = load_config()
+    assert set(gigacode["mcpServers"]) == set(servers), (
+        "конфиг для GigaCode разошёлся с основной конфигурацией"
+    )
+
+
+def test_wordstat_key_is_passed_to_server() -> None:
+    """Ключ к Wordstat должен доходить до сервера.
+
+    Без переменных окружения сервер запустится, но не получит доступ к
+    API: ошибка будет выглядеть как «сервер не отвечает», а не как
+    «нет ключа».
+    """
+    root = Path(__file__).resolve().parent.parent
+    payload = json.loads((root / "mcp" / "servers.json").read_text(encoding="utf-8"))
+    env = payload["mcpServers"]["wordstat"]["env"]
+    assert env["YANDEX_SEARCH_API_KEY"] == "${YANDEX_SEARCH_API_KEY}"
+    assert env["YANDEX_FOLDER_ID"] == "${YANDEX_FOLDER_ID}"

@@ -2,13 +2,55 @@
   "mcpServers": {
     "static-parser": {
       "command": "${PF_MCP_DIR}/static-parser-mcp/.venv/bin/python",
-      "args": ["server.py"],
-      "cwd": "${PF_MCP_DIR}/static-parser-mcp"
+      "args": [
+        "server.py"
+      ],
+      "cwd": "${PF_MCP_DIR}/static-parser-mcp",
+      "description": "Разбор веб-страниц: абзацы, метаданные, robots.txt"
     },
     "parser-storage": {
       "command": "${PF_MCP_DIR}/parser-storage-mcp/.venv/bin/python",
-      "args": ["server.py"],
-      "cwd": "${PF_MCP_DIR}/parser-storage-mcp"
+      "args": [
+        "server.py"
+      ],
+      "cwd": "${PF_MCP_DIR}/parser-storage-mcp",
+      "description": "Хранилище разобранных документов: полнотекст, дедупликация"
+    },
+    "document-transformer": {
+      "command": "${PF_MCP_DIR}/.venv/bin/python",
+      "args": [
+        "${PF_MCP_DIR}/document-transformer-mcp/server.py"
+      ],
+      "cwd": "${PF_MCP_DIR}/document-transformer-mcp",
+      "description": "Извлечение текста из PDF, DOCX и изображений с OCR"
+    },
+    "ux-snapshot": {
+      "command": "${PF_MCP_DIR}/ux-snapshot-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "${PF_MCP_DIR}/ux-snapshot-mcp",
+      "description": "Слепки интерфейсов: очищенный HTML для анализа UX"
+    },
+    "vision": {
+      "command": "${PF_MCP_DIR}/vision-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "${PF_MCP_DIR}/vision-mcp",
+      "description": "Скриншоты и распознавание текста на экране"
+    },
+    "wordstat": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "yandex-wordstat-mcp"
+      ],
+      "env": {
+        "YANDEX_SEARCH_API_KEY": "${YANDEX_SEARCH_API_KEY}",
+        "YANDEX_FOLDER_ID": "${YANDEX_FOLDER_ID}"
+      },
+      "description": "Поисковый спрос Яндекс Wordstat: частотность и динамика запросов"
     }
   }
 }

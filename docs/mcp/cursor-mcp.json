@@ -1,0 +1,51 @@
+{
+  "mcpServers": {
+    "static-parser": {
+      "command": "/ПУТЬ/К/mcp-servers/static-parser-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "/ПУТЬ/К/mcp-servers/static-parser-mcp"
+    },
+    "parser-storage": {
+      "command": "/ПУТЬ/К/mcp-servers/parser-storage-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "/ПУТЬ/К/mcp-servers/parser-storage-mcp"
+    },
+    "document-transformer": {
+      "command": "/ПУТЬ/К/mcp-servers/.venv/bin/python",
+      "args": [
+        "/ПУТЬ/К/mcp-servers/document-transformer-mcp/server.py"
+      ],
+      "cwd": "/ПУТЬ/К/mcp-servers/document-transformer-mcp"
+    },
+    "ux-snapshot": {
+      "command": "/ПУТЬ/К/mcp-servers/ux-snapshot-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "/ПУТЬ/К/mcp-servers/ux-snapshot-mcp"
+    },
+    "vision": {
+      "command": "/ПУТЬ/К/mcp-servers/vision-mcp/.venv/bin/python",
+      "args": [
+        "server.py"
+      ],
+      "cwd": "/ПУТЬ/К/mcp-servers/vision-mcp"
+    },
+    "wordstat": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "yandex-wordstat-mcp"
+      ],
+      "cwd": "",
+      "env": {
+        "YANDEX_SEARCH_API_KEY": "${YANDEX_SEARCH_API_KEY}",
+        "YANDEX_FOLDER_ID": "${YANDEX_FOLDER_ID}"
+      }
+    }
+  }
+}
