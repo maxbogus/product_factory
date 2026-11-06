@@ -126,6 +126,11 @@ def as_text(value: object) -> str:
 
 FactKind = Literal["факт", "гипотеза", "прогноз"]
 
+#: Бренды операторов связи. В ключевом сообщении они недопустимы:
+#: коммуникация продукта обращается к аудитории своего продукта, а не
+#: конкурента. В контексте рынка (`barrier`, анализ) они допустимы.
+COMPETITOR_BRANDS: tuple[str, ...] = ("мтс", "билайн", "теле2", "tele2", "ростелеком")
+
 
 class SourceRef(BaseModel):
     """Ссылка на источник утверждения.
@@ -540,6 +545,29 @@ class CommunicationStrategy(BaseModel):
             data["barrier"] = as_text(data.get("barrier"))
         return data
 
+    @model_validator(mode="after")
+    def _message_owns_our_brand(self) -> CommunicationStrategy:
+        """Ключевое сообщение должно говорить от нашего имени.
+
+        Коммуникация обращается к аудитории нашего продукта. Если в
+        сообщении назван конкурент, это не наша коммуникация: в
+        демонстрации так вышло «МТС предлагает прозрачные тарифы» для
+        задачи Фабрики Мегафона. Ловим кодом, а не просьбой модели.
+
+        В `barrier` конкурент упоминать можно: это контекст рынка,
+        а не обращение к аудитории.
+
+        Raises:
+            ValueError: В сообщении назван чужой бренд.
+        """
+        named = [brand for brand in COMPETITOR_BRANDS if brand in self.key_message.lower()]
+        if named:
+            raise ValueError(
+                "ключевое сообщение называет чужой бренд "
+                f"({', '.join(named)}): коммуникация должна идти от нашего имени"
+            )
+        return self
+
 
 class VerificationPlan(BaseModel):
     """План проверки решения.
@@ -555,7 +583,7 @@ class VerificationPlan(BaseModel):
     expected_change: str = Field(min_length=1)
     compare_against: str = Field(min_length=1)
     observation_period: str = Field(min_length=1)
-    adverse_effects: list[str] = Field(default_factory=list)
+    adverse_effects: list[str] = Field(min_length=1)
     success_criteria: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -567,6 +595,25 @@ class VerificationPlan(BaseModel):
             data["adverse_effects"] = as_text_list(data.get("adverse_effects"))
             data["success_criteria"] = as_text_list(data.get("success_criteria"))
         return data
+
+    @model_validator(mode="after")
+    def _plan_is_complete(self) -> VerificationPlan:
+        """План проверки обязан содержать нежелательные последствия.
+
+        Требование брифа: «план проверки — ожидаемое изменение, с чем
+        сравниваем, срок наблюдения и нежелательные последствия». Пустой
+        список последствий — это не «последствий нет», а отсутствующая
+        часть плана: стратегия без «а если» — не стратегия.
+
+        Raises:
+            ValueError: Нежелательные последствия не указаны.
+        """
+        if not self.adverse_effects:
+            raise ValueError(
+                "в плане проверки должны быть нежелательные последствия: "
+                "что может пойти не так и что делаем, если это произойдёт"
+            )
+        return self
 
 
 class Strategy(BaseModel):

@@ -30,6 +30,7 @@ from pf.journal import Journal, journal_path
 from pf.schemas import (
     Analysis,
     Claim,
+    CommunicationStrategy,
     Strategy,
     Variants,
     VerificationPlan,
@@ -247,16 +248,54 @@ def _d07_strategy_three_blocks() -> str:
 
 
 def _d08_verification_has_adverse() -> str:
-    """В плане проверки должны быть нежелательные последствия."""
+    """План проверки без нежелательных последствий должен отклоняться.
+
+    Схема теперь требует последствия явно: пустой список — это не
+    «последствий нет», а отсутствующая часть плана.
+    """
     try:
         VerificationPlan(
             expected_change="рост",
             compare_against="база",
             observation_period="месяц",
+            adverse_effects=[],
         )
     except Exception as exc:  # noqa: BLE001 — текст ошибки и есть результат
-        return str(exc)
-    return "Ожидаемое изменение"
+        return f"нежелательные последствия обязательны: {exc}"
+    return "план без нежелательных последствий принят"
+
+
+def _d13_plan_has_adverse_effects() -> str:
+    """Пустой список последствий должен отклоняться схемой."""
+    try:
+        VerificationPlan(
+            expected_change="рост удержания на 3 %",
+            compare_against="база января",
+            observation_period="3 месяца",
+            adverse_effects=[],
+        )
+    except Exception as exc:  # noqa: BLE001 — текст ошибки и есть результат
+        return f"нежелательные последствия обязательны: {exc}"
+    return "план принят без нежелательных последствий"
+
+
+def _d14_message_cannot_name_competitor() -> str:
+    """Ключевое сообщение не должно называть чужой бренд.
+
+    Коммуникация продукта обращается к аудитории своего продукта. В
+    демонстрации так вышло «МТС предлагает прозрачные тарифы» для задачи
+    Фабрики Мегафона — схема обязана это ловить.
+    """
+    try:
+        CommunicationStrategy(
+            audience="Клиенты",
+            barrier="Рынок привык к скрытым подпискам",
+            key_message="МТС предлагает прозрачные тарифы",
+            proof="Информирование о подписках",
+        )
+    except Exception as exc:  # noqa: BLE001 — текст ошибки и есть результат
+        return f"чужой бренд в сообщении отклонён: {exc}"
+    return "сообщение с чужим брендом принято"
 
 
 def _d09_gaps_declared() -> str:
@@ -339,6 +378,8 @@ _HANDLERS = {
     "D-10-prompt-injection-ignored": _d10_injection_ignored,
     "D-11-resume-keeps-phase": _d11_resume_keeps_phase,
     "D-12-cost-visible": _d12_cost_visible,
+    "D-13-plan-has-adverse-effects": _d13_plan_has_adverse_effects,
+    "D-14-message-cannot-name-competitor": _d14_message_cannot_name_competitor,
 }
 
 

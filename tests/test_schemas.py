@@ -178,3 +178,80 @@ def test_variants_accept_bare_list() -> None:
     )
     assert len(variants.variants) == 3
     assert all(item.objections for item in variants.variants)
+
+
+def test_key_message_cannot_name_a_competitor() -> None:
+    """Ключевое сообщение не должно называть чужой бренд.
+
+    Коммуникация обращается к аудитории нашего продукта. Если в
+    сообщении назван конкурент, это не наша коммуникация — так в
+    демонстрации вышло «МТС предлагает прозрачные тарифы» для задачи
+    Фабрики Мегафона. Ловим кодом, а не просьбой модели.
+    """
+    from pf.schemas import CommunicationStrategy
+
+    with pytest.raises(ValidationError):
+        CommunicationStrategy(
+            audience="Клиенты",
+            barrier="Низкая прозрачность тарифов",
+            key_message="МТС предлагает прозрачные тарифы и гибкие условия",
+            proof="Информирование о подписках",
+        )
+
+
+def test_key_message_without_competitor_is_accepted() -> None:
+    """Сообщение без чужого бренда принимается."""
+    from pf.schemas import CommunicationStrategy
+
+    strategy = CommunicationStrategy(
+        audience="Клиенты",
+        barrier="Низкая прозрачность тарифов",
+        key_message="Мы сделали тарифы прозрачными: вы видите все подписки",
+        proof="Информирование о подписках",
+    )
+    assert "МТС" not in strategy.key_message
+
+
+def test_barrier_may_mention_competitor() -> None:
+    """В барьере конкурентMention конкурента можно: это контекст рынка."""
+    from pf.schemas import CommunicationStrategy
+
+    strategy = CommunicationStrategy(
+        audience="Клиенты",
+        barrier="Рынок привык к навязчивым подпискам МТС, и доверие к обещаниям падает",
+        key_message="Мы показываем все подписки до подтверждения",
+        proof="Информирование о подписках",
+    )
+    assert "МТС" in strategy.barrier
+
+
+def test_verification_requires_adverse_effects() -> None:
+    """План проверки без нежелательных последствий неполон.
+
+    Требование брифа: «план проверки — ожидаемое изменение, с чем
+    сравниваем, срок наблюдения и нежелательные последствия». Пустой
+    список последствий — это не «последствий нет», это отсутствующая
+    часть плана.
+    """
+    from pf.schemas import VerificationPlan
+
+    with pytest.raises(ValidationError):
+        VerificationPlan(
+            expected_change="Рост удержания на 3 %",
+            compare_against="База января",
+            observation_period="3 месяца",
+            adverse_effects=[],
+        )
+
+
+def test_verification_accepts_adverse_effects() -> None:
+    """С нежелательными последствиями план принимается."""
+    from pf.schemas import VerificationPlan
+
+    plan = VerificationPlan(
+        expected_change="Рост удержания на 3 %",
+        compare_against="База января",
+        observation_period="3 месяца",
+        adverse_effects=["Падение маржи ниже 2 % — откатываем на сегмент A"],
+    )
+    assert plan.adverse_effects
