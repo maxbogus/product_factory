@@ -78,6 +78,34 @@ def test_model_produces_three_variants() -> None:
     assert all(item.objections for item in variants.variants)
 
 
+def _extract_quote(answer: str) -> str:
+    """Достать цитату из ответа модели.
+
+    Модель обрамляет цитату по-разному: голыми кавычками, markdown-звёздочками
+    или без обрамления. Проверять надо способность процитировать, а не
+    упаковку ответа, поэтому обрамление снимается здесь.
+
+    Args:
+        answer: Текст ответа модели.
+
+    Returns:
+        Текст цитаты.
+    """
+    text = answer.strip()
+    for marker in ("**", "__", "*", "`"):
+        text = text.replace(marker, "")
+    text = text.strip()
+    if text.startswith("«") and "»" in text:
+        start = text.index("«")
+        end = text.index("»", start)
+        return text[start + 1 : end].strip()
+    if '"' in text:
+        start = text.index('"')
+        end = text.index('"', start + 1)
+        return text[start + 1 : end].strip()
+    return text.strip('"').strip()
+
+
 @requires_model
 def test_model_quotes_source_verbatim() -> None:
     """Модель умеет привести дословную цитату.
@@ -91,7 +119,8 @@ def test_model_quotes_source_verbatim() -> None:
         "Ты цитируешь источник дословно.",
         f"Приведи цитату из источника: {source}",
     )
-    support = verify_quote(source, response.content.strip().strip('"'), "test/s")
+    quote = _extract_quote(response.content)
+    support = verify_quote(source, quote, "test/s")
     assert support.status is SupportStatus.CONFIRMED, support.detail
 
 
