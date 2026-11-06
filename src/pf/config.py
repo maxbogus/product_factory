@@ -160,6 +160,11 @@ class Settings(BaseSettings):
     # ── Пути состояния ──────────────────────────────────────────────────────
     state_dir: Path = Path("state")
     journal_dir: Path = Path("journal")
+
+    #: Материалы проекта: свои документы, таблицы и данные. Это третий
+    #: слой знаний — он относится к конкретной задаче и не попадает
+    #: в инструкции ролей.
+    project_dir: Path = Path("project")
     prompts_dir: Path = Path("prompts")
     methods_dir: Path = Path("methods")
     hooks_dir: Path = Path("hooks")

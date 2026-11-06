@@ -25,6 +25,7 @@ import json
 import sys
 
 from pf import __version__
+from pf.config import settings
 from pf.journal import Journal, journal_path
 from pf.state import Phase, SessionState, list_sessions, load, save
 
@@ -301,6 +302,41 @@ def cmd_stop(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── materials ───────────────────────────────────────────────────────────────
+
+
+def cmd_materials(args: argparse.Namespace) -> int:
+    """Показать материалы проекта: свои документы, таблицы и данные.
+
+    У каждого материала — идентификатор для цитирования, адрес источника
+    и хеш содержимого. По хешу видно, на какую версию данных опирался
+    вывод: при пересмотре это первое, что нужно проверить.
+    """
+    from pf.materials import load_materials
+
+    materials = load_materials()
+    if not materials:
+        _out("Материалов проекта нет.")
+        _out(
+            f"Положите файлы в {settings.project_dir}/ — .md, .txt, .csv, .json, .pdf, .docx, .xlsx"
+        )
+        return 0
+
+    _rule(f"Материалы проекта: {len(materials)}")
+    for material in materials:
+        _out(f"{ARROW} {material.source_id}")
+        _out(f"    вид: {material.kind.value}   абзацев: {len(material.passages)}")
+        if material.url:
+            _out(f"    источник: {material.url}")
+        if material.retrieved:
+            _out(f"    получено: {material.retrieved}")
+        _out(f"    sha256: {material.sha256[:16]}…")
+        if material.passages:
+            _out(f"    {material.passages[0].text[:150]}")
+        _out()
+    return 0
+
+
 # ── log / cost ──────────────────────────────────────────────────────────────
 
 
@@ -571,6 +607,11 @@ def build_parser() -> argparse.ArgumentParser:
     sources.add_argument("query", help="поисковый запрос")
     sources.add_argument("--limit", type=int, default=8, help="сколько абзацев показать")
     sources.set_defaults(func=cmd_sources)
+
+    materials = subparsers.add_parser(
+        "materials", help="показать материалы проекта (документы и таблицы)"
+    )
+    materials.set_defaults(func=cmd_materials)
 
     sessions = subparsers.add_parser("sessions", help="список сохранённых сессий")
     sessions.set_defaults(func=cmd_sessions)

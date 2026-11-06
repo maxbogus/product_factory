@@ -16,8 +16,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from pf.config import settings
 from pf.corpus import DOMAIN_TERMS, Article, Corpus, get_corpus, tokenize
 from pf.ground import Support, SupportStatus, split_source_id, verify_claim, verify_quote
+from pf.materials import Material
 
 #: Минимальная длина абзаца, пригодного для цитирования.
 MIN_PARAGRAPH_CHARS = 60
@@ -299,20 +301,27 @@ def collect(
     corpus: Corpus | None = None,
     top_k: int | None = None,
     max_paragraphs: int | None = None,
+    materials: list[Material] | None = None,
+    include_materials: bool = True,
 ) -> SourceBundle:
     """Собрать источники под запрос.
+
+    В срез попадают и статьи корпуса, и материалы проекта: это третий
+    слой знаний — свои документы и таблицы. Материалы проходят ту же
+    проверку дословности, что и статьи, поэтому смешивать их можно
+    свободно.
 
     Args:
         query: Запрос агента.
         corpus: Корпус. По умолчанию — общий для процесса.
         top_k: Сколько статей взять.
         max_paragraphs: Сколько абзацев из каждой статьи.
+        materials: Материалы проекта. По умолчанию — из каталога ``project/``.
+        include_materials: Включать ли материалы проекта.
 
     Returns:
         Набор источников с абзацами, пригодными для цитирования.
     """
-    from pf.config import settings
-
     corpus = corpus or get_corpus()
     top_k = top_k or settings.source_top_k
     max_paragraphs = max_paragraphs or settings.source_max_paragraphs
@@ -329,4 +338,103 @@ def collect(
         passages.extend(selected)
 
     passages.sort(key=lambda passage: passage.relevance, reverse=True)
-    return SourceBundle(passages=passages, articles=articles, query=query)
+
+    if not include_materials:
+        return SourceBundle(passages=passages, articles=articles, query=query)
+
+    if materials is None:
+        from pf.materials import load_materials
+
+        materials = load_materials()
+
+    project_passages, project_articles = _material_passages(materials, query_terms, max_paragraphs)
+    if not project_passages:
+        return SourceBundle(passages=passages, articles=articles, query=query)
+
+    # Материалы проекта идут перед корпусом: они относятся к задаче
+    # непосредственно, а корпус даёт рыночный контекст.
+    return SourceBundle(
+        passages=project_passages + passages,
+        articles=project_articles + articles,
+        query=query,
+    )
+
+
+def _material_passages(
+    materials: list[Material],
+    query_terms: set[str],
+    max_paragraphs: int,
+) -> tuple[list[Passage], list[Article]]:
+    """Отобрать абзацы материалов проекта, релевантные запросу.
+
+    Args:
+        materials: Материалы проекта.
+        query_terms: Значимые слова запроса.
+        max_paragraphs: Сколько абзацев оставить из каждого материала.
+
+    Returns:
+        Пара ``(абзацы, материалы как статьи)``.
+    """
+    project_passages: list[Passage] = []
+    project_articles: list[Article] = []
+
+    for material in materials:
+        selected = _score_material(material, query_terms, max_paragraphs)
+        if not selected:
+            continue
+        project_articles.append(
+            Article(
+                source_id=material.source_id,
+                title=material.title,
+                section="project",
+                content=material.content,
+            )
+        )
+        project_passages.extend(selected)
+
+    project_passages.sort(key=lambda passage: passage.relevance, reverse=True)
+    return project_passages, project_articles
+
+
+def _score_material(
+    material: Material,
+    query_terms: set[str],
+    max_paragraphs: int,
+) -> list[Passage]:
+    """Отобрать абзацы материала, релевантные запросу.
+
+    Args:
+        material: Материал проекта.
+        query_terms: Значимые слова запроса.
+        max_paragraphs: Сколько абзацев оставить.
+
+    Returns:
+        Отобранные абзацы.
+    """
+    scored: list[tuple[float, int, str]] = []
+    for passage in material.passages:
+        text = passage.text
+        words = tokenize(text)
+        if not words:
+            continue
+        hits = sum(1 for word in words if word in query_terms)
+        if hits == 0:
+            continue
+        weighted = sum(
+            2.0 if word in DOMAIN_TERMS else 1.0 for word in words if word in query_terms
+        )
+        score = weighted / (len(words) ** 0.5)
+        scored.append((score, passage.index, text))
+
+    scored.sort(reverse=True)
+    return [
+        Passage(
+            source_id=material.source_id,
+            title=material.title,
+            section="project",
+            paragraph_index=index,
+            text=text,
+            relevance=score,
+        )
+        for score, index, text in scored[:max_paragraphs]
+    ]

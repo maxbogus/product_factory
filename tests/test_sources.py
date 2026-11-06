@@ -98,9 +98,11 @@ def test_collect_returns_bundle_for_real_query() -> None:
     assert bundle.articles
     assert bundle.passages
     # В отобранном срезе не должно быть статей из несвязанных разделов:
-    # доменный фильтр отсекает химию, математику и лингвистику.
+    # доменный фильтр отсекает химию, математику и лингвистику. Раздел
+    # project — это материалы проекта: свои документы и таблицы, они
+    # относятся к задаче напрямую.
     for passage in bundle.passages:
-        assert passage.section in {"security", "economics", "law", "telecom"}
+        assert passage.section in {"security", "economics", "law", "telecom", "project"}
 
 
 def test_verify_claim_rejects_irrelevant_but_real_source() -> None:
