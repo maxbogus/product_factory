@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from pf import __version__
@@ -439,6 +440,61 @@ def cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Показать инструменты MCP-сервера или вызвать инструмент.
+
+    Серверы лежат в соседнем репозитории и запускаются в своём
+    окружении: у них тяжёлые зависимости, несовместимые с лёгким
+    окружением агента.
+    """
+    import asyncio
+
+    from pf.mcp import ServerSpec, call_tool, list_tools, load_config
+
+    servers = load_config()
+    if not servers:
+        _out("Серверы MCP не описаны в mcp/servers.json.")
+        return 1
+
+    if args.server not in servers:
+        _out(f"Сервер «{args.server}» не описан. Доступны: {', '.join(servers)}")
+        return 1
+
+    spec: ServerSpec = servers[args.server]
+
+    if args.tool:
+        arguments: dict[str, object] = {}
+        if args.args:
+            try:
+                arguments = json.loads(args.args)
+            except json.JSONDecodeError as exc:
+                _out(f"Аргументы должны быть JSON: {exc}")
+                return 1
+        try:
+            result = asyncio.run(call_tool(spec, args.tool, arguments))
+        except Exception as exc:  # noqa: BLE001 — CLI показывает ошибку
+            _out(f"ОШИБКА: {exc}")
+            return 1
+        _rule(f"{args.server} → {args.tool}")
+        _out(result[:4000])
+        return 0
+
+    try:
+        tools = asyncio.run(list_tools(spec))
+    except Exception as exc:  # noqa: BLE001 — CLI показывает ошибку
+        _out(f"ОШИБКА: {exc}")
+        return 1
+
+    _rule(f"Инструменты сервера: {args.server}")
+    for tool in tools:
+        _out(f"{ARROW} {tool.name}")
+        if tool.description:
+            _out(f"    {tool.description[:110]}")
+    _out()
+    _out(f"Вызов: pf mcp {args.server} <инструмент> '{{\"аргумент\": \"значение\"}}'")
+    return 0
+
+
 def cmd_sessions(args: argparse.Namespace) -> int:
     """Показать список сохранённых сессий."""
     sessions = list_sessions()
@@ -517,6 +573,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="искать в интернете и разбирать найденные страницы",
     )
     web_parser.set_defaults(func=cmd_web)
+
+    mcp_parser = subparsers.add_parser("mcp", help="инструменты MCP-сервера")
+    mcp_parser.add_argument("server", help="имя сервера из mcp/servers.json")
+    mcp_parser.add_argument("tool", nargs="?", help="инструмент для вызова")
+    mcp_parser.add_argument("args", nargs="?", help="аргументы вызова в виде JSON")
+    mcp_parser.set_defaults(func=cmd_mcp)
 
     return parser
 

@@ -87,6 +87,38 @@ ROLE_METHODS: dict[str, tuple[str, ...]] = {
     "router": (),
 }
 
+#: Скилы — повторяемые процедуры. Они лежали в файлах, но модель их не
+#: видела: скил был написан для человека, а не подключён к работе.
+#: Теперь скил подставляется в инструкцию своей роли — как методика,
+#: но описывает не «как думать», а «как выполнить процедуру».
+ROLE_SKILLS: dict[str, tuple[str, ...]] = {
+    "analyst": ("mock-respondents",),
+    "collector": ("collect-sources",),
+}
+
+
+def skills_for(role_name: str) -> str:
+    """Собрать скилы для роли.
+
+    Args:
+        role_name: Идентификатор роли.
+
+    Returns:
+        Текст скилов, пригодных для роли, либо пустая строка.
+    """
+    names = ROLE_SKILLS.get(role_name)
+    if not names:
+        return ""
+    blocks: list[str] = []
+    for name in names:
+        path = settings.skills_dir / f"{name}.md"
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            blocks.append(f"### {name}\n\n{text}")
+    return "\n\n---\n\n".join(blocks)
+
 
 def knowledge_for(role_name: str) -> str:
     """Собрать методические знания для роли.

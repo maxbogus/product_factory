@@ -149,7 +149,7 @@ def load_prompt(role_name: str) -> str:
             "Без него агент не знает, что делать."
         )
     prompt = path.read_text(encoding="utf-8")
-    return _with_methods(prompt, role_name)
+    return _with_skills(_with_methods(prompt, role_name), role_name)
 
 
 def _prompt_stamp(role_name: str) -> tuple[float, ...]:
@@ -159,18 +159,21 @@ def _prompt_stamp(role_name: str) -> tuple[float, ...]:
         role_name: Идентификатор роли.
 
     Returns:
-        Временные метки файлов: промпт и его методики.
+        Временные метки файлов: промпт, его методики и его скилы.
     """
     role = ROLES.get(role_name)
     if role is None:
         return ()
     path = prompts_root() / role.prompt_file
     stamps = [path.stat().st_mtime if path.exists() else 0.0]
-    from pf.knowledge import ROLE_METHODS
+    from pf.knowledge import ROLE_METHODS, ROLE_SKILLS
 
     for name in ROLE_METHODS.get(role_name, ()):
         method = settings.methods_dir / f"{name}.md"
         stamps.append(method.stat().st_mtime if method.exists() else 0.0)
+    for name in ROLE_SKILLS.get(role_name, ()):
+        skill = settings.skills_dir / f"{name}.md"
+        stamps.append(skill.stat().st_mtime if skill.exists() else 0.0)
     return tuple(stamps)
 
 
@@ -203,6 +206,34 @@ def _with_methods(prompt: str, role_name: str) -> str:
         "Это правила работы, общие для всех ролей. Они уточняют инструкцию "
         "выше, но не отменяют её.\n\n"
         f"{methods}"
+    )
+
+
+def _with_skills(prompt: str, role_name: str) -> str:
+    """Дополнить инструкцию роли скилами.
+
+    Скил — повторяемая процедура: не «как думать», а «как выполнить».
+    Методики отвечают на первое, скилы — на второе. Без подключения
+    скилы остаются файлами, которые читает человек, а модель их не видит.
+
+    Args:
+        prompt: Текст инструкции роли.
+        role_name: Идентификатор роли.
+
+    Returns:
+        Инструкция со скилами.
+    """
+    from pf.knowledge import skills_for
+
+    skills = skills_for(role_name)
+    if not skills:
+        return prompt
+    return (
+        f"{prompt}\n\n---\n\n"
+        "## Процедуры (скилы)\n\n"
+        "Это повторяемые процедуры работы. Выполняй подходящую под задачу; "
+        "если ни одна не подходит — не упоминай их.\n\n"
+        f"{skills}"
     )
 
 

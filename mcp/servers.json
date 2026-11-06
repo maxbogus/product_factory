@@ -1,14 +1,14 @@
 {
   "mcpServers": {
     "static-parser": {
-      "command": "python3",
+      "command": "${PF_MCP_DIR}/static-parser-mcp/.venv/bin/python",
       "args": ["server.py"],
-      "cwd": "../mcp-servers/static-parser-mcp"
+      "cwd": "${PF_MCP_DIR}/static-parser-mcp"
     },
     "parser-storage": {
-      "command": "python3",
+      "command": "${PF_MCP_DIR}/parser-storage-mcp/.venv/bin/python",
       "args": ["server.py"],
-      "cwd": "../mcp-servers/parser-storage-mcp"
+      "cwd": "${PF_MCP_DIR}/parser-storage-mcp"
     }
   }
 }

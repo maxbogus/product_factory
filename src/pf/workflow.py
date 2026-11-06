@@ -204,6 +204,20 @@ class StepResult:
 #: Тип результата роли — любой валидированный объект схемы.
 BaseModelType = Any
 
+#: Соответствие «роль → фаза». По нему решение роутера превращается в
+#: следующий шаг рабочего процесса.
+_PHASE_BY_ROLE: dict[str, Phase] = {
+    "intake": Phase.INTAKE,
+    "planner": Phase.PLANNING,
+    "router": Phase.ROUTING,
+    "collector": Phase.COLLECTING,
+    "analyst": Phase.ANALYZING,
+    "options": Phase.OPTIONS,
+    "redteam": Phase.REDTEAM,
+    "strategy": Phase.STRATEGY,
+    "keeper": Phase.KEEPER,
+}
+
 
 class Workflow:
     """Исполнитель рабочего процесса агента.
@@ -397,7 +411,107 @@ class Workflow:
 
         return confirmed, rejected, details
 
-    # ── Шаги ────────────────────────────────────────────────────────────────
+    def _run_fact_check(
+        self,
+        state: SessionState,
+        bundle: SourceBundle | None,
+        claims: list[Any],
+    ) -> Any:
+        """Позвать субагента fact-check по собранным основаниям.
+
+        Субагент отвечает на другой вопрос, чем основной проверяющий:
+        не «найдена ли цитата», а «относится ли источник к задаче». Он
+        идёт от факта к источнику, а не от цитаты к тексту.
+
+        Args:
+            state: Состояние сессии.
+            bundle: Локальные источники.
+            claims: Утверждения для проверки.
+
+        Returns:
+            Отчёт субагента либо ``None``, если проверять нечего.
+        """
+        from pf.subagents import check_facts
+
+        if not claims or bundle is None:
+            return None
+
+        def verify(
+            text: str,
+            source_id: str,
+            paragraph: int | None,
+            quote: str,
+        ) -> Any:
+            support = bundle.verify_claim(
+                text,
+                source_id=source_id,
+                paragraph=paragraph,
+                quote=quote,
+            )
+            named = source_id or "источник не назван"
+            if not bundle.is_relevant(named):
+                from pf.ground import Support, SupportStatus
+
+                return Support(
+                    quote=quote,
+                    source_id=source_id,
+                    status=SupportStatus.NO_DATA,
+                    detail="источник не относится к задаче",
+                )
+            return support
+
+        return check_facts(claims, verify)
+
+    def route_next(self, state: SessionState, result: StepResult) -> Phase:
+        """Определить следующую фазу по решению роутера.
+
+        Роутер выбирает, кто работает следующим. Решение может быть
+        ошибочным — и тогда его надо исправить, а не выполнять:
+
+        - роль, которой нет в реестре, — берётся обычный порядок;
+        - фаза, которая уже позади, — это откат назад: маршрут
+          отбрасывается, работа продолжается по порядку;
+        - та же фаза, что и текущая, — зацикливание: берётся следующая.
+
+        Args:
+            state: Состояние сессии.
+            result: Результат шага роутера.
+
+        Returns:
+            Фаза, которая должна выполняться следующей.
+        """
+        from pf.roles import ROLES
+
+        default = state.phase.next
+        data = result.data
+        if not isinstance(data, NextStep):
+            return default
+
+        chosen = data.role.strip().lower()
+        if chosen not in ROLES:
+            state.results["routing_note"] = (
+                f"маршрут «{data.role}» неизвестен — идём по порядку: {default.title_ru}"
+            )
+            return default
+
+        target = _PHASE_BY_ROLE.get(chosen)
+        if target is None:
+            return default
+
+        order = list(Phase)
+        if order.index(target) <= order.index(state.phase):
+            state.results["routing_note"] = (
+                f"маршрут «{data.role}» ведёт назад — исправлено, "
+                f"идём по порядку: {default.title_ru}"
+            )
+            return default
+
+        state.results["routing_note"] = (
+            f"маршрут: {data.role} — {target.title_ru}. Причина: {data.reason or 'не указана'}"
+        )
+        return target
+
+    # ── Шаги ─────────────────────────────────────────────────────────────────
 
     def run_step(self, state: SessionState, bundle: SourceBundle | None = None) -> StepResult:
         """Выполнить один шаг автомата по текущей фазе.
@@ -438,6 +552,29 @@ class Workflow:
         state.cost_units += usage.cost_units
         self._record(state, result)
         self._apply_hooks(state, result)
+
+        # Субагент включается после разбора: он перепроверяет основания
+        # с другой стороны — не «найдена ли цитата», а «относится ли
+        # источник к задаче». Его отчёт виден в журнале.
+        if phase is Phase.ANALYZING:
+            claims = getattr(data, "facts", None) or []
+            report = self._run_fact_check(state, bundle, list(claims))
+            if report is not None:
+                state.results["fact_check"] = {
+                    "summary": report.summary(),
+                    "confirmed": report.confirmed,
+                    "needs_review": report.needs_review,
+                    "no_data": report.no_data,
+                    "findings": [
+                        {
+                            "source_id": item.source_id,
+                            "paragraph": item.paragraph,
+                            "status": item.status,
+                            "detail": item.detail,
+                        }
+                        for item in report.findings
+                    ],
+                }
         return result
 
     def _search_web(self, state: SessionState) -> list[Any]:
@@ -793,12 +930,25 @@ def run_full_workflow(
         if on_step is not None:
             on_step(state, result)
 
+        # Человек подключается там, где без его решения работа потеряла
+        # бы смысл. Это требование брифа: агент сам ведёт работу, но
+        # подключает человека при существенном выборе.
+        if isinstance(result.data, NextStep) and result.data.need_human:
+            question = result.data.question or "Нужно ваше решение, чтобы продолжить."
+            state.pending_question = question
+            state.results.setdefault("human_questions", []).append(question)
+            save(state)
+            break
+
         if state.phase is Phase.KEEPER:
             state.phase = Phase.DONE
             save(state)
             break
 
-        state.phase = state.phase.next
+        if state.phase is Phase.ROUTING:
+            state.phase = workflow.route_next(state, result)
+        else:
+            state.phase = state.phase.next
         save(state)
 
     return state

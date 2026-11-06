@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -64,6 +66,11 @@ class MCPError(RuntimeError):
 def load_config(path: Path | None = None) -> dict[str, ServerSpec]:
     """Прочитать конфигурацию серверов.
 
+    В конфигурации можно использовать ``${ПЕРЕМЕННАЯ}`` — подставляется
+    значение переменной окружения. Так путь к соседнему репозиторию
+    задаётся один раз (``PF_MCP_DIR``), а не зашивается в файл: иначе
+    конфигурация перестаёт переноситься на другую машину.
+
     Args:
         path: Путь к конфигурации. По умолчанию — ``mcp/servers.json``.
 
@@ -73,7 +80,9 @@ def load_config(path: Path | None = None) -> dict[str, ServerSpec]:
     target = path or settings.mcp_config_path
     if not target.exists():
         return {}
-    payload = json.loads(target.read_text(encoding="utf-8"))
+    raw = target.read_text(encoding="utf-8")
+    raw = _expand_env(raw)
+    payload = json.loads(raw)
     servers: dict[str, ServerSpec] = {}
     for name, spec in payload.get("mcpServers", {}).items():
         servers[name] = ServerSpec(
@@ -83,6 +92,26 @@ def load_config(path: Path | None = None) -> dict[str, ServerSpec]:
             cwd=str(spec.get("cwd", "")),
         )
     return servers
+
+
+def _expand_env(raw: str) -> str:
+    """Подставить переменные окружения в конфигурацию.
+
+    Неизвестная переменная оставляется как есть: так видно в ошибке,
+    что переменная не задана, а не что путь молча стал пустым.
+
+    Args:
+        raw: Текст конфигурации.
+
+    Returns:
+        Текст с подставленными значениями.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        return os.environ.get(key, match.group(0))
+
+    return re.sub(r"\$\{([A-Z_][A-Z0-9_]*)\}", replace, raw)
 
 
 async def list_tools(spec: ServerSpec) -> list[Tool]:
