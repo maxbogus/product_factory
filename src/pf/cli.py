@@ -203,6 +203,7 @@ def _print_strategy(state: SessionState) -> None:
 
 def cmd_resume(args: argparse.Namespace) -> int:
     """Продолжить сохранённую сессию."""
+    from pf.schemas import NextStep
     from pf.workflow import Workflow
 
     session_id = _session_id(args.session)
@@ -224,15 +225,10 @@ def cmd_resume(args: argparse.Namespace) -> int:
     _out()
 
     workflow = Workflow()
-    bundle = (
-        workflow.collect_sources(state)
-        if state.phase
-        in {
-            Phase.ANALYZING,
-            Phase.STRATEGY,
-        }
-        else None
-    )
+    # Источники собираются для тех фаз, которым они нужны. Без этого
+    # продолжение со сбора источников дало бы сборщику пустой блок
+    # МАТЕРИАЛЫ, и он начал бы сочинять цитаты.
+    bundle = workflow.bundle_for(state)
 
     try:
         result = workflow.run_step(state, bundle)
@@ -241,7 +237,25 @@ def cmd_resume(args: argparse.Namespace) -> int:
         return 1
 
     _out(f"{CHECK} {result.phase.title_ru}: {_describe(result.data)}")
-    state.phase = state.phase.next
+
+    # Роутер может снова попросить человека: вопрос показывается, работа
+    # не продолжается вслепую.
+    if isinstance(result.data, NextStep) and result.data.need_human:
+        question = result.data.question or "Нужно ваше решение, чтобы продолжить."
+        state.pending_question = question
+        state.results.setdefault("human_questions", []).append(question)
+        save(state)
+        _out()
+        _out(f"Ждём ответа: {question}")
+        _out('Ответить: pf answer "текст ответа"')
+        return 0
+
+    if state.phase is Phase.KEEPER:
+        state.phase = Phase.DONE
+    elif state.phase is Phase.ROUTING:
+        state.phase = workflow.route_next(state, result)
+    else:
+        state.phase = state.phase.next
     save(state)
     _out(f"Следующая фаза: {state.phase.title_ru}")
     return 0

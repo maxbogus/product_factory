@@ -54,10 +54,12 @@ jobs:
         run: uv sync --extra dev --frozen
 
       - name: Поднять Ollama с моделью
+        # Модель должна совпадать с моделью по умолчанию в настройках:
+        # иначе живые тесты получают «model not found» и падают.
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           ollama serve &
-          ollama pull qwen2.5:7b
+          ollama pull qwen3:8b
 
       - name: Живые тесты с моделью
         run: uv run pytest tests/ -m slow -q

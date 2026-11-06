@@ -206,6 +206,12 @@ BaseModelType = Any
 
 #: Соответствие «роль → фаза». По нему решение роутера превращается в
 #: следующий шаг рабочего процесса.
+#: Фазы, которым нужны собранные источники. Для остальных набор не
+#: собирается: это экономит время и не засоряет контекст модели.
+_PHASES_WITH_SOURCES: frozenset[Phase] = frozenset(
+    {Phase.COLLECTING, Phase.ANALYZING, Phase.STRATEGY}
+)
+
 _PHASE_BY_ROLE: dict[str, Phase] = {
     "intake": Phase.INTAKE,
     "planner": Phase.PLANNING,
@@ -664,6 +670,33 @@ class Workflow:
     ) -> tuple[str, dict[str, Any], str]:
         """Определить роль, данные и контекст для текущей фазы.
 
+        К контексту добавляются ответы человека: они должны видеть любая
+        следующая фаза, а не только первая. Иначе агент спрашивает,
+        человек отвечает — и ответ теряется: работа продолжается вслепую.
+
+        Args:
+            state: Состояние сессии.
+            bundle: Собранные источники.
+
+        Returns:
+            Пара ``(роль, данные, контекст)``.
+
+        Raises:
+            ValueError: Для фазы нет роли.
+        """
+        role, payload, context = self._phase_inputs(state, bundle)
+        human = self._human_context(state)
+        if human:
+            context = f"{human}\n\n{context}" if context else human
+        return role, payload, context
+
+    def _phase_inputs(
+        self,
+        state: SessionState,
+        bundle: SourceBundle | None,
+    ) -> tuple[str, dict[str, Any], str]:
+        """Определить роль, данные и контекст для текущей фазы.
+
         Args:
             state: Состояние сессии.
             bundle: Собранные источники.
@@ -677,16 +710,16 @@ class Workflow:
         phase = state.phase
 
         if phase is Phase.INTAKE:
-            return "intake", {"question": state.question}, self._human_context(state)
+            return "intake", {"question": state.question}, ""
 
         if phase is Phase.PLANNING:
             frame = state.results.get(Phase.INTAKE.value, {})
-            return "planner", {"task": frame}, self._human_context(state)
+            return "planner", {"task": frame}, ""
 
         if phase is Phase.ROUTING:
             frame = state.results.get(Phase.INTAKE.value, {})
             plan = state.results.get(Phase.PLANNING.value, {})
-            return "router", {"task": frame, "plan": plan}, self._human_context(state)
+            return "router", {"task": frame, "plan": plan}, ""
 
         if phase is Phase.COLLECTING:
             plan = state.results.get(Phase.PLANNING.value, {})
@@ -899,6 +932,25 @@ class Workflow:
         questions = plan.get("questions", [])[:5]
         query = " ".join([state.question, str(frame.get("goal", "")), *questions])
         return collect(query)
+
+    def bundle_for(self, state: SessionState) -> SourceBundle | None:
+        """Источники, нужные текущей фазе.
+
+        Фазы, которые работают с материалами, получают собранный набор
+        источников; остальные — ``None``. Вынесено отдельно, потому что
+        продолжение после перерыва должно собрать источники заново: если
+        остановились на сборе и продолжить без источников, сборщик
+        получит пустой блок МАТЕРИАЛЫ и начнёт сочинять цитаты.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Набор источников либо ``None``, если фаза их не использует.
+        """
+        if state.phase in _PHASES_WITH_SOURCES:
+            return self.collect_sources(state)
+        return None
 
 
 def run_full_workflow(

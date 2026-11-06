@@ -18,13 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pf.config import settings
+from pf.config import Settings, settings
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,23 +46,29 @@ class ServerSpec:
     """Описание MCP-сервера.
 
     Attributes:
-        name: Имя сервера в конфигурации.
+        name: Имя сервера.
         command: Команда запуска.
         args: Аргументы команды.
         cwd: Рабочий каталог.
+        env: Переменные окружения, которые получает сервер.
     """
 
     name: str
     command: str
     args: tuple[str, ...] = ()
     cwd: str = ""
+    env: dict[str, str] = field(default_factory=dict)
 
 
 class MCPError(RuntimeError):
     """Ошибка работы с MCP-сервером."""
 
 
-def load_config(path: Path | None = None) -> dict[str, ServerSpec]:
+def load_config(
+    path: Path | None = None,
+    *,
+    settings: Settings | None = None,
+) -> dict[str, ServerSpec]:
     """Прочитать конфигурацию серверов.
 
     В конфигурации можно использовать ``${ПЕРЕМЕННАЯ}`` — подставляется
@@ -71,30 +76,41 @@ def load_config(path: Path | None = None) -> dict[str, ServerSpec]:
     задаётся один раз (``PF_MCP_DIR``), а не зашивается в файл: иначе
     конфигурация перестаёт переноситься на другую машину.
 
+    Переменные берутся из окружения процесса **и** из файла ``.env``:
+    pydantic-settings читает ``.env`` только для объявленных полей, а
+    ключи к внешним серверам — например, к Wordstat — объявленных полей
+    не имеют.
+
     Args:
         path: Путь к конфигурации. По умолчанию — ``mcp/servers.json``.
+        settings: Настройки агента. По умолчанию — общие для процесса.
 
     Returns:
         Словарь «имя сервера → описание».
     """
-    target = path or settings.mcp_config_path
+    config = settings or globals()["settings"]
+    target = path or config.mcp_config_path
     if not target.exists():
         return {}
     raw = target.read_text(encoding="utf-8")
-    raw = _expand_env(raw)
+    variables = config.environment()
+    raw = _expand_env(raw, variables)
     payload = json.loads(raw)
     servers: dict[str, ServerSpec] = {}
     for name, spec in payload.get("mcpServers", {}).items():
+        env_raw = spec.get("env") or {}
+        env = {str(key): _expand_env(str(value), variables) for key, value in dict(env_raw).items()}
         servers[name] = ServerSpec(
             name=name,
             command=str(spec.get("command", "python")),
             args=tuple(str(a) for a in spec.get("args", ())),
             cwd=str(spec.get("cwd", "")),
+            env=env,
         )
     return servers
 
 
-def _expand_env(raw: str) -> str:
+def _expand_env(raw: str, variables: dict[str, str] | None = None) -> str:
     """Подставить переменные окружения в конфигурацию.
 
     Неизвестная переменная оставляется как есть: так видно в ошибке,
@@ -102,14 +118,16 @@ def _expand_env(raw: str) -> str:
 
     Args:
         raw: Текст конфигурации.
+        variables: Значения переменных. По умолчанию — окружение и ``.env``.
 
     Returns:
         Текст с подставленными значениями.
     """
+    values = variables if variables is not None else settings.environment()
 
     def replace(match: re.Match[str]) -> str:
         key = match.group(1)
-        return os.environ.get(key, match.group(0))
+        return values.get(key, match.group(0))
 
     return re.sub(r"\$\{([A-Z_][A-Z0-9_]*)\}", replace, raw)
 
@@ -134,6 +152,7 @@ async def list_tools(spec: ServerSpec) -> list[Tool]:
         command=spec.command,
         args=list(spec.args),
         cwd=spec.cwd or None,
+        env=spec.env or None,
     )
     try:
         async with (
@@ -179,6 +198,7 @@ async def call_tool(spec: ServerSpec, tool: str, arguments: dict[str, Any]) -> s
         command=spec.command,
         args=list(spec.args),
         cwd=spec.cwd or None,
+        env=spec.env or None,
     )
     try:
         async with (

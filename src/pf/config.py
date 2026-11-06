@@ -7,13 +7,74 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from typing import Any
 
+from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def read_env_file(path: Path | None = None) -> dict[str, str]:
+    """Прочитать переменные из файла ``.env``.
+
+    pydantic-settings читает ``.env`` только для объявленных полей. Но
+    агенту нужны и «чужие» переменные — например, ключи к внешним
+    MCP-серверам, которые в конфигурации сервера подставляются как
+    ``${ПЕРЕМЕННАЯ}``. Поэтому файл читается здесь, целиком.
+
+    Формат — простой ``KEY=VALUE``, как в ``.env.example``: строки с
+    ``#`` и пустые строки пропускаются, кавычки снимаются.
+
+    Args:
+        path: Путь к файлу. По умолчанию — ``.env`` в рабочем каталоге.
+
+    Returns:
+        Словарь «переменная → значение».
+    """
+    target = path or Path(".env")
+    if not target.is_file():
+        return {}
+
+    values: dict[str, str] = {}
+    for line in target.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def environment(extra_file: Path | None = None) -> dict[str, str]:
+    """Собрать переменные окружения: процесс, затем файл ``.env``.
+
+    Приоритет у процесса: то, что задано в окружении, сильнее значения
+    из файла. Иначе правило «скопируйте .env.example в .env» нельзя было
+    бы перекрыть одноразовой переменной в терминале.
+
+    Args:
+        extra_file: Дополнительный файл с переменными.
+
+    Returns:
+        Объединённый словарь «переменная → значение».
+    """
+    merged = dict(os.environ)
+    merged.update(read_env_file(extra_file))
+    return merged
 
 
 class Settings(BaseSettings):
     """Настройки агента."""
+
+    #: Путь к файлу ``.env``, из которого читались переменные.
+    _env_file_path: Path = PrivateAttr(default=Path(".env"))
 
     model_config = SettingsConfigDict(
         env_prefix="PF_",
@@ -105,6 +166,12 @@ class Settings(BaseSettings):
     skills_dir: Path = Path("skills")
     mcp_config_path: Path = Path("mcp/servers.json")
 
+    #: Каталог с MCP-серверами. Серверы лежат в соседнем репозитории и
+    #: тянут тяжёлые зависимости, поэтому живут в своём окружении.
+    #: Путь задаётся переменной, чтобы конфигурация переносилась на
+    #: другую машину: абсолютный путь здесь зашивать нельзя.
+    mcp_dir: Path = Path("../mcp-servers")
+
     @property
     def effective_base_url(self) -> str:
         """Базовый URL API выбранного провайдера."""
@@ -123,6 +190,33 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         """Работает ли агент на локальной модели (без внешних ключей)."""
         return self.llm_provider == "ollama"
+
+    def environment(self) -> dict[str, str]:
+        """Все переменные, доступные агенту: процесс и файл ``.env``.
+
+        Файл берётся из настроек агента, а не из текущего каталога: иначе
+        настройки, созданные с другим путём к ``.env``, читали бы не тот
+        файл.
+
+        Returns:
+            Объединённый словарь «переменная → значение».
+        """
+        return environment(self._env_file_path)
+
+    def __init__(self, **values: Any) -> None:
+        """Создать настройки, запомнив путь к файлу ``.env``.
+
+        pydantic-settings принимает ``_env_file`` в конструкторе, но не
+        сохраняет его: в ``model_config`` лежит классовое значение «.env».
+        Агенту нужен именно тот файл, который ему передали, — иначе
+        настройки с другим путём читали бы не тот файл.
+
+        Args:
+            **values: Значения полей и служебные параметры pydantic-settings.
+        """
+        env_file = values.pop("_env_file", None)
+        super().__init__(**values)
+        self._env_file_path = Path(env_file) if env_file is not None else Path(".env")
 
 
 settings = Settings()
