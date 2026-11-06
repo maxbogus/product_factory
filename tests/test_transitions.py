@@ -418,6 +418,28 @@ def test_local_and_web_materials_are_separated() -> None:
     assert "ВНЕШНИЙ ТЕКСТ" in web_part
 
 
+def test_repair_prompt_explains_missing_source() -> None:
+    """Ошибка «факт без источника» объясняется моделью явно.
+
+    Текст ошибки для модели абстрактен: она не понимает, что нужно не
+    «дописать ссылку», а перенести утверждение в гипотезы. Без
+    пояснения модель повторяет ту же ошибку три раза.
+    """
+    error = "факт должен ссылаться хотя бы на один источник"
+    prompt = Workflow._repair_prompt("ЗАДАЧА", error)
+
+    assert "sources" in prompt
+    assert "hypotheses" in prompt
+    assert "Не выдумывай цитату" in prompt
+
+
+def test_repair_prompt_without_special_hint() -> None:
+    """Для прочих ошибок подсказка остаётся общей."""
+    prompt = Workflow._repair_prompt("ЗАДАЧА", "не хватает поля")
+    assert "не хватает поля" in prompt
+    assert "Не выдумывай цитату" not in prompt
+
+
 def test_state_survives_process_restart() -> None:
     """Работа продолжается после перерыва: состояние читается с диска."""
     workflow = _workflow()
