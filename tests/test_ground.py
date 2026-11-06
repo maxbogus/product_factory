@@ -124,3 +124,26 @@ def test_find_quote_reports_paragraph() -> None:
     found, index = find_quote(SOURCE, "с 1993 года")
     assert found
     assert index == 2
+
+
+def test_split_source_id_understands_row_anchor() -> None:
+    """Ссылка на строку таблицы должна разбираться.
+
+    Метрики ссылаются на строки таблиц (`#row3`), а не на абзацы
+    (`#p12`). Если разбор не понимает `#row`, метрика не может быть
+    проверена и всегда отклоняется как «источник не найден».
+    """
+    from pf.ground import split_source_id
+
+    path, row = split_source_id("project/data/numbers.csv#row3")
+    assert path == "project/data/numbers.csv"
+    assert row == 3
+
+
+def test_split_source_id_understands_plain_path() -> None:
+    """Ссылка без якоря остаётся как есть."""
+    from pf.ground import split_source_id
+
+    path, row = split_source_id("project/data/numbers.csv")
+    assert path == "project/data/numbers.csv"
+    assert row is None

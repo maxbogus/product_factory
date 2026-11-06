@@ -339,3 +339,36 @@ def test_resolve_citation_returns_none_for_unknown() -> None:
     from pf.materials import resolve_citation
 
     assert resolve_citation("project/нет-такого.csv#row0") is None
+
+
+def test_material_enters_slice_when_its_topic_matches(_project: Path) -> None:
+    """Материал должен попадать в срез по теме задачи.
+
+    Запрос руководителя — «почему падает удержание». Материал про
+    абонентскую базу операторов — это ровно тот контекст, который нужен.
+    Но если требовать в каждом абзаце слово «удержание», материал в
+    срез не попадёт: тема выражена не буквально, а предметом.
+    """
+    from pf.sources import collect
+
+    (_project / "metrics.csv").write_text(
+        "оператор,абонентская_база,период\nМТС,87 млн человек,3-й квартал 2024\n"
+        "Tele2,38,9 млн абонентов,конец июля\n",
+        encoding="utf-8",
+    )
+    bundle = collect("отток абонентов операторов связи удержание")
+    project_ids = {a.source_id for a in bundle.articles if a.section == "project"}
+    assert project_ids, "материал про абонентов должен попасть в срез"
+
+
+def test_material_outside_topic_stays_out(_project: Path) -> None:
+    """Непохожий материал в срез не попадает."""
+    from pf.sources import collect
+
+    (_project / "recipes.csv").write_text(
+        "блюдо,время_готовки\nБорщ,120 минут\n",
+        encoding="utf-8",
+    )
+    bundle = collect("отток абонентов операторов связи удержание")
+    project_ids = {a.source_id for a in bundle.articles if a.section == "project"}
+    assert not project_ids, "материал не по теме не должен попадать в срез"

@@ -568,12 +568,51 @@ class ProductStrategy(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_text(cls, data: object) -> object:
-        """Строки и списки привести к ожидаемому виду."""
+        """Строки, списки и синонимы полей привести к ожидаемому виду.
+
+        Модель называет поля по-своему: «направление» вместо
+        ``chosen_direction``, «аудитория» вместо ``audience``. Без
+        синонимов стратегия отбрасывалась целиком, хотя по сути была
+        заполнена — и агент терял работу на последнем шаге.
+        """
         if isinstance(data, dict):
             data = dict(data)
+            for alias, target in (
+                ("аудитория", "audience"),
+                ("audience_task", "audience"),
+                ("направление", "chosen_direction"),
+                ("name", "chosen_direction"),
+                ("chosen", "chosen_direction"),
+                ("direction", "chosen_direction"),
+                ("выбранное_направление", "chosen_direction"),
+                ("осознанные_отказы", "deliberate_omissions"),
+                ("отказы", "deliberate_omissions"),
+                ("польза_затраты", "value_to_cost"),
+                ("value_cost", "value_to_cost"),
+            ):
+                if alias in data and not data.get(target):
+                    data[target] = data[alias]
             data["value_to_cost"] = as_text(data.get("value_to_cost"))
             data["alternatives"] = as_text_list(data.get("alternatives"))
             data["deliberate_omissions"] = as_text_list(data.get("deliberate_omissions"))
+            data["audience"] = as_text(data.get("audience"))
+            data["chosen_direction"] = as_text(data.get("chosen_direction"))
+            # Обязательные поля нельзя оставлять пустыми: стратегия без
+            # аудитории и без направления — это не стратегия. Если
+            # модель их не заполнила, берём то, что есть в блоке, и
+            # честно помечаем пробел — выдумывать ничего нельзя.
+            if not data["audience"]:
+                for source in ("целевая_аудитория", "target_audience", "аудитория_и_задача"):
+                    candidate = as_text(data.get(source))
+                    if candidate:
+                        data["audience"] = candidate
+                        break
+            if not data["chosen_direction"]:
+                for source in ("направление", "выбранное_направление", "direction"):
+                    candidate = as_text(data.get(source))
+                    if candidate:
+                        data["chosen_direction"] = candidate
+                        break
         return data
 
 

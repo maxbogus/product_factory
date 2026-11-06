@@ -217,23 +217,29 @@ def find_quote(source_text: str, quote: str) -> tuple[bool, int | None]:
 
 
 def split_source_id(source_id: str) -> tuple[str, int | None]:
-    """Разделить идентификатор источника на путь и номер абзаца.
+    """Разделить идентификатор источника на путь и номер строки.
 
-    Модель часто склеивает их в одну строку вида
-    ``security/Мегафон (компания)#p126``. Разбор делается здесь, чтобы
-    остальной код работал с чистыми полями.
+    Модель часто склеивает их в одну строку. Якоря бывают двух видов:
+
+    - ``#p126`` — номер абзаца статьи;
+    - ``#row3`` — номер строки таблицы (так ссылаются метрики).
+
+    Разбор делается здесь, чтобы остальной код работал с чистыми
+    полями. Оба вида якоря дают номер строки: у абзацев он тоже
+    нужен — по нему ищется фрагмент для проверки цитаты.
 
     Args:
         source_id: Идентификатор как прислала модель.
 
     Returns:
-        Пара ``(source_id, номер_абзаца)``.
+        Пара ``(source_id, номер строки)``.
     """
     text = source_id.strip()
-    if "#p" in text:
-        path, _, suffix = text.rpartition("#p")
-        if path and suffix.isdigit():
-            return path, int(suffix)
+    for anchor in ("#p", "#row"):
+        if anchor in text:
+            path, _, suffix = text.rpartition(anchor)
+            if path and suffix.isdigit():
+                return path, int(suffix)
     return text, None
 
 

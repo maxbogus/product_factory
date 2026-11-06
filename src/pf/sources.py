@@ -18,7 +18,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from pf.config import settings
-from pf.corpus import DOMAIN_TERMS, Article, Corpus, get_corpus, tokenize
+from pf.corpus import (
+    DOMAIN_TERMS,
+    STRONG_DOMAIN_TERMS,
+    Article,
+    Corpus,
+    get_corpus,
+    tokenize,
+)
 from pf.ground import Support, SupportStatus, split_source_id, verify_claim, verify_quote
 from pf.materials import Material
 
@@ -532,6 +539,21 @@ def _score_material(
 ) -> list[Passage]:
     """Отобрать абзацы материала, релевантные запросу.
 
+    Отбор двухчастный, и это не украшение:
+
+    1. **Прямое совпадение слов.** Абзац содержит слово из запроса —
+       он точно по теме.
+    2. **Совпадение по предметной области.** Материал может быть по
+       теме, но называть её не теми словами, что запрос: задача
+       «почему падает удержание» спрашивает про абонентов, а таблица
+       про них говорит «абонентская база». Требовать буквального
+       совпадения здесь нельзя — тогда собственные материалы агента
+       никогда не попадали бы в срез, и они были бы видны только
+       при дословном повторении формулировки задачи.
+
+    Материал не по теме (рецепты при запросе про отток) не проходит
+    ни по одному признаку.
+
     Args:
         material: Материал проекта.
         query_terms: Значимые слова запроса.
@@ -540,6 +562,19 @@ def _score_material(
     Returns:
         Отобранные абзацы.
     """
+    material_words: set[str] = set()
+    for record in material.rows:
+        for value in record.values():
+            material_words.update(tokenize(str(value)))
+    for passage in material.passages:
+        material_words.update(tokenize(passage.text))
+
+    # Материал по предметной области: в нём есть сильный доменный
+    # признак, а запрос — тоже про предметную область.
+    strong_in_material = material_words & set(STRONG_DOMAIN_TERMS)
+    domain_in_query = query_terms & set(DOMAIN_TERMS)
+    same_domain = bool(strong_in_material) and bool(domain_in_query)
+
     scored: list[tuple[float, int, str]] = []
     for passage in material.passages:
         text = passage.text
@@ -547,11 +582,15 @@ def _score_material(
         if not words:
             continue
         hits = sum(1 for word in words if word in query_terms)
-        if hits == 0:
+        if hits == 0 and not same_domain:
             continue
         weighted = sum(
             2.0 if word in DOMAIN_TERMS else 1.0 for word in words if word in query_terms
         )
+        if hits == 0:
+            # Совпадение по предметной области: вес даёт сам факт, что
+            # материал про ту же область, что и запрос.
+            weighted = 1.0
         score = weighted / (len(words) ** 0.5)
         scored.append((score, passage.index, text))
 
