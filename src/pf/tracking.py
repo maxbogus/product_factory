@@ -267,5 +267,3 @@ def _append_jsonl(path: str, metrics: RunMetrics, run_id: str) -> None:
     }
     with target.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
-
-

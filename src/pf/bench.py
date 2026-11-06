@@ -30,10 +30,7 @@ from pf.tracking import RunMetrics
 DEFAULT_TASK = "Почему падает удержание у мобильного тарифа и что с этим делать?"
 
 #: Инструкция для baseline: обычный чат с той же моделью.
-BASELINE_SYSTEM = (
-    "Ты — руководитель цифрового продукта. Отвечай по существу, "
-    "по-русски, без воды."
-)
+BASELINE_SYSTEM = "Ты — руководитель цифрового продукта. Отвечай по существу, по-русски, без воды."
 
 #: Что спрашиваем у baseline. Вопрос тот же, что получает агент, но без
 #: материалов: у обычного чата их нет, и в этом суть сравнения.
@@ -180,7 +177,9 @@ def run_agent(
     )
 
 
-def baseline_metrics(task: str, result: BaselineResult, config: Settings | None = None) -> RunMetrics:
+def baseline_metrics(
+    task: str, result: BaselineResult, config: Settings | None = None
+) -> RunMetrics:
     """Оформить baseline как измерение.
 
     Args:
@@ -218,9 +217,7 @@ def compare(agent: RunMetrics, baseline: RunMetrics) -> dict[str, Any]:
         Словарь с абсолютными и относительными величинами.
     """
     token_ratio = (
-        round(agent.total_tokens / baseline.total_tokens, 2)
-        if baseline.total_tokens
-        else 0.0
+        round(agent.total_tokens / baseline.total_tokens, 2) if baseline.total_tokens else 0.0
     )
     time_ratio = (
         round(agent.duration_sec / baseline.duration_sec, 2) if baseline.duration_sec else 0.0
@@ -238,4 +235,3 @@ def compare(agent: RunMetrics, baseline: RunMetrics) -> dict[str, Any]:
             "фиксации обязательств и журнала шагов.",
         ],
     }
-

@@ -19,6 +19,11 @@ journal/
 !state/.gitkeep
 !journal/.gitkeep
 
+# Отчёты замеров и база MLflow: накапливаются по ходу работы
+reports/bench/
+mlruns/
+mlruns.db
+
 # Прочее
 .DS_Store
 *.log

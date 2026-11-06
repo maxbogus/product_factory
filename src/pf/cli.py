@@ -491,7 +491,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
         if tool.description:
             _out(f"    {tool.description[:110]}")
     _out()
-    _out(f"Вызов: pf mcp {args.server} <инструмент> '{{\"аргумент\": \"значение\"}}'")
+    _out(f'Вызов: pf mcp {args.server} <инструмент> \'{{"аргумент": "значение"}}\'')
     return 0
 
 
