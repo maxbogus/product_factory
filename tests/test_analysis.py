@@ -232,3 +232,103 @@ def test_metric_is_rejected_when_value_differs(tmp_path: Path) -> None:
     )
     support = verify_metric(metric, materials)
     assert not support.is_usable, "неверное значение не должно подтверждаться"
+
+
+def test_grounding_metrics_are_computed() -> None:
+    """Метрики качества оснований считаются по прогону.
+
+    Аналог citation_precision в mlaw-rag: доля оснований, которые
+    действительно подтверждены. Без такой метрики «качество оснований»
+    — это самооценка.
+    """
+    from pf.ground import GroundEntry, GroundReport
+
+    report = GroundReport(
+        entries=[
+            GroundEntry(citation="a", status="confirmed", kind="факт"),
+            GroundEntry(citation="b", status="no_data", kind="факт"),
+            GroundEntry(citation="c", status="confirmed", kind="метрика"),
+            GroundEntry(citation="d", status="needs_review", kind="метрика"),
+        ]
+    )
+    assert report.confirmed == 2
+    assert report.total == 4
+    assert report.grounding_rate == pytest.approx(0.5)
+    assert report.fact_grounding_rate == pytest.approx(0.5)
+    assert report.metric_grounding_rate == pytest.approx(0.5)
+
+
+def test_grounding_metrics_handle_empty_report() -> None:
+    """Пустой прогон даёт нули, а не деление на ноль."""
+    from pf.ground import GroundReport
+
+    report = GroundReport(entries=[])
+    assert report.total == 0
+    assert report.grounding_rate == 0.0
+
+
+def test_control_test_detects_broken_grounding() -> None:
+    """Контрольный тест: при случайных основаниях метрика должна пасть.
+
+    Если метрика не падает на мусоре, она ничего не измеряет. Это
+    прямой аналог контрольного теста в mlaw-rag.
+    """
+    from pf.ground import GroundEntry, GroundReport
+
+    # Настоящий прогон: основания подтверждены.
+    real = GroundReport(
+        entries=[
+            GroundEntry(citation="a", status="confirmed", kind="факт"),
+            GroundEntry(citation="b", status="confirmed", kind="факт"),
+        ]
+    )
+    # Контроль: те же объёмы, но основания не подтверждаются.
+    control = GroundReport(
+        entries=[
+            GroundEntry(citation="x", status="no_data", kind="факт"),
+            GroundEntry(citation="y", status="no_data", kind="факт"),
+        ]
+    )
+    assert real.grounding_rate > control.grounding_rate
+    assert control.grounding_rate < 0.1
+
+
+def test_control_grounding_collapses_on_fabricated_citations() -> None:
+    """Контрольный тест: выдуманные ссылки должны обрушить метрику.
+
+    Принцип из mlaw-rag: если метрика не падает на мусоре, она ничего
+    не измеряет. Здесь проверяется, что подтверждение основания —
+    реальная проверка, а не счётчик.
+    """
+    from pf.ground import verify_quote
+
+    source = "По состоянию на июнь 2024 года компания обслужила 77,26 млн абонентов."
+
+    # Настоящая цитата подтверждается.
+    real = verify_quote(source, "компания обслужила 77,26 млн абонентов", "test/s")
+    assert real.status.value == "confirmed"
+
+    # Выдуманная цитата — нет.
+    fabricated = verify_quote(source, "компания обслужила 99,99 млн абонентов", "test/s")
+    assert fabricated.status.value == "no_data"
+
+
+def test_control_grounding_rate_collapses() -> None:
+    """Доля подтверждённых падает с 100 % до нуля на выдумках."""
+    from pf.ground import GroundEntry, GroundReport
+
+    real = GroundReport(
+        entries=[
+            GroundEntry(citation="a", status="confirmed", kind="факт"),
+            GroundEntry(citation="b", status="confirmed", kind="факт"),
+        ]
+    )
+    fabricated = GroundReport(
+        entries=[
+            GroundEntry(citation="x", status="no_data", kind="факт"),
+            GroundEntry(citation="y", status="no_data", kind="факт"),
+        ]
+    )
+    assert real.grounding_rate == 1.0
+    assert fabricated.grounding_rate == 0.0
+    assert fabricated.grounding_rate < 0.1

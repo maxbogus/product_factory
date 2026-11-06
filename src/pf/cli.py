@@ -337,6 +337,43 @@ def cmd_materials(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── report ──────────────────────────────────────────────────────────────────
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """Отчёт по прогону: числа, расход и границы замера.
+
+    Отчёт строится по журналу шагов, поэтому цифры воспроизводимы.
+    По умолчанию печатается markdown; с `--json` — словарь для
+    машинного чтения, с `--save` — файл в каталоге отчётов.
+    """
+    import json as json_module
+
+    from pf.report import build_session_report, report_as_dict
+
+    session_id = _session_id(args.session)
+    if not session_id:
+        _out("Нет сохранённых сессий.")
+        return 1
+
+    report = build_session_report(session_id)
+
+    if args.json:
+        _out(json_module.dumps(report_as_dict(report), ensure_ascii=False, indent=2))
+        return 0
+
+    text = report.as_markdown()
+    if args.save:
+        target = settings.reports_dir / f"session-{session_id}.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        _out(f"Отчёт сохранён: {target}")
+        return 0
+
+    _out(text)
+    return 0
+
+
 # ── knowledge ───────────────────────────────────────────────────────────────
 
 
@@ -650,6 +687,14 @@ def build_parser() -> argparse.ArgumentParser:
         "materials", help="показать материалы проекта (документы и таблицы)"
     )
     materials.set_defaults(func=cmd_materials)
+
+    report = subparsers.add_parser(
+        "report", help="отчёт по прогону: основания, расход, границы замера"
+    )
+    report.add_argument("--session", help="идентификатор сессии")
+    report.add_argument("--json", action="store_true", help="вывести в JSON")
+    report.add_argument("--save", action="store_true", help="сохранить в reports/")
+    report.set_defaults(func=cmd_report)
 
     knowledge = subparsers.add_parser(
         "knowledge", help="показать хранилище знаний (выгрузки и их источники)"

@@ -170,6 +170,10 @@ class Settings(BaseSettings):
     #: с provenance. Отдельно от материалов проекта: здесь лежит то,
     #: что агент скачал сам, с датой и хешем версии.
     knowledge_dir: Path = Path("knowledge")
+
+    #: Отчёты по прогонам: markdown и JSON. Коммитятся: по ним видно,
+    #: что именно измерялось.
+    reports_dir: Path = Path("reports/sessions")
     prompts_dir: Path = Path("prompts")
     methods_dir: Path = Path("methods")
     hooks_dir: Path = Path("hooks")

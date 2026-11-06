@@ -297,3 +297,45 @@ def test_knowledge_manifest_is_not_empty_for_empty_dir(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     raw.mkdir()
     assert read_manifest(raw) == []
+
+
+def test_material_citation_resolves_to_url(tmp_path: Path) -> None:
+    """Ссылка на материал должна вести на адрес источника.
+
+    Идентификатор `project/файл#row3` — не ссылка: человек по нему
+    ничего не откроет. Ссылка должна быть кликабельной и вести туда,
+    откуда данные взяты.
+    """
+    from pf.materials import resolve_citation
+
+    (tmp_path / "numbers.csv").write_text("период,значение\n2026 Q1,110,7\n", encoding="utf-8")
+    (tmp_path / "numbers.csv.meta.json").write_text(
+        json.dumps(
+            {"title": "Метрики", "url": "https://example.org/metrics"},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    resolved = resolve_citation("project/numbers.csv#row0", directory=tmp_path)
+    assert resolved is not None
+    assert resolved.url == "https://example.org/metrics"
+    assert resolved.source_id == "project/numbers.csv"
+    assert resolved.row == 0
+
+
+def test_resolve_citation_for_corpus_article(tmp_path: Path) -> None:
+    """Ссылка на статью корпуса должна разрешаться в статью Википедии."""
+    from pf.materials import resolve_citation
+
+    resolved = resolve_citation("telecom/Т2 (оператор сотовой связи)#p12")
+    assert resolved is not None
+    assert "wikipedia.org" in resolved.url
+    assert resolved.source_id == "telecom/Т2 (оператор сотовой связи)"
+    assert resolved.paragraph == 12
+
+
+def test_resolve_citation_returns_none_for_unknown() -> None:
+    """Неизвестный источник не разрешается — лучше пусто, чем выдумка."""
+    from pf.materials import resolve_citation
+
+    assert resolve_citation("project/нет-такого.csv#row0") is None

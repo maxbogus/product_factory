@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 #: Нормализация текста перед сравнением: приводим к NFC, схлопываем пробелы
@@ -83,6 +83,96 @@ class Support:
         if self.paragraph_index is None:
             return self.source_id
         return f"{self.source_id}#p{self.paragraph_index}"
+
+
+@dataclass(frozen=True, slots=True)
+class GroundEntry:
+    """Одно основание в отчёте о качестве заземления.
+
+    Attributes:
+        citation: Ссылка на источник.
+        status: Статус подтверждения.
+        kind: Что это — факт или метрика.
+    """
+
+    citation: str
+    status: str
+    kind: str = "факт"
+
+
+@dataclass(frozen=True, slots=True)
+class GroundReport:
+    """Отчёт о качестве оснований: какая доля подтверждена кодом.
+
+    Самооценка «оснований достаточно» ничего не значит. Значима
+    доля подтверждённых оснований — и отдельно по фактам и по
+    метрикам: у них разный способ проверки.
+
+    Метрики намеренно разделены: «факты подтверждены на 90 %» и
+    «метрики воспроизводятся на 60 %» говорят разные вещи, а одно
+    среднее число скрывает разницу.
+    """
+
+    entries: list[GroundEntry] = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        """Сколько всего оснований."""
+        return len(self.entries)
+
+    @property
+    def confirmed(self) -> int:
+        """Сколько оснований подтверждено."""
+        return sum(1 for entry in self.entries if entry.status == "confirmed")
+
+    @property
+    def grounding_rate(self) -> float:
+        """Доля подтверждённых оснований от всех.
+
+        Returns:
+            Доля от 0 до 1; ноль для пустого отчёта.
+        """
+        if not self.entries:
+            return 0.0
+        return self.confirmed / self.total
+
+    def _rate(self, kind: str) -> float:
+        """Доля подтверждённых оснований одного вида.
+
+        Args:
+            kind: Вид основания.
+
+        Returns:
+            Доля от 0 до 1; ноль, если таких оснований нет.
+        """
+        selected = [entry for entry in self.entries if entry.kind == kind]
+        if not selected:
+            return 0.0
+        confirmed = sum(1 for entry in selected if entry.status == "confirmed")
+        return confirmed / len(selected)
+
+    @property
+    def fact_grounding_rate(self) -> float:
+        """Доля подтверждённых фактов."""
+        return self._rate("факт")
+
+    @property
+    def metric_grounding_rate(self) -> float:
+        """Доля подтверждённых метрик."""
+        return self._rate("метрика")
+
+    @property
+    def summary(self) -> str:
+        """Краткая сводка для вывода.
+
+        Returns:
+            Текст сводки.
+        """
+        return (
+            f"оснований: {self.total}, подтверждено: {self.confirmed} "
+            f"({self.grounding_rate:.0%}); факты: {self.fact_grounding_rate:.0%}, "
+            f"метрики: {self.metric_grounding_rate:.0%}"
+        )
 
 
 def normalize(text: str) -> str:

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from pf.config import settings
-from pf.journal import Journal, StepRecord
+from pf.journal import Journal, StepRecord, journal_path
 from pf.state import Phase, SessionState, list_sessions, load, save
 
 
@@ -157,3 +157,55 @@ def test_sessions_are_listed() -> None:
     found = list_sessions()
     assert "alpha" in found
     assert "beta" in found
+
+
+def test_session_report_counts_grounding_and_cost(tmp_path: Path) -> None:
+    """Отчёт по сессии должен считать качество оснований и расход.
+
+    Журнал хранит по каждому шагу подтверждённые и отклонённые
+    основания. Из него можно посчитать долю подтверждённых — без
+    этого «качество оснований» остаётся самооценкой.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-test"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=0,
+            role="collector",
+            phase="collecting",
+            summary="факты",
+            citations=["a#p1", "b#p2"],
+            cost_units=0.001,
+        )
+    )
+    journal.append(
+        StepRecord(
+            ordinal=1,
+            role="analyst",
+            phase="analyzing",
+            summary="факты",
+            citations=["c#p3"],
+            rejected_details=["d#p4: цитата не найдена"],
+            cost_units=0.002,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert report.steps == 2
+    assert report.confirmed_citations == 3
+    assert report.rejected_citations == 1
+    assert report.grounding_rate == pytest.approx(0.75)
+    assert report.total_cost_units == pytest.approx(0.003)
+    assert report.cost_by_role["collector"] == pytest.approx(0.001)
+
+
+def test_session_report_handles_missing_session() -> None:
+    """Отчёт по несуществующей сессии не должен падать."""
+    from pf.report import build_session_report
+
+    report = build_session_report("нет-такой-сессии")
+    assert report.steps == 0
+    assert report.grounding_rate == 0.0

@@ -436,6 +436,111 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedCitation:
+    """Ссылка, разрешённая в адрес источника.
+
+    Attributes:
+        source_id: Идентификатор источника.
+        url: Адрес, по которому можно открыть источник.
+        paragraph: Номер абзаца, если ссылка была на абзац.
+        row: Номер строки, если ссылка была на строку таблицы.
+        title: Заголовок источника.
+    """
+
+    source_id: str
+    url: str
+    title: str = ""
+    paragraph: int | None = None
+    row: int | None = None
+
+    @property
+    def anchor(self) -> str:
+        """Якорь внутри адреса — на абзац или строку.
+
+        Returns:
+            Якорь вида ``#p12`` или ``#row3`` либо пустая строка.
+        """
+        if self.paragraph is not None:
+            return f"#p{self.paragraph}"
+        if self.row is not None:
+            return f"#row{self.row}"
+        return ""
+
+
+def _wikipedia_url(title: str) -> str:
+    """Адрес статьи Википедии по заголовку.
+
+    Args:
+        title: Заголовок статьи.
+
+    Returns:
+        Адрес статьи.
+    """
+    from urllib.parse import quote
+
+    return f"https://ru.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+
+
+def resolve_citation(
+    citation: str,
+    *,
+    directory: Path | None = None,
+) -> ResolvedCitation | None:
+    """Разрешить ссылку на источник в адрес, по которому его можно открыть.
+
+    Идентификатор вроде ``project/файл#row3`` или ``telecom/Статья#p12``
+    — это не ссылка: человек по нему ничего не откроет. Здесь
+    идентификатор превращается в адрес: для материала проекта берётся
+    адрес из его метаданных, для статьи корпуса — адрес статьи
+    Википедии.
+
+    Args:
+        citation: Ссылка вида ``источник#pN`` или ``источник#rowN``.
+        directory: Каталог материалов. По умолчанию — ``project/``.
+
+    Returns:
+        Разрешённая ссылка либо ``None``, если источник неизвестен.
+    """
+    if not citation:
+        return None
+
+    clean, _, fragment = citation.partition("#")
+    paragraph: int | None = None
+    row: int | None = None
+    if fragment.startswith("p") and fragment[1:].isdigit():
+        paragraph = int(fragment[1:])
+    elif fragment.startswith("row") and fragment[3:].isdigit():
+        row = int(fragment[3:])
+
+    root = directory or settings.project_dir
+    if clean.startswith("project/"):
+        relative = clean.removeprefix("project/")
+        path = root / relative
+        sidecar = _read_sidecar(path)
+        if not path.is_file():
+            return None
+        return ResolvedCitation(
+            source_id=clean,
+            url=sidecar.get("url", "") or path.as_uri(),
+            title=sidecar.get("title", "") or path.stem,
+            paragraph=paragraph,
+            row=row,
+        )
+
+    # Статья корпуса: раздел/заголовок. Адрес — статья Википедии.
+    section, _, title = clean.partition("/")
+    if not title:
+        return None
+    return ResolvedCitation(
+        source_id=clean,
+        url=_wikipedia_url(title),
+        title=title,
+        paragraph=paragraph,
+        row=row,
+    )
+
+
 def load_materials(directory: Path | None = None) -> list[Material]:
     """Загрузить материалы проекта.
 
