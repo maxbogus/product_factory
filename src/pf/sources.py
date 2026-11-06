@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from pf.config import settings
 from pf.corpus import DOMAIN_TERMS, Article, Corpus, get_corpus, tokenize
@@ -241,6 +242,134 @@ class SourceBundle:
                 return result
             best = result
         return best
+
+
+def verify_metric(
+    metric: Any,
+    materials: list[Material],
+    *,
+    tolerance: float = 1e-6,
+) -> Support:
+    """Проверить расчётную метрику пересчётом по строке источника.
+
+    Факт подтверждается дословной цитатой. Метрика — иначе: её нужно
+    **пересчитать** по указанной строке и сравнить с заявленным
+    значением. Это единственная проверка, которая отличает расчёт от
+    выдумки: число нельзя «процитировать».
+
+    Проверяются оба основания расчёта:
+
+    1. значение метрики совпадает со значением в строке источника —
+       либо с заявленными входами ``inputs``;
+    2. если входы заданы, пересчёт по ним даёт то же значение.
+
+    Args:
+        metric: Метрика с provenance.
+        materials: Материалы проекта.
+        tolerance: Допустимое расхождение при сравнении.
+
+    Returns:
+        Результат проверки: подтверждено, требует проверки или нет
+        данных.
+    """
+    from pf.analysis import Metric, parse_number
+
+    if not isinstance(metric, Metric):
+        return Support(
+            quote="",
+            source_id="",
+            status=SupportStatus.NO_DATA,
+            detail="метрика не имеет структуры с provenance",
+        )
+
+    source_id = metric.source_id
+    if not source_id:
+        return Support(
+            quote=metric.name,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail="у метрики нет источника — пересчитать нельзя",
+        )
+
+    material = next((m for m in materials if m.source_id == source_id), None)
+    if material is None:
+        return Support(
+            quote=metric.name,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail=f"источник {source_id} не найден среди материалов",
+        )
+
+    # 1. Значение из указанной строки источника.
+    row_values: list[float] = []
+    if metric.row is not None and 0 <= metric.row < len(material.rows):
+        for value in material.rows[metric.row].values():
+            parsed = parse_number(str(value))
+            if parsed is not None:
+                row_values.append(parsed)
+    else:
+        for record in material.rows:
+            for value in record.values():
+                parsed = parse_number(str(value))
+                if parsed is not None:
+                    row_values.append(parsed)
+
+    if row_values and not _matches_any(metric.value, row_values, tolerance):
+        return Support(
+            quote=metric.formatted,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail=(
+                f"значение {metric.formatted} не совпадает со строкой "
+                f"{metric.row if metric.row is not None else '?'} источника"
+            ),
+        )
+
+    # 2. Пересчёт по заявленным входам.
+    if metric.inputs:
+        numbers = [
+            parsed
+            for parsed in (parse_number(str(v)) for v in metric.inputs.values())
+            if parsed is not None
+        ]
+        if len(numbers) >= 2:
+            base, new = numbers[0], numbers[1]
+            recomputed = (new - base) / abs(base) * 100 if base else 0.0
+            if metric.unit == "%" and not _matches_any(recomputed, [metric.value], tolerance):
+                return Support(
+                    quote=metric.formatted,
+                    source_id=source_id,
+                    status=SupportStatus.NO_DATA,
+                    detail=(
+                        f"пересчёт по входам даёт {recomputed:.4g} %, а заявлено {metric.formatted}"
+                    ),
+                )
+
+    return Support(
+        quote=metric.formatted,
+        source_id=source_id,
+        status=SupportStatus.CONFIRMED,
+        paragraph_index=metric.row,
+        detail=(
+            "метрика пересчитана по строке источника"
+            if metric.row is not None
+            else "метрика подтверждена по материалу"
+        ),
+    )
+
+
+def _matches_any(value: float, candidates: list[float], tolerance: float) -> bool:
+    """Совпадает ли значение с одним из кандидатов.
+
+    Args:
+        value: Проверяемое значение.
+        candidates: Кандидаты.
+        tolerance: Допустимое расхождение.
+
+    Returns:
+        Есть ли подходящий кандидат.
+    """
+    return any(abs(value - candidate) <= tolerance for candidate in candidates)
 
 
 def score_passages(

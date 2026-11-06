@@ -436,6 +436,47 @@ class Workflow:
                     rejected += 1
                     details.append(f"{named or 'источник не назван'}: {support.detail}")
 
+        confirmed_metrics, rejected_metrics, metric_details = Workflow._verify_metrics(data)
+        confirmed.extend(confirmed_metrics)
+        rejected += rejected_metrics
+        details.extend(metric_details)
+
+        return confirmed, rejected, details
+
+    @staticmethod
+    def _verify_metrics(data: Any) -> tuple[list[str], int, list[str]]:
+        """Проверить расчётные метрики пересчётом по источнику.
+
+        Факт подтверждается дословной цитатой. Метрику подтверждает
+        только пересчёт: число нельзя «процитировать», его можно только
+        посчитать заново. Метрика без источника или с неверным
+        значением отбрасывается — как и выдуманная цитата.
+
+        Args:
+            data: Результат роли.
+
+        Returns:
+            Пара ``(подтверждённые ссылки, число отброшенных, пояснения)``.
+        """
+        metrics = getattr(data, "metrics", None) or []
+        if not metrics:
+            return [], 0, []
+
+        from pf.materials import load_materials
+        from pf.sources import verify_metric
+
+        materials = load_materials()
+        confirmed: list[str] = []
+        rejected = 0
+        details: list[str] = []
+        for metric in metrics:
+            support = verify_metric(metric, materials)
+            if support.is_usable:
+                confirmed.append(support.citation)
+            else:
+                rejected += 1
+                name = getattr(metric, "name", "метрика")
+                details.append(f"{name}: {support.detail}")
         return confirmed, rejected, details
 
     def _run_fact_check(
@@ -822,6 +863,63 @@ class Workflow:
         context = state.results.get("web_context")
         return context if isinstance(context, str) else ""
 
+    @staticmethod
+    def _computed_metrics(state: SessionState) -> str:
+        """Готовые расчёты по материалам проекта.
+
+        Считать должен код, а не модель: числа из таблиц — это то, что
+        можно пересчитать и проверить. Агенту отдаются уже посчитанные
+        значения с указанием строки и формулы, чтобы он опирался на них
+        при построении плана проверки.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Текст блока с расчётами либо пустая строка.
+        """
+        from pf.analysis import compute_from_rows, summarize_series
+        from pf.materials import load_materials
+
+        materials = load_materials()
+        blocks: list[str] = []
+        for material in materials:
+            if not material.rows:
+                continue
+            columns = list(material.rows[0].keys())
+            value_column = next(
+                (name for name in columns if "знач" in name.lower() or "value" in name.lower()),
+                None,
+            )
+            if value_column is None:
+                continue
+            label_column = next(
+                (name for name in columns if name != value_column),
+                None,
+            )
+            metrics = compute_from_rows(
+                material.rows,
+                value_column=value_column,
+                source_id=material.source_id,
+                name=material.title,
+                label_column=label_column or "",
+            )
+            if not metrics:
+                continue
+            lines = [
+                f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
+                for metric in metrics[:10]
+            ]
+            summary = summarize_series(metrics, name=material.title, unit=metrics[0].unit)
+            lines.extend(
+                f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
+                for metric in summary
+            )
+            blocks.append(f"РАСЧЁТЫ по {material.source_id}:\n" + "\n".join(lines))
+        if not blocks:
+            return ""
+        return "\n\n".join(blocks)
+
     @classmethod
     def _materials(cls, bundle: SourceBundle | None, state: SessionState) -> str:
         """Собрать все материалы для роли: локальные и внешние.
@@ -840,9 +938,12 @@ class Workflow:
         """
         local = cls._bundle_context(bundle)
         web = cls._web_context(state)
+        computed = cls._computed_metrics(state)
         parts = []
         if local:
             parts.append(local)
+        if computed:
+            parts.append(computed)
         if web:
             parts.append(
                 "ВНЕШНИЕ ИСТОЧНИКИ (статус: требует проверки человеком, не подтверждено):\n" + web

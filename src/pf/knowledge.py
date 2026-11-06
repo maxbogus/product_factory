@@ -92,7 +92,7 @@ ROLE_METHODS: dict[str, tuple[str, ...]] = {
 #: Теперь скил подставляется в инструкцию своей роли — как методика,
 #: но описывает не «как думать», а «как выполнить процедуру».
 ROLE_SKILLS: dict[str, tuple[str, ...]] = {
-    "analyst": ("mock-respondents",),
+    "analyst": ("analyze-data", "mock-respondents"),
     "collector": ("collect-sources",),
 }
 

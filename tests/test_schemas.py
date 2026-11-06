@@ -255,3 +255,41 @@ def test_verification_accepts_adverse_effects() -> None:
         adverse_effects=["Падение маржи ниже 2 % — откатываем на сегмент A"],
     )
     assert plan.adverse_effects
+
+
+def test_analysis_accepts_metrics_with_provenance() -> None:
+    """Разбор должен принимать расчётные метрики со ссылкой на строку."""
+    from pf.schemas import Analysis
+
+    analysis = Analysis(
+        facts=[],
+        hypotheses=[],
+        forecasts=[],
+        gaps=[],
+        metrics=[
+            {
+                "name": "Абонентская база, 2026 Q1",
+                "value": 110.7,
+                "unit": "млн",
+                "source_id": "project/data/numbers.csv",
+                "row": 4,
+                "formula": "значение из строки 5",
+                "inputs": {"значение": "110,7"},
+            }
+        ],
+    )
+    assert len(analysis.metrics) == 1
+    metric = analysis.metrics[0]
+    assert metric.value == pytest.approx(110.7)
+    assert metric.source_id == "project/data/numbers.csv"
+    assert metric.citation == "project/data/numbers.csv#row4"
+
+
+def test_analysis_metric_without_source_is_marked_not_reproducible() -> None:
+    """Метрика без источника принимается, но помечается как непроверяемая."""
+    from pf.schemas import Analysis
+
+    analysis = Analysis(
+        metrics=[{"name": "Что-то", "value": 1.0, "unit": "шт"}],
+    )
+    assert analysis.metrics[0].is_reproducible is False

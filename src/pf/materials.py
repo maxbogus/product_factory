@@ -117,11 +117,24 @@ class Material:
     retrieved: str = ""
     sha256: str = ""
     path: str = ""
+    rows: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def content(self) -> str:
         """Весь текст материала — абзацы, соединённые переводом строки."""
         return "\n".join(passage.text for passage in self.passages)
+
+    def table_rows(self) -> list[dict[str, str]]:
+        """Строки таблицы как словари «колонка → значение».
+
+        Нужны для расчётов: по строке можно посчитать метрику и
+        потом проверить её пересчётом. Для нетабличных материалов
+        возвращается пустой список.
+
+        Returns:
+            Список строк.
+        """
+        return list(self.rows)
 
 
 def _sha256(data: bytes) -> str:
@@ -186,6 +199,35 @@ def _csv_rows(text: str, delimiter: str) -> list[str]:
         if pairs:
             lines.append(", ".join(pairs)[:MAX_PASSAGE_CHARS])
     return lines
+
+
+def _csv_dicts(text: str, delimiter: str) -> list[dict[str, str]]:
+    """Прочитать таблицу в словари «колонка → значение».
+
+    Строки нужны для расчётов: метрика ссылается на номер строки, и
+    по ней значение можно пересчитать и проверить.
+
+    Args:
+        text: Содержимое таблицы.
+        delimiter: Разделитель полей.
+
+    Returns:
+        Список словарей. Первая строка файла считается заголовком.
+    """
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    rows = [row for row in reader if any(cell.strip() for cell in row)]
+    if not rows:
+        return []
+    header = [cell.strip() for cell in rows[0]]
+    result: list[dict[str, str]] = []
+    for row in rows[1:]:
+        record: dict[str, str] = {}
+        for index, cell in enumerate(row):
+            if index < len(header) and header[index]:
+                record[header[index]] = cell.strip()
+        if record:
+            result.append(record)
+    return result
 
 
 def _json_records(payload: Any) -> tuple[str, str, str, list[str]]:
@@ -345,6 +387,7 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
     retrieved = sidecar.get("retrieved", "")
     kind = Material.Kind.DOCUMENT
     blocks: list[str] = []
+    rows: list[dict[str, str]] = []
 
     try:
         if suffix in TEXT_SUFFIXES:
@@ -352,7 +395,9 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
         elif suffix in TABLE_SUFFIXES:
             kind = Material.Kind.TABLE
             delimiter = "\t" if suffix == ".tsv" else ","
-            blocks = _csv_rows(raw.decode("utf-8", errors="replace"), delimiter)
+            text = raw.decode("utf-8", errors="replace")
+            blocks = _csv_rows(text, delimiter)
+            rows = _csv_dicts(text, delimiter)
         elif suffix in DATA_SUFFIXES:
             kind = Material.Kind.DATA
             payload = json.loads(raw.decode("utf-8", errors="replace"))
@@ -387,6 +432,7 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
         retrieved=retrieved,
         sha256=_sha256(raw),
         path=str(path),
+        rows=rows,
     )
 
 

@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -171,6 +171,67 @@ class SourceRef(BaseModel):
         return f"{self.source_id}#p{self.paragraph}"
 
 
+class MetricRef(BaseModel):
+    """Расчётная метрика со ссылкой на источник данных.
+
+    Отличие от факта: факт подтверждается дословной цитатой, метрика —
+    числом, посчитанным по строке. Поэтому у метрики другой источник
+    (строка таблицы) и обязательно формула.
+
+    Attributes:
+        name: Название метрики.
+        value: Значение.
+        unit: Единица измерения.
+        source_id: Идентификатор источника данных.
+        row: Номер строки в источнике (нумерация с нуля).
+        formula: Как считалось.
+        inputs: Входные значения.
+        note: Пояснение для человека.
+    """
+
+    name: str = Field(min_length=1)
+    value: float
+    unit: str = Field(default="")
+    source_id: str = Field(default="")
+    row: int | None = Field(default=None)
+    formula: str = Field(default="")
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    note: str = Field(default="")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize(cls, data: object) -> object:
+        """Привести поля к ожидаемому виду: модель отвечает строками."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        data["name"] = as_text(data.get("name"))
+        data["unit"] = as_text(data.get("unit"))
+        data["source_id"] = as_text(data.get("source_id"))
+        data["formula"] = as_text(data.get("formula"))
+        row = data.get("row")
+        if isinstance(row, str):
+            data["row"] = int(row) if row.strip().isdigit() else None
+        return data
+
+    @property
+    def citation(self) -> str:
+        """Ссылка на источник значения."""
+        if not self.source_id:
+            return ""
+        if self.row is None:
+            return self.source_id
+        return f"{self.source_id}#row{self.row}"
+
+    @property
+    def is_reproducible(self) -> bool:
+        """Можно ли пересчитать метрику по её же данным.
+
+        Метрика без источника — это утверждение, а не расчёт.
+        """
+        return bool(self.source_id)
+
+
 class Claim(BaseModel):
     """Утверждение с его основанием.
 
@@ -290,6 +351,7 @@ class Analysis(BaseModel):
     hypotheses: list[Claim] = Field(default_factory=list)
     forecasts: list[Claim] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
+    metrics: list[MetricRef] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -371,8 +433,8 @@ class Analysis(BaseModel):
     @model_validator(mode="after")
     def _has_content(self) -> Analysis:
         """Пустой разбор бесполезен — значит, шаг не удался."""
-        if not (self.facts or self.hypotheses or self.forecasts or self.gaps):
-            raise ValueError("разбор не содержит ни фактов, ни гипотез, ни пробелов")
+        if not (self.facts or self.hypotheses or self.forecasts or self.gaps or self.metrics):
+            raise ValueError("разбор не содержит ни фактов, ни гипотез, ни метрик, ни пробелов")
         return self
 
 
