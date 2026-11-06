@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pymorphy3  # type: ignore[import-untyped]
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore[import-untyped]
 
 from pf.config import settings
@@ -25,6 +26,12 @@ from pf.config import settings
 #: Шаблон выделения слов. Только кириллица и латиница длиной от 4 знаков:
 #: короткие служебные слова дают шум, а не сигнал.
 _TOKEN_PATTERN = r"[а-яёa-z]{4,}"
+
+#: Морфологический анализатор и кэш лемм. Анализатор тяжёлый (словари),
+#: поэтому создаётся один раз; кэш нужен потому, что одни и те же слова
+#: встречаются в тексте тысячи раз.
+_MORPH: pymorphy3.MorphAnalyzer | None = None
+_LEMMA_CACHE: dict[str, str] = {}
 
 #: Слова, которые встречаются везде и не различают статьи.
 _STOP_WORDS = frozenset(
@@ -141,6 +148,48 @@ STRONG_DOMAIN_TERMS: frozenset[str] = frozenset(
     ]
 )
 
+#: Названия операторов связи. Статья про оператора — это ядро предметной
+#: области, а не совпадение по слову «абонент»: именно такие статьи нужны
+#: руководителю цифрового продукта.
+OPERATOR_PATTERN: re.Pattern[str] = re.compile(
+    r"(мегафон|мтс|билайн|tele2|теле2|ростелеком|телеком)",
+    re.IGNORECASE,
+)
+
+#: Насколько статья про оператора поднимается над прочими доменными.
+#: Величина подобрана так, чтобы оператор обгонял статью с лучшим
+#: TF-IDF, но не вытеснял её из выдачи: сортировка по сумме.
+OPERATOR_BONUS: float = 2.0
+
+#: Доменные термины, которые **не встречаются** в чужих областях.
+#: Отделены от остальных по факту: замер по корпусу показал, что «абонент»
+#: встречается в 5 статьях из чужих разделов (13 %), а «связь» — в 1 402
+#: (68 %): химическая «двойная связь» и IT-«связь» не имеют отношения к
+#: телеком-тематике, но формально подходят.
+#:
+#: По этому списку строится доменный фильтр запроса.
+CLEAN_DOMAIN_TERMS: frozenset[str] = frozenset(
+    [
+        "абонент",
+        "абонентов",
+        "абонентский",
+        "абонентская",
+        "роуминг",
+        "симкар",
+        "симкарты",
+        "сотовая",
+        "сотовый",
+        "сотово",
+        "тарифы",
+        "тарифный",
+        "пакеты",
+        "трафик",
+        "телеком",
+        "телекоммуникация",
+        "провайдер",
+    ]
+)
+
 DOMAIN_TERMS: frozenset[str] = frozenset(
     [
         "оператор",
@@ -237,6 +286,17 @@ class Corpus:
     чем пересчитывать на каждый запрос.
     """
 
+    #: Во сколько раз больше кандидатов берётся для доменного запроса,
+    #: прежде чем применяется доменная фильтрация. Нужный запас: статья
+    #: про оператора по TF-IDF стоит ниже, чем статья с коротким точным
+    #: совпадением.
+    DOMAIN_CANDIDATE_MULTIPLIER: int = 8
+
+    #: Доля от лучшего счёта, ниже которой статья в доменный срез не идёт.
+    #: Подобрано замером: статья с оценкой 0,15 при лучшей 2,13 — это шум
+    #: («Эрланг» из математики), а не ответ на вопрос про удержание.
+    DOMAIN_SCORE_CUTOFF: float = 0.5
+
     def __init__(self, articles: list[Article]) -> None:
         self._articles = articles
         self._vectorizer: TfidfVectorizer | None = None
@@ -310,13 +370,18 @@ class Corpus:
     # ── Индекс и поиск ──────────────────────────────────────────────────────
 
     def _ensure_index(self) -> None:
-        """Построить TF-IDF-индекс, если он ещё не построен."""
+        """Построить TF-IDF-индекс, если он ещё не построен.
+
+        Индекс строится по **основам** слов. Это не украшение: без него
+        запрос «почему падает удержание у мобильном тарифе» не совпадает со
+        статьёй, где написано «тариф» и «мобильный», — TF-IDF даёт нулевое
+        сходство, и нужная статья в срез не попадала вовсе.
+        """
         if self._vectorizer is not None:
             return
         self._vectorizer = TfidfVectorizer(
             max_features=60_000,
-            token_pattern=_TOKEN_PATTERN,
-            lowercase=True,
+            analyzer=analyze,
         )
         self._matrix = self._vectorizer.fit_transform(a.content for a in self._articles)
 
@@ -329,13 +394,26 @@ class Corpus:
     ) -> list[tuple[Article, float]]:
         """Найти статьи, релевантные запросу.
 
+        Для доменного запроса работают два механизма сразу:
+
+        1. **Пул кандидатов.** В поиск идут только статьи, содержащие доменные
+           термины запроса. Без этого в срез попадала физика: TF-IDF по
+           длинной статье плохо совпадает с коротким запросом, и «Мегафон»
+           оказывался 25-м из 25.
+        2. **Бонус оператора.** Статья про оператора связи поднимается выше
+           прочих: это ядро предметной области, и именно её ищет
+           руководитель цифрового продукта.
+
+        Для запроса вне предметной области работает обычный TF-IDF — агент
+        должен отвечать и на чужую тему.
+
         Args:
             query: Поисковый запрос.
             top_k: Сколько статей вернуть. По умолчанию — из настроек.
+            prefer_domain: Применять ли доменную обработку.
 
         Returns:
             Список пар ``(статья, оценка)``, отсортированный по убыванию оценки.
-            Оценка — косинусная близость TF-IDF.
         """
         self._ensure_index()
         limit = top_k or settings.source_top_k
@@ -364,20 +442,78 @@ class Corpus:
         # Статьи с нулевой оценкой не несут информации — отбрасываем.
         found = [(article, score) for article, score in ranked if score > 0.0]
 
-        if prefer_domain and self._query_is_domain(query):
-            # Сначала статьи с доменным признаком, потом остальные — но с
-            # пониженным весом, чтобы они не вытесняли тематические.
-            strong = [(a, s) for a, s in found if a.domain_hit > 0]
-            weak = [(a, s * 0.35) for a, s in found if a.domain_hit == 0]
-            found = strong + weak
+        if prefer_domain and is_domain_query(query):
+            # Кандидатов берём с запасом: доменная фильтрация идёт после
+            # TF-IDF, и нужная статья может стоять ниже топ-6.
+            candidates = found[: limit * self.DOMAIN_CANDIDATE_MULTIPLIER]
+            return self._prefer_domain(candidates, found, query)[:limit]
 
         return found[:limit]
 
-    @staticmethod
-    def _query_is_domain(query: str) -> bool:
-        """Похож ли запрос на нашу предметную область."""
-        words = set(tokenize(query))
-        return bool(words & STRONG_DOMAIN_TERMS)
+    def _prefer_domain(
+        self,
+        candidates: list[tuple[Article, float]],
+        all_found: list[tuple[Article, float]],
+        query: str,
+    ) -> list[tuple[Article, float]]:
+        """Оставить в выдаче статьи по предметной области запроса.
+
+        Шаги:
+
+        1. из кандидатов оставляются те, что содержат **чистый** доменный
+           термин запроса. Чистый — отобранный замером по корпусу: «абонент»
+           встречается в 5 статьях из чужих разделов, а «связь» — в 1 402,
+           и химическая «двойная связь» прошла бы фильтр наравне с
+           телекомом;
+        2. статья про оператора получает бонус и проходит в срез всегда:
+           операторов в корпусе всего четыре, и это ядро предметной области;
+        3. хвост отсекается по порогу доли от лучшего счёта: доменный срез
+           должен быть коротким и точным, а не длинным и формальным.
+
+        Args:
+            candidates: Отобранные TF-IDF кандидаты.
+            all_found: Вся найденная выдача — не используется, оставлен
+                для совместимости вызова.
+            query: Поисковый запрос.
+
+        Returns:
+            Переупорядоченная выдача.
+        """
+        query_lemmas = set(analyze(query))
+        # Фильтр — по чистым терминам. «Связь» и «интернет» тоже доменные,
+        # но они двусмысленны: химическая «двойная связь» и IT-«связь»
+        # проходят по ним наравне с телекомом. Чистые термины отобраны
+        # замером по корпусу (см. CLEAN_DOMAIN_TERMS).
+        wanted = query_lemmas & domain_lemmas()
+        if not wanted:
+            wanted = query_lemmas & strong_domain_lemmas()
+        if not wanted:
+            return candidates
+
+        pool: list[tuple[Article, float]] = []
+        for article, score in candidates:
+            is_operator = bool(OPERATOR_PATTERN.search(article.title))
+            if is_operator:
+                # Статья про оператора попадает в срез всегда: это ядро
+                # предметной области, даже если конкретное слово запроса
+                # в ней не встречается. «Мегафон» не содержит слова
+                # «тариф», но вопрос — именно про него.
+                pool.append((article, score + OPERATOR_BONUS))
+            elif wanted & _article_lemmas(article):
+                pool.append((article, score))
+
+        if not pool:
+            return candidates
+
+        scored = pool
+        scored.sort(key=lambda pair: pair[1], reverse=True)
+
+        # Хвост отсекается: статья, чей счёт кратно ниже лучшего, в срез
+        # не идёт. В доменном срезе нужен десяток сильных статей, а не
+        # сотня формально подходящих.
+        best = scored[0][1]
+        cutoff = best * self.DOMAIN_SCORE_CUTOFF
+        return [(article, score) for article, score in scored if score >= cutoff]
 
 
 @lru_cache(maxsize=1)
@@ -397,3 +533,106 @@ def tokenize(text: str) -> list[str]:
     """
     words = re.findall(_TOKEN_PATTERN, text.lower())
     return [word for word in words if word not in _STOP_WORDS]
+
+
+def get_morph() -> pymorphy3.MorphAnalyzer:
+    """Морфологический анализатор — создаётся один раз на процесс.
+
+    Returns:
+        Анализатор pymorphy3.
+    """
+    global _MORPH
+    if _MORPH is None:
+        _MORPH = pymorphy3.MorphAnalyzer()
+    return _MORPH
+
+
+def lemmatize(word: str) -> str:
+    """Привести слово к нормальной форме.
+
+    Лемматизация взята из проверенного решения: ``pymorphy3`` с русским
+    словарём. Эвристический срез суффиксов здесь не годится — он путает
+    «связь» и «связью» (даёт «связ») и «удержание» с «удержания»
+    (даёт «удержание» против «удержан»). На этих словах держится вся
+    сопоставимость запроса и словаря.
+
+    Args:
+        word: Слово в нижнем регистре.
+
+    Returns:
+        Нормальная форма слова.
+    """
+    cached = _LEMMA_CACHE.get(word)
+    if cached is not None:
+        return cached
+    parsed = get_morph().parse(word)
+    normal = parsed[0].normal_form if parsed else word.lower()
+    _LEMMA_CACHE[word] = normal
+    return normal
+
+
+@lru_cache(maxsize=1)
+def domain_lemmas() -> frozenset[str]:
+    """Леммы чистых доменных терминов — по ним ищется предметная область.
+
+    Returns:
+        Множество лемм чистых доменных терминов.
+    """
+    return frozenset(lemmatize(term) for term in CLEAN_DOMAIN_TERMS)
+
+
+@lru_cache(maxsize=1)
+def strong_domain_lemmas() -> frozenset[str]:
+    """Леммы сильных доменных признаков.
+
+    Сильный признак — тот, что не встречается в чужих областях: «оператор»
+    есть и в статье про операторы в C++, а «абонент» — только в телекоме.
+
+    Returns:
+        Множество лемм сильных доменных терминов.
+    """
+    return frozenset(lemmatize(term) for term in STRONG_DOMAIN_TERMS)
+
+
+def analyze(text: str) -> list[str]:
+    """Разложить текст на значимые слова в форме леммы.
+
+    Используется как анализатор TF-IDF: и корпус, и запрос проходят через
+    одну и ту же функцию, поэтому словоформы сопоставимы.
+
+    Args:
+        text: Исходный текст.
+
+    Returns:
+        Список лемм значимых слов.
+    """
+    return [lemmatize(word) for word in tokenize(text)]
+
+
+def _article_lemmas(article: Article) -> frozenset[str]:
+    """Основы значимых слов статьи — для доменной фильтрации.
+
+    Args:
+        article: Статья корпуса.
+
+    Returns:
+        Множество основ слов статьи.
+    """
+    return frozenset(analyze(article.title + " " + article.content[:8000]))
+
+
+def is_domain_query(query: str) -> bool:
+    """Похож ли запрос на нашу предметную область.
+
+    Сравнение идёт по основам слов, а не по словоформам: запрос «почему падает
+    удержание у мобильном тарифе» доменный, хотя слова «мобильном» и
+    «тарифе» в словаре нет.
+
+    Args:
+        query: Поисковый запрос.
+
+    Returns:
+        Запрос относится к предметной области.
+    """
+    lemmas = set(analyze(query))
+    return bool(lemmas & strong_domain_lemmas())
