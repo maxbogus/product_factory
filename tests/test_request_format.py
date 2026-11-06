@@ -91,3 +91,31 @@ def test_required_fields_are_marked() -> None:
     # key_message обязателен, proof — нет.
     assert "key_message: str" in user
     assert "proof: str (необязательное)" in user
+
+
+def test_input_data_is_not_json() -> None:
+    """Входные данные поданы текстом, а не JSON.
+
+    Это измерено: при JSON во входе модель отвечает его эхом — на
+    материалах по удержанию возвращала пустые списки фактов (за три
+    попытки: 1, 0, 0), а на текстовой подаче — факт каждый раз
+    (1, 1, 1). JSON во входе задаёт форму ответа, и модель заполняет её
+    структурой входа вместо извлечения содержимого.
+    """
+    user = _user_for("collector")
+    data_block = user.split("ДАННЫЕ:")[1].split("СХЕМА ОТВЕТА")[0]
+    assert "{" not in data_block
+    assert "}" not in data_block
+    assert "[{" not in data_block
+
+
+def test_input_data_keeps_its_content() -> None:
+    """Текстовая подача не теряет содержимое входных данных."""
+    user = Workflow._build_user(
+        {"query": "удержание клиентов", "plan": {"questions": ["какие тарифы"]}},
+        "",
+        "collector",
+    )
+    data_block = user.split("ДАННЫЕ:")[1].split("СХЕМА ОТВЕТА")[0]
+    assert "удержание клиентов" in data_block
+    assert "какие тарифы" in data_block

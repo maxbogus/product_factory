@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -66,23 +65,91 @@ def _describe_fields(
 
     properties = spec.get("properties")
     if not properties:
+        # Массив: описываем его элемент.
+        items = spec.get("items")
+        if isinstance(items, dict) and _nested_properties(items, defs):
+            return _describe_fields(items, defs, indent)
         return [f"{pad}{_type_name(spec)}"]
 
     required = set(spec.get("required", []))
     lines: list[str] = []
     for name, name_spec in properties.items():
         mark = "" if name in required else " (необязательное)"
-        nested = name_spec.get("properties") or (
-            defs.get(name_spec.get("$ref", "").rsplit("/", 1)[-1], {}).get("properties")
-            if name_spec.get("$ref")
-            else None
-        )
+        nested = _nested_properties(name_spec, defs)
         if nested:
             lines.append(f"{pad}{name}:")
             lines.extend(_describe_fields(name_spec, defs, indent + 2))
-        else:
-            lines.append(f"{pad}{name}: {_type_name(name_spec)}{mark}")
+            continue
+        # Массив объектов: показываем поля элемента, иначе модель не знает,
+        # что класть в список, и отвечает пустым списком.
+        items = name_spec.get("items") if name_spec.get("type") == "array" else None
+        if items is not None:
+            item_props = _nested_properties(items, defs)
+            if item_props:
+                lines.append(f"{pad}{name}: list of")
+                lines.extend(_describe_fields(items, defs, indent + 2))
+                continue
+        lines.append(f"{pad}{name}: {_type_name(name_spec)}{mark}")
     return lines
+
+
+def _nested_properties(spec: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any] | None:
+    """Свойства объекта, если схема на него ссылается или описывает напрямую.
+
+    Args:
+        spec: Описание поля.
+        defs: Определения моделей из ``$defs``.
+
+    Returns:
+        Описание свойств объекта либо ``None``.
+    """
+    direct = spec.get("properties")
+    if direct:
+        return dict(direct)
+    ref = spec.get("$ref")
+    if isinstance(ref, str):
+        resolved = defs.get(ref.rsplit("/", 1)[-1], {})
+        properties = resolved.get("properties")
+        if properties:
+            return dict(properties)
+    return None
+
+
+def _as_text(payload: Any, indent: int = 0) -> str:
+    """Подать входные данные текстом, а не JSON.
+
+    Это измерено: при JSON во входе модель отвечает его эхом — на
+    материалах по удержанию возвращала пустые списки фактов (за три
+    попытки: 1, 0, 0), а на текстовой подаче — факт каждый раз (1, 1, 1).
+    Причина в том, что JSON задаёт форму ответа, и модель заполняет её
+    структурой входа вместо того, чтобы извлечь содержимое.
+
+    Args:
+        payload: Данные для подачи.
+        indent: Текущий отступ.
+
+    Returns:
+        Текстовое представление данных.
+    """
+    pad = " " * indent
+    if isinstance(payload, dict):
+        lines = []
+        for key, value in payload.items():
+            if isinstance(value, (dict, list)):
+                lines.append(f"{pad}{key}:")
+                lines.append(_as_text(value, indent + 2))
+            else:
+                lines.append(f"{pad}{key}: {value}")
+        return "\n".join(lines)
+    if isinstance(payload, list):
+        lines = []
+        for item in payload:
+            if isinstance(item, (dict, list)):
+                lines.append(_as_text(item, indent + 2))
+            else:
+                lines.append(f"{pad}- {item}")
+        return "\n".join(lines)
+    return f"{pad}{payload}"
 
 
 def _type_name(spec: dict[str, Any]) -> str:
@@ -243,7 +310,7 @@ class Workflow:
         parts = []
         if context:
             parts.append(f"МАТЕРИАЛЫ:\n{context}")
-        parts.append("ДАННЫЕ:\n" + json.dumps(payload, ensure_ascii=False, indent=2))
+        parts.append("ДАННЫЕ:\n" + _as_text(payload))
         if role_name:
             parts.append(Workflow._schema_hint(role_name))
         parts.append("Верни ТОЛЬКО JSON по схеме выше, без пояснений.")
@@ -408,11 +475,18 @@ class Workflow:
                     " ".join(plan.get("questions", [])[:5]),
                 ]
             )
+            # Сборщику не передаются вопросы плана. Это измерено: с
+            # вопросами («каковы текущие показатели удержания») модель
+            # отвечала «данных нет» и не извлекала ничего, хотя в
+            # материалах было что цитировать. Вопросы плана нужны для
+            # **поиска** источников — они уже учтены в запросе, — но не
+            # для **извлечения** фактов: перед сборщиком уже отобранные
+            # абзацы, и его дело — взять из них то, что есть.
             # Сборщик обязан видеть материалы: без них он не может выбрать
             # основания и сочиняет цитаты. Контекст — те же абзацы, что
             # потом получит аналитик.
             context = self._bundle_context(bundle)
-            return "collector", {"query": query, "plan": plan}, context
+            return "collector", {"query": query}, context
 
         if phase is Phase.ANALYZING:
             collector = state.results.get(Phase.COLLECTING.value, {})
