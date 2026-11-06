@@ -13,16 +13,23 @@
 ```
 src/pf/
   config.py      настройки из окружения (.env), без секретов в коде
-  corpus.py      корпус Википедии: загрузка, TF-IDF-индекс, доменные веса
+  corpus.py      корпус Википедии: лемматизация, TF-IDF, доменный отбор
   sources.py     отбор статей, нарезка на цитатуемые абзацы, ссылки
   ground.py      ПРОВЕРКА ОСНОВАНИЙ: цитата должна быть дословной
   llm.py         клиент модели (Ollama / OpenAI-совместимый), ретраи
   schemas.py     схемы ответа: ограничения на форму и содержание
   roles.py       реестр ролей: промпт + схема
-  workflow.py    конечный автомат: фазы, проверка, журнал
+  knowledge.py   слой знаний: методы и скилы, подставляемые в роли
+  workflow.py    конечный автомат: фазы, проверка, журнал, хуки
+  hooks.py       хуки: действия по событиям (правила из hooks/*.yaml)
+  web.py         внешние источники: поиск и статус «требует проверки»
+  mcp.py         клиент MCP: подключение к внешним инструментам
+  evalrun.py     исполнитель eval-сценариев
   journal.py     append-only журнал шагов, учёт стоимости
   state.py       состояние сессии: сохранение и продолжение
-  cli.py         команды: run / resume / answer / stop / log / cost / sources
+  cli.py         команды агента
+scripts/
+  fetch_telecom.py  догрузка телеком-статей из Википедии
 ```
 
 ## Четыре слоя знаний (раздельно, как требует бриф)
@@ -37,11 +44,14 @@ src/pf/
 ## Фазы рабочего процесса
 
 ```
-INTAKE → PLANNING → COLLECTING → ANALYZING → OPTIONS → REDTEAM → STRATEGY → KEEPER → DONE
+INTAKE → PLANNING → ROUTING → COLLECTING → ANALYZING → OPTIONS → REDTEAM → STRATEGY → KEEPER → DONE
 ```
 
-Роли: `intake`, `planner`, `collector`, `analyst`, `options`, `redteam`,
-`strategy`, `keeper`, `router`.
+Роли: `intake`, `planner`, `router`, `collector`, `analyst`, `options`,
+`redteam`, `strategy`, `keeper`.
+
+У каждой фазы есть роль — это проверяется тестом: фаза без роли молча
+ничего не делает.
 
 ## Команды
 
@@ -49,8 +59,9 @@ INTAKE → PLANNING → COLLECTING → ANALYZING → OPTIONS → REDTEAM → STR
 make setup          # зависимости (uv sync --extra dev)
 make doctor         # проверка готовности: Python, Ollama, модель, корпус, промпты
 make demo           # демонстрационная задача целиком
-make test           # 51 детерминированный тест, без модели
+make test           # 119 детерминированных тестов, без модели
 make test-slow      # тесты с живой моделью
+make eval           # eval-сценарии: правила поведения агента
 make lint           # ruff check
 make format         # ruff format
 make typecheck      # mypy --strict
