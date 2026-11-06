@@ -11,15 +11,19 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from pf.ground import SupportStatus
 from pf.web import (
+    RSS_FEEDS,
     SearchHit,
     WebSource,
     allowed_domains,
     decode_bing_url,
     is_allowed,
+    search_bing_news,
+    search_web,
     verify_web_quote,
 )
 
@@ -124,3 +128,139 @@ def test_search_hit_reports_domain() -> None:
     """Домен результата известен без ``www.``."""
     hit = SearchHit(url="https://www.mts.ru/tariffs", title="Тарифы")
     assert hit.domain == "mts.ru"
+
+
+def test_rg_feed_url_works() -> None:
+    """RSS-лента «РГ» должна отдавать материалы.
+
+    Адрес в конфигурации устарел: лента отдавала 404, и канал молча
+    выпадал из выдачи — без всякой ошибки.
+    """
+    feeds = dict(RSS_FEEDS)
+    assert "rg.ru" in feeds
+    assert feeds["rg.ru"] == "https://rg.ru/xml/index.xml"
+
+
+def test_google_trends_is_available_as_channel() -> None:
+    """Google Trends должен быть доступен как канал.
+
+    Он отвечает без ключа и без OAuth — в отличие от Wordstat — и
+    показывает, что ищут и что в тренде.
+    """
+    from pf.web import search_trends
+
+    hits = search_trends("телеком", limit=3)
+    assert isinstance(hits, list)
+
+
+def test_search_web_uses_all_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Поиск должен опрашивать все каналы, включая RSS.
+
+    Раньше вызывался только Bing News: RSS-ленты были описаны в коде,
+    но в выдачу не попадали.
+    """
+    called: list[str] = []
+
+    def _bing_news(query: str, limit: int = 5) -> list[SearchHit]:
+        called.append("bing_news")
+        return []
+
+    def _rss(query: str, limit: int = 5) -> list[SearchHit]:
+        called.append("rss")
+        return []
+
+    def _trends(query: str, limit: int = 5) -> list[SearchHit]:
+        called.append("trends")
+        return []
+
+    monkeypatch.setattr("pf.web.search_bing_news", _bing_news)
+    monkeypatch.setattr("pf.web.search_rss_feeds", _rss)
+    monkeypatch.setattr("pf.web.search_trends", _trends)
+    monkeypatch.setattr("pf.web.search_bing_web", lambda query, limit=5: [])
+
+    search_web("отток абонентов", limit=3)
+    assert "bing_news" in called
+    assert "rss" in called
+    assert "trends" in called
+
+
+def test_bing_news_survives_empty_first_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bing News должен переспрашивать, если первый ответ пустой.
+
+    Канал отдаёт результаты нестабильно: один и тот же запрос то даёт
+    статью, то пустоту. Без повторной попытки агент молча терял
+    единственный релевантный источник.
+    """
+    attempts = {"count": 0}
+
+    def _fake_get(url: str, **kwargs: object) -> httpx.Response:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            body = "<?xml version='1.0'?><rss><channel></channel></rss>"
+        else:
+            body = (
+                "<?xml version='1.0'?><rss><channel><item>"
+                "<title>Операторы показали отток абонентов</title>"
+                "<link>https://example.org/news</link>"
+                "<description>Сотовые операторы отток абонентов</description>"
+                "</item></channel></rss>"
+            )
+        request = httpx.Request("GET", "https://www.bing.com/news/search")
+        return httpx.Response(200, text=body, request=request)
+
+    monkeypatch.setattr("pf.web.httpx.get", _fake_get)
+
+    hits = search_bing_news("отток абонентов операторов", limit=3)
+    assert attempts["count"] >= 2, "канал должен повторить запрос"
+    assert hits, "второй ответ должен дать результат"
+
+
+def test_cbr_key_rate_is_readable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Открытые данные Банка России должны читаться.
+
+    Это официальный источник без ключей: макро-контекст для
+    продуктовых решений. Проверяется разбор, а не сеть: документ
+    подставляется в тест.
+    """
+    from pf.web import parse_cbr_key_rate
+
+    xml = (
+        "<?xml version='1.0' encoding='windows-1251'?>"
+        "<ValCurs><Record Date='13.01.2026'><Nominal>1</Nominal>"
+        "<Value>78,7913</Value><VunitRate>78,7913</VunitRate></Record>"
+        "<Record Date='14.01.2026'><Nominal>1</Nominal>"
+        "<Value>78,8527</Value><VunitRate>78,8527</VunitRate></Record>"
+        "</ValCurs>"
+    )
+    rows = parse_cbr_key_rate(xml)
+    assert len(rows) == 2
+    assert rows[0]["дата"] == "13.01.2026"
+    assert rows[0]["значение_процентов"] == "78.7913"
+
+
+def test_cbr_is_a_search_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Банк России должен быть одним из каналов поиска."""
+    from pf.web import search_web
+
+    called: list[str] = []
+
+    def _fake(query: str, limit: int = 5) -> list[SearchHit]:
+        called.append("cbr")
+        return [
+            SearchHit(
+                url="https://www.cbr.ru/press/event/?id=1",
+                title="Ключевая ставка Банка России",
+                snippet="Ключевая ставка снижена",
+                provider="cbr",
+            )
+        ]
+
+    monkeypatch.setattr("pf.web.search_cbr", _fake)
+    monkeypatch.setattr("pf.web.search_bing_news", lambda query, limit=5: [])
+    monkeypatch.setattr("pf.web.search_rss_feeds", lambda query, limit=5: [])
+    monkeypatch.setattr("pf.web.search_trends", lambda query, limit=5: [])
+    monkeypatch.setattr("pf.web.search_bing_web", lambda query, limit=5: [])
+
+    hits = search_web("ключевая ставка", limit=3)
+    assert "cbr" in called
+    assert hits

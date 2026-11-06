@@ -28,6 +28,7 @@ import base64
 import html
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
@@ -35,6 +36,7 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 import httpx
 
 from pf.config import settings
+from pf.corpus import DOMAIN_TERMS
 from pf.ground import SupportStatus, verify_quote
 
 #: Заголовок запроса к Википедии: без указания контакта — ответ 403.
@@ -419,36 +421,42 @@ def search_bing_news(query: str, limit: int = 5) -> list[SearchHit]:
         + quote_plus(query)
         + f"&format=rss&count={max(1, min(limit * 2, 30))}"
     )
-    try:
-        response = httpx.get(
-            url,
-            headers={"User-Agent": _browser_agent()},
-            timeout=settings.timeout_seconds,
-            follow_redirects=True,
-        )
-        response.raise_for_status()
-    except httpx.HTTPError:
-        return []
-
-    try:
-        root = ET.fromstring(response.text)
-    except ET.ParseError:
-        return []
-
     hits: list[SearchHit] = []
-    for item in root.findall("./channel/item"):
-        target = _unwrap_news_link(item.findtext("link") or "")
-        if not target:
-            continue
-        hits.append(
-            SearchHit(
-                url=target,
-                title=_strip_tags(item.findtext("title") or ""),
-                snippet=_strip_tags(item.findtext("description") or ""),
-                provider="bing_news",
+    for _attempt in range(CHANNEL_RETRIES):
+        try:
+            response = httpx.get(
+                url,
+                headers={"User-Agent": _browser_agent()},
+                timeout=settings.timeout_seconds,
+                follow_redirects=True,
             )
-        )
-        if len(hits) >= limit:
+            response.raise_for_status()
+        except httpx.HTTPError:
+            return hits
+
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError:
+            return hits
+
+        for item in root.findall("./channel/item"):
+            target = _unwrap_news_link(item.findtext("link") or "")
+            if not target:
+                continue
+            hits.append(
+                SearchHit(
+                    url=target,
+                    title=_strip_tags(item.findtext("title") or ""),
+                    snippet=_strip_tags(item.findtext("description") or ""),
+                    provider="bing_news",
+                )
+            )
+            if len(hits) >= limit:
+                return hits
+
+        # Пустой ответ — не приговор: канал отдаёт результаты нестабильно.
+        # Повторяем попытку, прежде чем считать канал молчащим.
+        if hits:
             break
     return hits
 
@@ -461,9 +469,26 @@ RSS_FEEDS: tuple[tuple[str, str], ...] = (
     ("tass.ru", "https://tass.ru/rss/v2.xml"),
     ("vedomosti.ru", "https://www.vedomosti.ru/rss/news"),
     ("interfax.ru", "https://www.interfax.ru/rss.asp"),
-    ("rg.ru", "https://rg.ru/feed/index.xml"),
+    ("rg.ru", "https://rg.ru/xml/index.xml"),
     ("kommersant.ru", "https://www.kommersant.ru/RSS/news.xml"),
 )
+
+#: Открытый XML-документ Банка России с ключевой ставкой. Без ключей
+#: и без авторизации — официальный источник макроэкономических данных.
+CBR_KEY_RATE_URL = (
+    "https://www.cbr.ru/scripts/xml_dynamic.asp"
+    "?date_req1=01/01/2026&date_req2=31/12/2026&VAL_NM_RQ=R01235"
+)
+
+#: Лента Google Trends: что ищут и что в тренде. Отвечает без ключа —
+#: в отличие от Wordstat, где нужен доступ к API.
+GOOGLE_TRENDS_RSS = "https://trends.google.com/trending/rss?geo=RU"
+
+#: Сколько раз повторять запрос к каналу, который ответил пустотой.
+#: Bing News отдаёт результаты нестабильно: один и тот же запрос то
+#: даёт статью, то пустоту. Без повтора агент молча терял единственный
+#: релевантный источник.
+CHANNEL_RETRIES = 2
 
 #: Слова, по которым заголовок новости считается относящимся к запросу.
 _STOP_WORDS = frozenset(
@@ -582,6 +607,18 @@ def _query_terms(query: str) -> set[str]:
     return {_stem(word) for word in words if word not in _STOP_WORDS}
 
 
+def _stem_set(terms: Iterable[str]) -> set[str]:
+    """Основы слов набора.
+
+    Args:
+        terms: Слова или основы.
+
+    Returns:
+        Множество основ.
+    """
+    return {_stem(word) for word in terms}
+
+
 def _matches_terms(text: str, terms: set[str]) -> bool:
     """Подходит ли текст по теме.
 
@@ -657,6 +694,138 @@ def search_rss_feeds(query: str, limit: int = 5) -> list[SearchHit]:
     return hits
 
 
+def parse_cbr_key_rate(xml_text: str) -> list[dict[str, str]]:
+    """Разобрать XML-документ Банка России с ключевой ставкой.
+
+    Документ приходит в кодировке windows-1251 и содержит ежедневные
+    значения. Разбор вынесен отдельно от запроса в сеть: его можно
+    проверить на готовом документе, не выходя в интернет.
+
+    Args:
+        xml_text: Текст XML-документа.
+
+    Returns:
+        Список записей: дата и значение в процентах.
+    """
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    rows: list[dict[str, str]] = []
+    for record in root.findall(".//Record"):
+        date = record.get("Date")
+        value = record.findtext("VunitRate")
+        if date and value:
+            rows.append({"дата": date, "значение_процентов": value.replace(",", ".")})
+    return rows
+
+
+def search_cbr(query: str, limit: int = 5) -> list[SearchHit]:
+    """Найти данные Банка России по макроэкономике.
+
+    Открытый XML без ключей и авторизации. Канал отвечает на вопросы о
+    стоимости денег — а она влияет на решение абонента отключить
+    дополнительные услуги или сменить тариф.
+
+    Args:
+        query: Поисковый запрос.
+        limit: Сколько результатов вернуть.
+
+    Returns:
+        Список найденных показателей; пустой список, если канал недоступен.
+    """
+    terms = _query_terms(query)
+    if terms and not _matches_terms("ключевая ставка Банка России", terms):
+        return []
+
+    try:
+        response = httpx.get(
+            CBR_KEY_RATE_URL,
+            headers=_search_headers(),
+            timeout=settings.timeout_seconds,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return []
+
+    response.encoding = "windows-1251"
+    rows = parse_cbr_key_rate(response.text)
+    if not rows:
+        return []
+
+    hits: list[SearchHit] = []
+    for row in rows[:limit]:
+        date = row["дата"]
+        value = row["значение_процентов"]
+        hits.append(
+            SearchHit(
+                url=f"{CBR_KEY_RATE_URL}&date={date}",
+                title=f"Ключевая ставка Банка России на {date}: {value} %",
+                snippet=f"Ключевая ставка: {value} % годовых",
+                provider="cbr",
+            )
+        )
+    return hits
+
+
+def search_trends(query: str, limit: int = 5) -> list[SearchHit]:
+    """Найти тренды Google по региону.
+
+    Лента отвечает без ключа и без OAuth — в отличие от Wordstat, где
+    нужен доступ к API. Показывает, что в тренде: это ранний сигнал о
+    сдвиге в интересе аудитории, ещё до того, как о нём написали
+    новости.
+
+    Args:
+        query: Поисковый запрос. Используется для отбора по теме.
+        limit: Сколько результатов вернуть.
+
+    Returns:
+        Список трендов; пустой список, если канал недоступен.
+    """
+    try:
+        response = httpx.get(
+            GOOGLE_TRENDS_RSS,
+            headers=_search_headers(),
+            timeout=settings.timeout_seconds,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+    except (httpx.HTTPError, ET.ParseError):
+        return []
+
+    terms = _query_terms(query)
+    # Тренды отдаются по всей стране, а не по запросу: поиск по конкретному
+    # ключевому слову требует API и упирается в лимит. Поэтому отбор
+    # идёт по словам запроса **и** по доменным терминам: так канал
+    # отвечает на вопрос «тема сейчас в тренде?» хотя бы для
+    # предметной области агента.
+    domain_terms = _stem_set(DOMAIN_TERMS)
+    hits: list[SearchHit] = []
+    for item in root.findall("./channel/item"):
+        title = _strip_tags(item.findtext("title") or "")
+        if not title:
+            continue
+        traffic = _strip_tags(item.findtext("ht:approx_traffic") or "")
+        stems = _stem_set(_query_terms(title))
+        if terms and not _matches_terms(title, terms) and not (stems & domain_terms):
+            continue
+        hits.append(
+            SearchHit(
+                url=item.findtext("ht:newsItemUrl") or "",
+                title=title,
+                snippet=f"Тренд в Google{', ' + traffic if traffic else ''}",
+                provider="google_trends",
+            )
+        )
+        if len(hits) >= limit:
+            break
+    return hits
+
+
 def search_web(query: str, limit: int = 5) -> list[SearchHit]:
     """Найти страницы в интернете по всем доступным каналам.
 
@@ -681,7 +850,13 @@ def search_web(query: str, limit: int = 5) -> list[SearchHit]:
     hits: list[SearchHit] = []
     seen: set[str] = set()
     terms = _query_terms(query)
-    for finder in (search_bing_news, search_rss_feeds, search_bing_web):
+    for finder in (
+        search_bing_news,
+        search_rss_feeds,
+        search_cbr,
+        search_trends,
+        search_bing_web,
+    ):
         for hit in finder(query, limit=limit):
             if hit.url in seen:
                 continue

@@ -30,13 +30,31 @@ doctor: ## Проверить, что всё готово к работе
 	@echo -n "Модель:      "; \
 	  curl -sf http://localhost:11434/api/tags 2>/dev/null \
 	    | $(PYTHON) -c "import json,sys; m=[x['name'] for x in json.load(sys.stdin)['models']]; print(', '.join(m))" \
-	    || echo "нет моделей — выполните 'ollama pull qwen2.5:7b'"
+	    || echo "нет моделей"
+	@$(UV) run python -c "from pf.config import settings; import sys; \
+	  names = []; \
+	  import httpx; \
+	  r = httpx.get(settings.ollama_base_url.rstrip('/') + '/api/tags', timeout=5); \
+	  names = [x['name'] for x in r.json().get('models', [])]; \
+	  want = settings.ollama_model; \
+	  ok = any(n == want or n.startswith(want.split(':')[0]) for n in names); \
+	  print('Модель по умолчанию: ' + want + (' — установлена' if ok else ' — НЕ УСТАНОВЛЕНА, выполните: ollama pull ' + want)); \
+	  sys.exit(0 if ok else 1)" \
+	  || echo "  → выполните: ollama pull $(shell $(UV) run python -c 'from pf.config import settings; print(settings.ollama_model)')"
 	@echo -n "Корпус:      "; \
 	  if [ -d data/wiki ] && [ -n "$$(ls data/wiki/*.json 2>/dev/null)" ]; then \
 	    echo "$$(ls data/wiki/*.json | wc -l) разделов"; \
 	  else echo "НЕТ — проверьте data/wiki/"; exit 1; fi
 	@echo -n "Промпты:     "; \
 	  echo "$$(ls prompts/roles/*.md 2>/dev/null | wc -l) ролей"
+	@echo -n "Материалы:   "; \
+	  $(UV) run python -c "from pf.materials import load_materials; \
+	  m = load_materials(); \
+	  print(f'{len(m)} файлов' if m else 'нет (каталог project/ пуст)')"
+	@echo -n "MCP:         "; \
+	  if [ -n "$$(PF_MCP_DIR=$${PF_MCP_DIR:-../mcp-servers} ls ../mcp-servers 2>/dev/null)" ]; then \
+	    echo "серверы найдены — список: pf mcp"; \
+	  else echo "каталог серверов не найден (PF_MCP_DIR) — базовая работа не требует MCP"; fi
 	@echo ""
 	@echo "Всё готово. Попробуйте: make demo"
 
