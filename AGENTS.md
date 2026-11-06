@@ -49,7 +49,7 @@ INTAKE → PLANNING → COLLECTING → ANALYZING → OPTIONS → REDTEAM → STR
 make setup          # зависимости (uv sync --extra dev)
 make doctor         # проверка готовности: Python, Ollama, модель, корпус, промпты
 make demo           # демонстрационная задача целиком
-make test           # 43 детерминированных теста, без модели
+make test           # 51 детерминированный тест, без модели
 make test-slow      # тесты с живой моделью
 make lint           # ruff check
 make format         # ruff format
