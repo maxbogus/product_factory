@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     #: Предел расхода одной сессии в условных единицах. Ноль — без предела.
     max_cost_units: float = 0.0
 
+    #: Искать в вебе, когда локальных оснований не хватает. По умолчанию
+    #: выключено: демо должно работать без сети.
+    enable_web: bool = False
+
+    #: Сколько подтверждённых оснований считается достаточным, чтобы не
+    #: идти в веб.
+    web_min_citations: int = 2
+
     #: Сколько подтверждённых оснований считается достаточным. Меньше —
     #: план исследования расширяется хуком.
     min_confirmed_citations: int = 2
@@ -56,6 +64,7 @@ class Settings(BaseSettings):
     methods_dir: Path = Path("methods")
     hooks_dir: Path = Path("hooks")
     skills_dir: Path = Path("skills")
+    mcp_config_path: Path = Path("mcp/servers.json")
 
     @property
     def effective_base_url(self) -> str:

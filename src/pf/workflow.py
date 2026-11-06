@@ -440,6 +440,31 @@ class Workflow:
         self._apply_hooks(state, result)
         return result
 
+    def _search_web(self, state: SessionState) -> list[Any]:
+        """Выйти в веб, если локальных оснований не хватает.
+
+        Внешние источники никогда не становятся подтверждёнными: их
+        статус — «требует проверки». Поэтому в журнале видно, что
+        основание внешнее и ждёт человека.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Собранные внешние источники.
+        """
+        if not self.config.enable_web:
+            return []
+        from pf.web import as_context, collect_web, summarize
+
+        query = state.question
+        sources = collect_web(query)
+        if not sources:
+            return []
+        state.results["web_sources"] = summarize(sources)
+        state.results["web_context"] = as_context(sources)
+        return sources
+
     def _apply_hooks(self, state: SessionState, result: StepResult) -> None:
         """Применить хуки к результату шага.
 
@@ -462,6 +487,7 @@ class Workflow:
             added = expand_plan(state)
             if added:
                 state.results["plan_expanded"] = added
+            self._search_web(state)
 
         limit = self.config.max_cost_units
         if limit <= 0:

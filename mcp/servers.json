@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "static-parser": {
+      "command": "python3",
+      "args": ["server.py"],
+      "cwd": "../mcp-servers/static-parser-mcp"
+    },
+    "parser-storage": {
+      "command": "python3",
+      "args": ["server.py"],
+      "cwd": "../mcp-servers/parser-storage-mcp"
+    }
+  }
+}

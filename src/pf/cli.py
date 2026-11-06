@@ -10,7 +10,8 @@
 - ``pf cost`` — показать расход;
 - ``pf sources "запрос"`` — показать, какие источники агент найдёт;
 - ``pf sessions`` — список сохранённых сессий;
-- ``pf eval`` — выполнить eval-сценарии и проверить правила поведения.
+- ``pf eval`` — выполнить eval-сценарии и проверить правила поведения;
+- ``pf web "запрос"`` — найти внешние источники (требуют проверки).
 
 Интерфейс командный, а не графический, сознательно: руководителю продукта
 нужно видеть продвижение работы и останавливать её, а не изучать устройство
@@ -382,6 +383,30 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    """Найти внешние источники по запросу.
+
+    Внешние источники никогда не становятся подтверждёнными основаниями:
+    их статус — «требует проверки».
+    """
+    from pf.web import collect_web
+
+    sources = collect_web(args.query, limit=args.limit)
+    if not sources:
+        _out("Ничего не найдено в вебе.")
+        return 1
+
+    _rule(f"Внешние источники по запросу: {args.query}")
+    _out(f"Найдено: {len(sources)}. Статус каждого — требует проверки.")
+    _out()
+    for source in sources:
+        _out(f"{ARROW} {source.title}")
+        _out(f"    {source.url}")
+        _out(f"    {source.text[:150]}")
+        _out()
+    return 0
+
+
 def cmd_sessions(args: argparse.Namespace) -> int:
     """Показать список сохранённых сессий."""
     sessions = list_sessions()
@@ -450,6 +475,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     eval_parser = subparsers.add_parser("eval", help="выполнить eval-сценарии и проверить правила")
     eval_parser.set_defaults(func=cmd_eval)
+
+    web_parser = subparsers.add_parser("web", help="найти внешние источники (требуют проверки)")
+    web_parser.add_argument("query", help="поисковый запрос")
+    web_parser.add_argument("--limit", type=int, default=3, help="сколько источников")
+    web_parser.set_defaults(func=cmd_web)
 
     return parser
 
