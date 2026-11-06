@@ -1,0 +1,141 @@
+"""Проверки состояния и журнала: работа продолжается после перерыва.
+
+Требование брифа: работу можно остановить и продолжить с сохранённого места,
+в том числе открыв новый чат. Здесь проверяется именно это — на диске.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from pf.config import settings
+from pf.journal import Journal, StepRecord
+from pf.state import Phase, SessionState, list_sessions, load, save
+
+
+@pytest.fixture(autouse=True)
+def _isolated_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Изолировать состояние и журнал в временный каталог."""
+    monkeypatch.setattr(settings, "state_dir", tmp_path / "state")
+    monkeypatch.setattr(settings, "journal_dir", tmp_path / "journal")
+
+
+def _record(ordinal: int, role: str = "intake") -> StepRecord:
+    return StepRecord(
+        ordinal=ordinal,
+        role=role,
+        phase="intake",
+        summary=f"шаг {ordinal}",
+        cost_units=0.001 * ordinal,
+    )
+
+
+def test_journal_is_append_only() -> None:
+    """Новые шаги дописываются, старые не переписываются."""
+    journal = Journal(settings.journal_dir / "s.jsonl")
+    journal.append(_record(1))
+    journal.append(_record(2))
+    journal.append(_record(3))
+
+    records = journal.read()
+    assert [r.ordinal for r in records] == [1, 2, 3]
+
+
+def test_journal_survives_broken_last_line() -> None:
+    """Обрыв на границе записи не ломает чтение журнала."""
+    path = settings.journal_dir / "s.jsonl"
+    journal = Journal(path)
+    journal.append(_record(1))
+    journal.append(_record(2))
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write('{"ordinal": 3, "role": "brok')
+
+    assert len(journal.read()) == 2
+
+
+def test_journal_counts_cost_by_role() -> None:
+    """Стоимость считается и по итогу, и по ролям."""
+    journal = Journal(settings.journal_dir / "s.jsonl")
+    journal.append(_record(1, "intake"))
+    journal.append(_record(2, "strategy"))
+
+    assert journal.total_cost_units == pytest.approx(0.003)
+    assert journal.cost_by_role()["strategy"] == pytest.approx(0.002)
+
+
+def test_state_roundtrip() -> None:
+    """Состояние сохраняется и читается без потерь."""
+    state = SessionState(
+        session_id="s1",
+        phase=Phase.ANALYZING,
+        question="почему падает удержание",
+        steps_done=3,
+        cost_units=0.007,
+    )
+    state.results["analysis"] = {"facts": 4}
+    save(state)
+
+    loaded = load("s1")
+    assert loaded is not None
+    assert loaded.phase is Phase.ANALYZING
+    assert loaded.steps_done == 3
+    assert loaded.results["analysis"] == {"facts": 4}
+
+
+def test_state_is_plain_readable_json() -> None:
+    """Состояние — текст на диске: его можно прочитать и поправить руками."""
+    state = SessionState(session_id="s2", phase=Phase.OPTIONS)
+    save(state)
+
+    path = settings.state_dir / "session-s2.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "options"
+    assert payload["session_id"] == "s2"
+
+
+def test_missing_session_returns_none() -> None:
+    """Несуществующая сессия — не ошибка, а отсутствие."""
+    assert load("нет-такой") is None
+
+
+def test_phase_order_is_sequential() -> None:
+    """Фазы идут в заданном порядке — это и есть рабочий процесс."""
+    assert Phase.INTAKE.next is Phase.PLANNING
+    assert Phase.PLANNING.next is Phase.COLLECTING
+    assert Phase.COLLECTING.next is Phase.ANALYZING
+    assert Phase.ANALYZING.next is Phase.OPTIONS
+    assert Phase.OPTIONS.next is Phase.REDTEAM
+    assert Phase.REDTEAM.next is Phase.STRATEGY
+    assert Phase.STRATEGY.next is Phase.KEEPER
+    assert Phase.KEEPER.next is Phase.DONE
+    assert Phase.DONE.next is Phase.DONE
+
+
+def test_work_can_resume_from_saved_phase() -> None:
+    """Работа продолжается с сохранённой фазы, а не с начала."""
+    state = SessionState(session_id="s3", phase=Phase.REDTEAM, steps_done=5)
+    save(state)
+
+    # «Новый чат»: состояние читается заново, как будто процесса не было.
+    reloaded = load("s3")
+    assert reloaded is not None
+    assert reloaded.phase is Phase.REDTEAM
+    assert reloaded.steps_done == 5
+
+    reloaded.phase = reloaded.phase.next
+    reloaded.steps_done += 1
+    save(reloaded)
+
+    assert load("s3").phase is Phase.STRATEGY
+
+
+def test_sessions_are_listed() -> None:
+    """Сохранённые сессии находятся."""
+    save(SessionState(session_id="alpha"))
+    save(SessionState(session_id="beta"))
+    found = list_sessions()
+    assert "alpha" in found
+    assert "beta" in found

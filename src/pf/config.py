@@ -1,0 +1,71 @@
+"""Конфигурация агента.
+
+Все параметры читаются из переменных окружения (или файла ``.env``).
+Значения по умолчанию подобраны так, чтобы агент запускался без настройки:
+локальная модель через Ollama, локальный корпус Википедии.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Настройки агента."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="PF_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # ── Провайдер LLM ───────────────────────────────────────────────────────
+    llm_provider: str = "ollama"
+
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b"
+
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+
+    # ── Параметры генерации ─────────────────────────────────────────────────
+    temperature: float = 0.2
+    max_tokens: int = 2400
+    timeout_seconds: int = 180
+
+    # ── Источники ───────────────────────────────────────────────────────────
+    wiki_dir: Path = Path("data/wiki")
+    source_top_k: int = 6
+    source_max_paragraphs: int = 6
+
+    # ── Пути состояния ──────────────────────────────────────────────────────
+    state_dir: Path = Path("state")
+    journal_dir: Path = Path("journal")
+    prompts_dir: Path = Path("prompts")
+    methods_dir: Path = Path("methods")
+
+    @property
+    def effective_base_url(self) -> str:
+        """Базовый URL API выбранного провайдера."""
+        if self.llm_provider == "ollama":
+            return self.ollama_base_url
+        return self.llm_base_url
+
+    @property
+    def effective_model(self) -> str:
+        """Имя модели выбранного провайдера."""
+        if self.llm_provider == "ollama":
+            return self.ollama_model
+        return self.llm_model
+
+    @property
+    def is_local(self) -> bool:
+        """Работает ли агент на локальной модели (без внешних ключей)."""
+        return self.llm_provider == "ollama"
+
+
+settings = Settings()
