@@ -7,7 +7,7 @@ SHELL := /usr/bin/env bash
 UV ?= uv
 PYTHON ?= python3
 
-.PHONY: help setup doctor run demo test test-slow lint format format-check \
+.PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index
 
 help: ## Показать список доступных команд
@@ -54,6 +54,9 @@ test-slow: ## Тесты с живой моделью
 	@$(UV) run pytest tests/ -m slow -q
 
 lint: ## Проверить стиль (ruff)
+
+eval: ## Выполнить eval-сценарии (правила поведения агента)
+	@$(UV) run pf eval
 	@$(UV) run ruff check src/ tests/
 
 format: ## Отформатировать код (ruff format)
@@ -70,6 +73,7 @@ ci: ## Полный прогон проверок
 	@$(MAKE) --no-print-directory format-check
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory eval
 
 sources: ## Показать источники: make sources QUERY="запрос"
 	@test -n "$(QUERY)" || (echo "Укажите запрос: make sources QUERY=\"...\"" && exit 1)

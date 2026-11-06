@@ -437,7 +437,42 @@ class Workflow:
         state.steps_done += 1
         state.cost_units += usage.cost_units
         self._record(state, result)
+        self._apply_hooks(state, result)
         return result
+
+    def _apply_hooks(self, state: SessionState, result: StepResult) -> None:
+        """Применить хуки к результату шага.
+
+        Два хука:
+
+        - ``sources.collected`` — подтверждённых оснований мало, значит
+          вывод пока нечем подкрепить: план расширяется, чтобы поиск шёл
+          дальше;
+        - ``budget.exhausted`` — расход достиг предела: работа
+          останавливается, чтобы не жечь токены впустую.
+
+        Args:
+            state: Состояние сессии.
+            result: Результат шага.
+        """
+        from pf.hooks import expand_plan, fire
+
+        collected = fire("sources.collected", float(len(result.citations)))
+        if collected.fired and result.phase is Phase.COLLECTING:
+            added = expand_plan(state)
+            if added:
+                state.results["plan_expanded"] = added
+
+        limit = self.config.max_cost_units
+        if limit <= 0:
+            return
+        exhausted = fire("budget.exhausted", state.cost_units)
+        if exhausted.fired:
+            state.results["stopped_at"] = state.phase.value
+            state.pending_question = (
+                f"Расход достиг предела ({state.cost_units:.6f} из {limit:.6f}). "
+                "Продолжить или снять предел?"
+            )
 
     def _step_inputs(
         self,

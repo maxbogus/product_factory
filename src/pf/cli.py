@@ -9,7 +9,8 @@
 - ``pf log`` — показать журнал шагов;
 - ``pf cost`` — показать расход;
 - ``pf sources "запрос"`` — показать, какие источники агент найдёт;
-- ``pf sessions`` — список сохранённых сессий.
+- ``pf sessions`` — список сохранённых сессий;
+- ``pf eval`` — выполнить eval-сценарии и проверить правила поведения.
 
 Интерфейс командный, а не графический, сознательно: руководителю продукта
 нужно видеть продвижение работы и останавливать её, а не изучать устройство
@@ -370,6 +371,17 @@ def cmd_sources(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Выполнить eval-сценарии и показать результаты."""
+    from pf.evalrun import format_results, run_all
+
+    results = run_all()
+    _rule("Eval-сценарии")
+    _out(format_results(results))
+    failed = [r for r in results if not r.passed]
+    return 1 if failed else 0
+
+
 def cmd_sessions(args: argparse.Namespace) -> int:
     """Показать список сохранённых сессий."""
     sessions = list_sessions()
@@ -435,6 +447,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sessions = subparsers.add_parser("sessions", help="список сохранённых сессий")
     sessions.set_defaults(func=cmd_sessions)
+
+    eval_parser = subparsers.add_parser("eval", help="выполнить eval-сценарии и проверить правила")
+    eval_parser.set_defaults(func=cmd_eval)
 
     return parser
 

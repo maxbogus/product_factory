@@ -42,11 +42,19 @@ class Settings(BaseSettings):
     source_top_k: int = 6
     source_max_paragraphs: int = 6
 
+    #: Предел расхода одной сессии в условных единицах. Ноль — без предела.
+    max_cost_units: float = 0.0
+
+    #: Сколько подтверждённых оснований считается достаточным. Меньше —
+    #: план исследования расширяется хуком.
+    min_confirmed_citations: int = 2
+
     # ── Пути состояния ──────────────────────────────────────────────────────
     state_dir: Path = Path("state")
     journal_dir: Path = Path("journal")
     prompts_dir: Path = Path("prompts")
     methods_dir: Path = Path("methods")
+    hooks_dir: Path = Path("hooks")
 
     @property
     def effective_base_url(self) -> str:

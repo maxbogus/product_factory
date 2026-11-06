@@ -56,5 +56,6 @@ mypy_path = "src"
 
 [dependency-groups]
 dev = [
+    "types-pyyaml>=6.0.12.20261103",
     "wikipedia>=1.4.0",
 ]
