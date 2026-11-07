@@ -27,8 +27,10 @@ __all__ = [
     "cagr",
     "change_percent",
     "Series",
+    "PERIOD_COLUMNS",
     "compute_from_rows",
     "group_series",
+    "label_column_for",
     "mean",
     "median",
     "parse_number",
@@ -120,6 +122,30 @@ class Metric:
         её нельзя, а значит, проверить тоже нельзя.
         """
         return bool(self.source_id)
+
+    @property
+    def is_aggregate(self) -> bool:
+        """Агрегат ли это — величина, посчитанная по нескольким строкам.
+
+        Среднее, медиана, размах и изменение вычисляются по нескольким
+        наблюдениям, и их значения нет ни в одной строке таблицы. Такие
+        метрики проверяются не сверкой со строкой, а пересчётом по
+        входам — поэтому входы должны быть видны.
+
+        Returns:
+            True, если метрика агрегатная.
+        """
+        observations = self.inputs.get("наблюдения")
+        if isinstance(observations, (list, tuple)):
+            return True
+        # Признак агрегата может стоять в названии («изменение за
+        # период») или в формуле («сумма / количество»). Формула
+        # изменения выглядит как «(последнее - первое) / |первое| * 100»
+        # — слова «изменение» в ней нет, поэтому смотрим оба места.
+        text = f"{self.name.lower()} {self.formula.lower()}"
+        return any(
+            marker in text for marker in ("средн", "медиан", "размах", "изменение", "процент")
+        )
 
     @property
     def formatted(self) -> str:
@@ -293,6 +319,40 @@ class Series:
     row_indices: list[int]
 
 
+#: Колонки, которые задают период, а не различие величин. Значения
+#: «2017», «2018», «конец июля» — это точки одной величины во времени.
+#: Такая колонка не может быть подписью ряда: иначе каждая дата
+#: образовала бы свой ряд из одной строки, и изменение всегда было бы
+#: нулевым.
+PERIOD_COLUMNS: frozenset[str] = frozenset(
+    {"период", "дата", "period", "date", "месяц", "квартал", "год", "time", "day"}
+)
+
+
+def label_column_for(columns: list[str], *, value_column: str) -> str:
+    """Выбрать колонку, по которой ряд различается.
+
+    Подпись ряда отвечает на вопрос «что за величина» — оператор,
+    показатель, категория. Колонка с периодом отвечает на другой
+    вопрос («когда»), и выбирать её подписью нельзя: тогда каждый
+    период становится отдельным рядом из одной строки.
+
+    Args:
+        columns: Колонки таблицы.
+        value_column: Колонка со значением.
+
+    Returns:
+        Имя колонки-подписи либо пустая строка, если подписи нет.
+    """
+    for name in columns:
+        if name == value_column:
+            continue
+        if name.strip().lower() in PERIOD_COLUMNS:
+            continue
+        return name
+    return ""
+
+
 def group_series(
     rows: list[dict[str, str]],
     *,
@@ -448,6 +508,11 @@ def summarize_series(
     values = [metric.value for metric in metrics]
     first = metrics[0]
     last = metrics[-1]
+    # Наблюдения ряда — не их количество. Среднее по ряду из 6, 7, 10, 12
+    # равно 8,75, но пересчитать его можно только по самим числам: если
+    # в inputs лежит «наблюдений: 4», сложить нечего, и метрику нечем
+    # подтвердить. Поэтому в inputs кладутся наблюдения.
+    observations = [f"{value:.6g}" for value in values]
     return [
         Metric(
             name=f"{name}: изменение за период",
@@ -468,7 +533,7 @@ def summarize_series(
             source_id=first.source_id,
             row=first.row,
             formula="сумма / количество",
-            inputs={"наблюдений": len(values)},
+            inputs={"наблюдения": observations},
         ),
         Metric(
             name=f"{name}: медиана",
@@ -477,7 +542,7 @@ def summarize_series(
             source_id=first.source_id,
             row=first.row,
             formula="медиана ряда",
-            inputs={"наблюдений": len(values)},
+            inputs={"наблюдения": observations},
         ),
         Metric(
             name=f"{name}: размах",
@@ -486,6 +551,6 @@ def summarize_series(
             source_id=first.source_id,
             row=first.row,
             formula="максимум - минимум",
-            inputs={"наблюдений": len(values)},
+            inputs={"наблюдения": observations},
         ),
     ]

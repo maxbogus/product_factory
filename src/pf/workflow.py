@@ -39,6 +39,38 @@ from pf.sources import SourceBundle, collect
 from pf.state import Phase, SessionState, save
 
 
+def _metric_line(metric: Any) -> str:
+    """Строка блока расчётов для одной метрики.
+
+    У агрегата показываются входы: его значения нет ни в одной строке
+    таблицы, и без входов его нечем пересчитать, а значит — нечем
+    подтвердить. Модель копирует в свою метрику ровно то, что видит
+    здесь, поэтому входы обязаны быть в строке.
+
+    Args:
+        metric: Метрика.
+
+    Returns:
+        Строка блока расчётов.
+    """
+    if metric.is_aggregate:
+        # Входы агрегата называются по-разному: у среднего и медианы —
+        # «наблюдения», у изменения — «база» и «новое». Показываем
+        # все: без них агрегат нечем пересчитать, а значит — нечем
+        # подтвердить.
+        parts = []
+        for key, raw in metric.inputs.items():
+            if isinstance(raw, (list, tuple)):
+                parts.append(f"{key}: {', '.join(str(item) for item in raw)}")
+            else:
+                parts.append(f"{key}: {raw}")
+        inputs = "; ".join(parts)
+        return (
+            f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula}; {inputs})"
+        )
+    return f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
+
+
 def _describe_fields(
     spec: dict[str, Any],
     defs: dict[str, Any],
@@ -911,7 +943,13 @@ class Workflow:
         Returns:
             Текст блока с расчётами либо пустая строка.
         """
-        from pf.analysis import compute_from_rows, group_series, summarize_groups
+        from pf.analysis import (
+            PERIOD_COLUMNS,
+            compute_from_rows,
+            group_series,
+            label_column_for,
+            summarize_groups,
+        )
         from pf.materials import load_materials
 
         materials = load_materials()
@@ -926,10 +964,11 @@ class Workflow:
             )
             if value_column is None:
                 continue
-            label_column = next(
-                (name for name in columns if name != value_column),
-                None,
-            )
+            # Подпись ряда — «что за величина», а не «когда». Колонка с
+            # периодом подписью быть не может: тогда каждый период
+            # образовал бы свой ряд из одной строки, и изменение всегда
+            # было бы нулевым.
+            label_column = label_column_for(columns, value_column=value_column)
             metrics = compute_from_rows(
                 material.rows,
                 value_column=value_column,
@@ -939,10 +978,7 @@ class Workflow:
             )
             if not metrics:
                 continue
-            lines = [
-                f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
-                for metric in metrics[:MAX_METRICS_IN_CONTEXT]
-            ]
+            lines = [_metric_line(metric) for metric in metrics[:MAX_METRICS_IN_CONTEXT]]
             # Изменение считается по рядам: разные операторы и разные
             # годы нельзя складывать в один ряд, иначе получится
             # бессмысленная величина.
@@ -955,7 +991,8 @@ class Workflow:
             group_columns = tuple(
                 name
                 for name in columns
-                if name not in {value_column, label_column} and name not in _PERIOD_COLUMNS
+                if name not in {value_column, label_column}
+                and name.strip().lower() not in PERIOD_COLUMNS
             )
             groups = group_series(
                 material.rows,
@@ -969,10 +1006,7 @@ class Workflow:
                 name=material.title,
                 unit=metrics[0].unit,
             )
-            lines.extend(
-                f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
-                for metric in summary[:MAX_METRICS_IN_CONTEXT]
-            )
+            lines.extend(_metric_line(metric) for metric in summary[:MAX_METRICS_IN_CONTEXT])
             blocks.append(
                 f"РАСЧЁТЫ по {material.source_id} "
                 "(числа посчитаны кодом, source_id копируется отсюда):\n" + "\n".join(lines)

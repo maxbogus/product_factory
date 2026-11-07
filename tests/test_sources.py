@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from pf.corpus import Article
+from pf.materials import load_materials
 from pf.sources import SourceBundle, collect, score_passages
 
 
@@ -184,3 +185,229 @@ def test_wrong_number_in_table_row_is_rejected(
         quote="МТС, абонентская база: 99",
     )
     assert not support.is_usable
+
+
+def test_verify_metric_accepts_metric_from_answer_schema(tmp_path: Path) -> None:
+    """Метрика из схемы ответа агента проверяется, а не отбрасывается.
+
+    Агент отвечает по схеме ``pf.schemas.Analysis``, и её метрика —
+    ``pf.schemas.MetricRef``. Проверка же ждала ``pf.analysis.Metric``.
+    Это разные классы с одинаковыми полями, поэтому isinstance-фильтр
+    отбрасывал **все** метрики из ответа агента: в журнале демо-прогона
+    10 отклонений из 12 — это метрики с текстом «метрика не имеет
+    структуры с provenance».
+
+    Тест строит метрику через схему ответа — туда, откуда она приходит
+    на деле. Проверка через внутренний класс тестировала другой путь
+    и потому оставалась зелёной.
+    """
+    from pf.roles import schema_for
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,82\n", encoding="utf-8")
+    analysis_schema = schema_for("analyst")
+    analysis = analysis_schema.model_validate(
+        {
+            "facts": [],
+            "hypotheses": [],
+            "forecasts": [],
+            "gaps": [],
+            "metrics": [
+                {
+                    "name": "Абонентская база МТС",
+                    "value": 82.0,
+                    "unit": "млн",
+                    "source_id": "project/numbers.csv",
+                    "row": 0,
+                    "formula": "значение из колонки «значение», строка 1",
+                    "inputs": {"значение": "82"},
+                }
+            ],
+        }
+    )
+
+    support = verify_metric(analysis.metrics[0], load_materials(tmp_path))
+    assert support.is_usable, f"метрика из схемы должна подтверждаться: {support.detail}"
+
+
+def test_verify_metric_accepts_internal_metric(tmp_path: Path) -> None:
+    """Внутренний класс метрики проверяется по-прежнему."""
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,82\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Абонентская база МТС",
+        value=82.0,
+        unit="млн",
+        source_id=materials[0].source_id,
+        row=0,
+        formula="значение из колонки «значение», строка 1",
+        inputs={"значение": "82"},
+    )
+    support = verify_metric(metric, materials)
+    assert support.is_usable, f"внутренняя метрика должна подтверждаться: {support.detail}"
+
+
+def test_verify_metric_accepts_anchor_inside_source_id(tmp_path: Path) -> None:
+    """Якорь в source_id метрики не мешает найти материал.
+
+    Модель копирует ``source_id`` из блока РАСЧЁТЫ вместе с якорем
+    ``#row3``. Материал лежит под чистым путём, поэтому поиск по строке
+    с якорем не находит его, и метрика отбрасывалась с текстом
+    «источник не найден среди материалов» — хотя всё было верно.
+    """
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,82\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+
+    from pf.schemas import MetricRef
+
+    schema_metric = MetricRef(
+        name="Абонентская база МТС",
+        value=82.0,
+        unit="млн",
+        source_id=f"{materials[0].source_id}#row0",
+        row=0,
+        formula="значение из колонки «значение», строка 1",
+        inputs={"значение": "82"},
+    )
+    support = verify_metric(schema_metric, materials)
+    assert support.is_usable, f"метрика с якорем должна подтверждаться: {support.detail}"
+
+
+def test_verify_metric_rejects_conflicting_anchor(tmp_path: Path) -> None:
+    """Якорь, противоречащий номеру строки, не подтверждается.
+
+    Если в source_id указан якорь одной строки, а в поле ``row`` — другая,
+    значения расходятся. Подтверждать такое нельзя: неизвестно, какая
+    строка имелась в виду, а подтверждение «по счастливой строке»
+    пропустило бы расчёт по неверным данным.
+    """
+    from pf.schemas import MetricRef
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text(
+        "оператор,значение\nМТС,82\nTele2,38.9\n", encoding="utf-8"
+    )
+    materials = load_materials(tmp_path)
+    schema_metric = MetricRef(
+        name="Абонентская база МТС",
+        value=82.0,
+        unit="млн",
+        source_id=f"{materials[0].source_id}#row1",
+        row=0,
+        formula="значение из колонки «значение», строка 1",
+        inputs={"значение": "82"},
+    )
+    support = verify_metric(schema_metric, materials)
+    assert not support.is_usable, "противоречивый якорь не должен подтверждаться"
+
+
+def test_rounded_display_value_still_verifies(tmp_path: Path) -> None:
+    """Округлённое для показа значение сверяется со строкой.
+
+    Блок РАСЧЁТЫ показывает число в формате ``%.4g``: из 78,7913
+    получается 78,79. Модель копирует именно это округлённое число в
+    свою метрику, а проверка идёт с допуском 1e-6 — и верный расчёт
+    отбрасывается с текстом «значение не совпадает со строкой».
+
+    Значит проверка должна принимать и округлённое значение: расхождение
+    в пределах точности показа — не расхождение.
+    """
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text(
+        "дата,значение_процентов\n13.01.2026,78.7913\n", encoding="utf-8"
+    )
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Ключевая ставка",
+        value=78.79,  # округлено для показа
+        unit="%",
+        source_id=materials[0].source_id,
+        row=0,
+        formula="значение из колонки «значение_процентов», строка 1",
+        inputs={"значение_процентов": "78.7913"},
+    )
+    support = verify_metric(metric, materials)
+    assert support.is_usable, f"округлённое значение должно сверяться: {support.detail}"
+
+
+def test_aggregate_metric_verifies_by_recomputation(tmp_path: Path) -> None:
+    """Среднее по ряду проверяется пересчётом из заявленных наблюдений.
+
+    Среднее, медиана, размах и изменение — величины, которых **нет** ни
+    в одной строке таблицы: они считаются по нескольким наблюдениям.
+    Проверка по одной строке их справедливо отвергала, и в демо-прогоне
+    так отбрасывались все сводные метрики.
+
+    Такая метрика проверяется пересчётом: если значение выводится из
+    заявленных входов по указанной формуле — основание подтверждено.
+    """
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,87\nМТС,82\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Абонентская база МТС: среднее",
+        value=84.5,
+        unit="млн",
+        source_id=materials[0].source_id,
+        row=0,
+        formula="сумма / количество",
+        inputs={"значения": [87.0, 82.0]},
+    )
+    support = verify_metric(metric, materials)
+    assert support.is_usable, f"среднее должно подтверждаться пересчётом: {support.detail}"
+
+
+def test_aggregate_metric_with_wrong_inputs_is_rejected(tmp_path: Path) -> None:
+    """Среднее, не выводимое из входов, не подтверждается."""
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,87\nМТС,82\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Абонентская база МТС: среднее",
+        value=99.0,
+        unit="млн",
+        source_id=materials[0].source_id,
+        row=0,
+        formula="сумма / количество",
+        inputs={"значения": [87.0, 82.0]},
+    )
+    support = verify_metric(metric, materials)
+    assert not support.is_usable, "неверное среднее не должно подтверждаться"
+
+
+def test_recomputation_follows_formula_kind() -> None:
+    """Вид пересчёта определяется формулой, а не порядком проверок.
+
+    У формул разные слова: «максимум - минимум», «сумма / количество»,
+    «(последнее - первое) / |первое| * 100». Если проверять их в неверном
+    порядке, размах посчитается как изменение в процентах: из 78,79 и
+    81,29 размах равен 2,5, а изменение — 3,18 %. Метрика с формулой
+    «максимум - минимум» проверялась бы по чужему правилу и
+    справедливо отбрасывалась.
+    """
+    from pf.sources import _aggregate_from_inputs
+
+    observations = {"наблюдения": ["78.7913", "81.2955"]}
+
+    assert _aggregate_from_inputs(2.5042, observations, "максимум - минимум") == pytest.approx(
+        2.5042, abs=0.01
+    )
+    assert _aggregate_from_inputs(80.0434, observations, "сумма / количество") == pytest.approx(
+        80.0434, abs=0.01
+    )
+    assert _aggregate_from_inputs(
+        3.17827,
+        {"база": "78.7913", "новое": "81.2955"},
+        "(последнее - первое) / |первое| * 100",
+    ) == pytest.approx(3.17827, abs=0.01)

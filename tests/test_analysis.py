@@ -448,3 +448,93 @@ def test_change_within_one_series_is_computed() -> None:
     )
     change = next(m for m in summaries if "изменение" in m.name)
     assert change.value == pytest.approx(10.0)
+
+
+def test_aggregate_carries_observations_not_only_count() -> None:
+    """Сводная метрика несёт сами наблюдения, а не их количество.
+
+    Среднее по ряду — это 8,75 из четырёх наблюдений 6, 7, 10, 12.
+    Если в inputs лежит только «наблюдений: 4», пересчитать среднее
+    невозможно: чисел для сложения нет. Значит метрику нечем
+    подтвердить, и она отбрасывается вопреки тому, что расчёт верен.
+
+    Поэтому в inputs кладутся **наблюдения ряда**: по ним пересчёт
+    воспроизводится, и агент может показать, из чего сложил.
+    """
+    from pf.analysis import group_series, summarize_groups
+
+    rows = [
+        {"оператор": "Виртуальные операторы", "период": "2017", "значение": "6"},
+        {"оператор": "Виртуальные операторы", "период": "2018", "значение": "7"},
+        {"оператор": "Виртуальные операторы", "период": "2019", "значение": "10"},
+        {"оператор": "Виртуальные операторы", "период": "2020", "значение": "12"},
+    ]
+    groups = group_series(rows, label_column="оператор")
+    summaries = summarize_groups(
+        groups,
+        value_column="значение",
+        source_id="project/data/x.csv",
+        name="Численность",
+    )
+
+    average = next(m for m in summaries if "среднее" in m.name)
+    numbers = []
+    for value in average.inputs.values():
+        if isinstance(value, (list, tuple)):
+            numbers = [float(v) for v in value]
+            break
+    assert numbers == [6.0, 7.0, 10.0, 12.0], (
+        f"среднее должно нести наблюдения ряда, а не их количество: {average.inputs}"
+    )
+
+
+def test_period_column_is_not_used_as_series_label() -> None:
+    """Колонка-период не выбирается подписью ряда.
+
+    Подпись ряда — это «что за величина» (оператор, показатель), а не
+    «когда». Если подписью стала колонка с датой, то каждая дата
+    образовала свой ряд из одной строки: изменение всегда 0 %, а
+    среднее всегда равно единственному значению. Ряд перестаёт быть
+    рядом.
+
+    Поэтому колонка с периодом исключается из выбора подписи.
+    """
+    from pf.analysis import label_column_for
+
+    columns = ["дата", "значение_процентов"]
+    assert label_column_for(columns, value_column="значение_процентов") == ""
+
+    columns = ["оператор", "показатель", "значение", "период", "источник"]
+    assert label_column_for(columns, value_column="значение") == "оператор"
+
+
+def test_aggregate_metric_is_marked_as_aggregate() -> None:
+    """Агрегат отличается от значения в строке.
+
+    Среднее, медиана, размах и изменение вычисляются по нескольким
+    наблюдениям, и их значения нет ни в одной строке таблицы. Такие
+    метрики нельзя сверить со строкой — их проверяют пересчётом по
+    входам, поэтому входы должны быть видны и в блоке расчётов.
+    """
+    from pf.analysis import Metric
+
+    aggregate = Metric(
+        name="Абонентская база: среднее",
+        value=8.75,
+        unit="млн",
+        source_id="project/data/x.csv",
+        row=0,
+        formula="сумма / количество",
+        inputs={"наблюдения": ["6", "7", "10", "12"]},
+    )
+    plain = Metric(
+        name="Абонентская база",
+        value=82.0,
+        unit="млн",
+        source_id="project/data/x.csv",
+        row=1,
+        formula="значение из колонки «значение», строка 2",
+        inputs={"значение": "82"},
+    )
+    assert aggregate.is_aggregate
+    assert not plain.is_aggregate

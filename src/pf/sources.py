@@ -322,6 +322,142 @@ class SourceBundle:
         return best
 
 
+def _metric_fields(
+    metric: Any,
+) -> tuple[str, float, str, int | None, str, str, dict[str, Any]] | None:
+    """Снять поля метрики с любого носителя provenance.
+
+    Метрика приходит из ответа агента по схеме ``pf.schemas.MetricRef``,
+    а внутри расчётов живёт ``pf.analysis.Metric``. Это разные классы
+    с одинаковыми полями, поэтому проверка по ``isinstance`` отбрасывала
+    все метрики из ответа агента, а тест, проверявший внутренний класс,
+    оставался зелёным.
+
+    Поэтому здесь не тип, а поля: метрика проверяется по тем данным,
+    которые в ней действительно есть.
+
+    Args:
+        metric: Объект метрики.
+
+    Returns:
+        Кортеж ``(name, value, source_id, row, unit, formula, inputs)``
+        либо ``None``, если нужных полей нет.
+    """
+    name = getattr(metric, "name", None)
+    value = getattr(metric, "value", None)
+    source_id = getattr(metric, "source_id", None)
+    if name is None or value is None or source_id is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    row = getattr(metric, "row", None)
+    if row is not None:
+        try:
+            row = int(row)
+        except (TypeError, ValueError):
+            row = None
+    inputs = getattr(metric, "inputs", None)
+    return (
+        str(name),
+        number,
+        str(source_id),
+        row,
+        str(getattr(metric, "unit", "") or ""),
+        str(getattr(metric, "formula", "") or ""),
+        dict(inputs) if isinstance(inputs, dict) else {},
+    )
+
+
+def _format_metric(value: float, unit: str) -> str:
+    """Значение с единицей измерения.
+
+    Args:
+        value: Значение метрики.
+        unit: Единица измерения.
+
+    Returns:
+        Текст значения.
+    """
+    if not unit:
+        return f"{value:.4g}"
+    return f"{value:.4g} {unit}"
+
+
+def _aggregate_from_inputs(
+    value: float,
+    inputs: dict[str, Any],
+    formula: str,
+) -> float | None:
+    """Пересчитать агрегатную метрику по заявленным входам.
+
+    Среднее, медиана, размах и изменение — величины, которых нет ни в
+    одной строке таблицы: они считаются по нескольким наблюдениям.
+    Проверка по одной строке их справедливо отвергала, и в
+    демо-прогоне так отбрасывались все сводные метрики.
+
+    Пересчёт идёт по формуле: формула в метрике не выдумывается, она
+    приходит из блока РАСЧЁТЫ, где её составил код.
+
+    Args:
+        value: Заявленное значение метрики.
+        inputs: Входные значения.
+        formula: Формула расчёта.
+
+    Returns:
+        Пересчитанное значение либо ``None``, если пересчёт невозможен.
+    """
+    from pf.analysis import change_percent, mean, median, parse_number
+
+    numbers = [
+        parsed
+        for parsed in (parse_number(str(item)) for item in _input_numbers(inputs))
+        if parsed is not None
+    ]
+    if not numbers:
+        return None
+
+    # Порядок проверок важен: у каждой формулы своё правило, и правило
+    # изменения общее («последнее» и «первое») не должно перехватывать
+    # размах или среднее.
+    text = formula.lower()
+    if "размах" in text or "максимум" in text:
+        return max(numbers) - min(numbers)
+    if "медиан" in text:
+        return median(numbers)
+    if "средн" in text or "сумма" in text:
+        return mean(numbers)
+    if "изменение" in text or "процент" in text or "первое" in text:
+        if len(numbers) >= 2:
+            return change_percent(numbers[0], numbers[-1])
+        return None
+    if len(numbers) >= 2:
+        return change_percent(numbers[0], numbers[-1])
+    return None
+
+
+def _input_numbers(inputs: dict[str, Any]) -> list[Any]:
+    """Числовые значения из входов метрики.
+
+    Входы бывают разными: скаляр («база»: «80») или списком
+    («значения»: [87, 82]). И то и другое надо увидеть числами.
+
+    Args:
+        inputs: Входные значения метрики.
+
+    Returns:
+        Список значений — числа развёрнуты из списков.
+    """
+    result: list[Any] = []
+    for value in inputs.values():
+        if isinstance(value, (list, tuple)):
+            result.extend(value)
+        else:
+            result.append(value)
+    return result
+
+
 def verify_metric(
     metric: Any,
     materials: list[Material],
@@ -350,87 +486,132 @@ def verify_metric(
         Результат проверки: подтверждено, требует проверки или нет
         данных.
     """
-    from pf.analysis import Metric, parse_number
+    from pf.analysis import parse_number
 
-    if not isinstance(metric, Metric):
+    fields = _metric_fields(metric)
+    if fields is None:
         return Support(
             quote="",
             source_id="",
             status=SupportStatus.NO_DATA,
             detail="метрика не имеет структуры с provenance",
         )
+    name, value, source_id, row, unit, formula, inputs = fields
 
-    source_id = metric.source_id
     if not source_id:
         return Support(
-            quote=metric.name,
+            quote=name,
             source_id=source_id,
             status=SupportStatus.NO_DATA,
             detail="у метрики нет источника — пересчитать нельзя",
         )
 
-    material = next((m for m in materials if m.source_id == source_id), None)
+    # Якорь живёт внутри source_id: модель копирует его из блока
+    # РАСЧЁТЫ вместе с путём. Материал лежит под чистым путём, поэтому
+    # искать по строке с якорем нельзя — якорь отделяется, искомым
+    # остаётся путь.
+    clean_id, anchor_row = split_source_id(source_id)
+    material = next((m for m in materials if m.source_id == clean_id), None)
     if material is None:
         return Support(
-            quote=metric.name,
+            quote=name,
             source_id=source_id,
             status=SupportStatus.NO_DATA,
             detail=f"источник {source_id} не найден среди материалов",
         )
 
+    # Якорь и поле row должны говорить о одной строке. Если говорят о
+    # разных, непонятно, какая строка имелась в виду, и подтверждать
+    # такую метрику нельзя: проверка шла бы по счастливой строке.
+    if anchor_row is not None and row is not None and anchor_row != row:
+        return Support(
+            quote=name,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail=(
+                f"якорь {source_id} указывает на строку {anchor_row}, "
+                f"а в метрике указана строка {row}"
+            ),
+        )
+    if row is None:
+        row = anchor_row
+
     # 1. Значение из указанной строки источника.
     row_values: list[float] = []
-    if metric.row is not None and 0 <= metric.row < len(material.rows):
-        for value in material.rows[metric.row].values():
-            parsed = parse_number(str(value))
+    if row is not None and 0 <= row < len(material.rows):
+        for cell in material.rows[row].values():
+            parsed = parse_number(str(cell))
             if parsed is not None:
                 row_values.append(parsed)
     else:
         for record in material.rows:
-            for value in record.values():
-                parsed = parse_number(str(value))
+            for cell in record.values():
+                parsed = parse_number(str(cell))
                 if parsed is not None:
                     row_values.append(parsed)
 
-    if row_values and not _matches_any(metric.value, row_values, tolerance):
+    formatted = _format_metric(value, unit)
+    allowed = max(tolerance, _display_tolerance(value))
+
+    # 2. Пересчёт по заявленным входам. Агрегат (среднее, медиана,
+    # размах, изменение) вычислен по нескольким наблюдениям, и его
+    # значения нет ни в одной строке таблицы — сверять его со строкой
+    # бессмысленно. Поэтому пересчёт идёт первым: если значение
+    # выводится из входов, основание подтверждено.
+    recomputed = _aggregate_from_inputs(value, inputs, formula)
+    if recomputed is not None:
+        if not _matches_any(value, [recomputed], allowed):
+            return Support(
+                quote=formatted,
+                source_id=source_id,
+                status=SupportStatus.NO_DATA,
+                detail=(f"пересчёт по входам даёт {recomputed:.6g}, а заявлено {formatted}"),
+            )
         return Support(
-            quote=metric.formatted,
+            quote=formatted,
+            source_id=source_id,
+            status=SupportStatus.CONFIRMED,
+            paragraph_index=row,
+            detail="метрика подтверждена пересчётом по заявленным входам",
+        )
+
+    # 1. Значение из указанной строки источника.
+    if row_values and not _matches_any(value, row_values, allowed):
+        return Support(
+            quote=formatted,
             source_id=source_id,
             status=SupportStatus.NO_DATA,
             detail=(
-                f"значение {metric.formatted} не совпадает со строкой "
-                f"{metric.row if metric.row is not None else '?'} источника"
+                f"значение {formatted} не совпадает со строкой "
+                f"{row if row is not None else '?'} источника"
             ),
         )
 
-    # 2. Пересчёт по заявленным входам.
-    if metric.inputs:
+    if inputs:
         numbers = [
             parsed
-            for parsed in (parse_number(str(v)) for v in metric.inputs.values())
+            for parsed in (parse_number(str(v)) for v in inputs.values())
             if parsed is not None
         ]
         if len(numbers) >= 2:
             base, new = numbers[0], numbers[1]
             recomputed = (new - base) / abs(base) * 100 if base else 0.0
-            if metric.unit == "%" and not _matches_any(recomputed, [metric.value], tolerance):
+            if unit == "%" and not _matches_any(recomputed, [value], allowed):
                 return Support(
-                    quote=metric.formatted,
+                    quote=formatted,
                     source_id=source_id,
                     status=SupportStatus.NO_DATA,
-                    detail=(
-                        f"пересчёт по входам даёт {recomputed:.4g} %, а заявлено {metric.formatted}"
-                    ),
+                    detail=(f"пересчёт по входам даёт {recomputed:.4g} %, а заявлено {formatted}"),
                 )
 
     return Support(
-        quote=metric.formatted,
+        quote=formatted,
         source_id=source_id,
         status=SupportStatus.CONFIRMED,
-        paragraph_index=metric.row,
+        paragraph_index=row,
         detail=(
             "метрика пересчитана по строке источника"
-            if metric.row is not None
+            if row is not None
             else "метрика подтверждена по материалу"
         ),
     )
@@ -509,6 +690,29 @@ def _matches_any(value: float, candidates: list[float], tolerance: float) -> boo
         Есть ли подходящий кандидат.
     """
     return any(abs(value - candidate) <= tolerance for candidate in candidates)
+
+
+def _display_tolerance(value: float) -> float:
+    """Допуск, соответствующий точности показа числа.
+
+    Блок РАСЧЁТЫ показывает значения в формате ``%.4g``: из 78,7913
+    получается 78,79. Модель копирует в метрику именно округлённое
+    число, поэтому сверка с точной строкой источника обязана принимать
+    расхождение в пределах показанной точности. Иначе верный расчёт
+    отбрасывается с текстом «значение не совпадает со строкой».
+
+    Args:
+        value: Проверяемое значение.
+
+    Returns:
+        Допуск для сверки.
+    """
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1e-6
+    # 4 значащие цифры: погрешность округления не превосходит половины
+    # единицы последнего разряда.
+    return max(1e-6, magnitude * 5e-4)
 
 
 def score_passages(
