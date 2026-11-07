@@ -10,9 +10,11 @@ import pytest
 
 from pf.ground import (
     SupportStatus,
+    citation_key,
     find_quote,
     normalize,
     split_source_id,
+    tally_grounds,
     token_overlap,
     verify_claim,
     verify_quote,
@@ -232,3 +234,58 @@ def test_oov_words_are_reported_to_queue() -> None:
         paragraph_index=0,
     )
     assert "криптовалютой" in support.oov
+
+
+def test_citation_key_normalizes_repeated_anchor() -> None:
+    """Повторный якорь — то же основание, а не новое.
+
+    Ссылка приходит как ``проект/файл.csv#row3#p3``: якорь продублирован.
+    Для счёта оснований это одна строка таблицы, поэтому ключ у них общий.
+    """
+    assert citation_key("project/файл.csv#row3#p3") == "project/файл.csv#row3"
+    assert citation_key("project/файл.csv") == "project/файл.csv"
+    assert citation_key("web/Новости") == "web/Новости"
+    assert citation_key("") == ""
+
+
+def test_repeated_ground_is_counted_once_and_worst_verdict_wins() -> None:
+    """Счёт идёт по уникальным ключам, отказ не перекрывается повтором.
+
+    Если на одну строку таблицы сослались дважды — подтверждением и
+    выдумкой, — основание считается отклонённым: повтор не может сделать
+    его подтверждённым. Обратный порядок дал бы то же: худший вердикт
+    побеждает независимо от порядка записей.
+    """
+    confirmed_then_rejected = tally_grounds(
+        [
+            ("project/файл.csv#row0", SupportStatus.CONFIRMED),
+            ("project/файл.csv#row0", SupportStatus.NO_DATA),
+        ]
+    )
+    rejected_then_confirmed = tally_grounds(
+        [
+            ("project/файл.csv#row0", SupportStatus.NO_DATA),
+            ("project/файл.csv#row0", SupportStatus.CONFIRMED),
+        ]
+    )
+
+    for tally in (confirmed_then_rejected, rejected_then_confirmed):
+        assert tally.checked == 1
+        assert tally.confirmed == 0
+        assert tally.rejected == 1
+        assert tally.needs_review == 0
+
+
+def test_grounds_awaiting_review_are_counted_separately() -> None:
+    """«Ждёт проверки» — не подтверждение и не отказ."""
+    tally = tally_grounds(
+        [
+            ("web/Новости", SupportStatus.NEEDS_REVIEW),
+            ("project/файл.csv#row0", SupportStatus.CONFIRMED),
+        ]
+    )
+
+    assert tally.checked == 2
+    assert tally.confirmed == 1
+    assert tally.needs_review == 1
+    assert tally.rejected == 0

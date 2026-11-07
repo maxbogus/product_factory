@@ -24,7 +24,15 @@ from typing import TYPE_CHECKING, Any
 
 from pf import roles
 from pf.config import Settings, settings
-from pf.ground import SupportStatus, verify_quote_as_external
+from pf.ground import (
+    GroundTally,
+    SupportStatus,
+    citation_key,
+    conclusion_status,
+    ground_buckets,
+    tally_grounds,
+    verify_quote_as_external,
+)
 from pf.journal import Journal, StepRecord, journal_path
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
@@ -872,46 +880,45 @@ class Workflow:
 
     @staticmethod
     def _conclusion_verdict(
-        total: int,
-        confirmed: int,
-        rejected: int,
-        needs_review: int = 0,
+        tally: GroundTally,
+        grounds: dict[str, list[str]],
     ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
+        Основания считаются по уникальным ключам, а не по записям:
+        стратегия и решение нередко объявляют одну и ту же строку
+        источника дважды. В прогоне `demo-v9` четыре объявленных основания
+        вели на две строки таблицы, и документ называл их одновременно
+        «8 из 8» и «уникальных 2» — доля выглядела лучше, чем была.
+
         Три состояния различаются принципиально: «подкреплено» — хотя бы
-        одно основание вывода подтверждено; «подкреплено частично» — часть
-        отклонена; «неподкреплено» — ни одного. Молчать нельзя: вывод без
-        основания выглядит в документе так же, как вывод с основанием.
+        одно основание подтверждено и ни одно не отклонено; «подкреплено
+        частично» — часть отклонена; «неподкреплено» — ни одного. Молчать
+        нельзя: вывод без основания выглядит в документе так же, как вывод
+        с основанием.
 
         Args:
-            total: Сколько оснований вывода проверялось.
-            confirmed: Сколько подтверждено.
-            rejected: Сколько отклонено.
-            needs_review: Сколько ждёт проверки человеком (внешние
-                источники, иностранные страницы). Это не отказ, но и не
-                подтверждение: вывод, у которого все основания такие,
-                нельзя называть ни подкреплённым, ни опровергнутым.
+            tally: Счёт по уникальным ключам (худший вердикт побеждает).
+            grounds: Ключи оснований по вердиктам — по ним отчёт
+                объединяет шаги, не складывая повторы.
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
         """
-        if total <= 0:
+        if tally.checked <= 0:
             return None
-        if confirmed <= 0 and needs_review > 0:
-            status = "ждёт проверки"
-        elif confirmed <= 0:
-            status = "неподкреплено"
-        elif rejected > 0 or needs_review > 0:
-            status = "подкреплено частично"
-        else:
-            status = "подкреплено"
         return {
-            "checked": total,
-            "confirmed": confirmed,
-            "rejected": rejected,
-            "needs_review": needs_review,
-            "status": status,
+            "checked": tally.checked,
+            "confirmed": tally.confirmed,
+            "rejected": tally.rejected,
+            "needs_review": tally.needs_review,
+            "status": conclusion_status(
+                tally.checked,
+                tally.confirmed,
+                tally.rejected,
+                tally.needs_review,
+            ),
+            "grounds": grounds,
         }
 
     @staticmethod
@@ -1041,10 +1048,10 @@ class Workflow:
         details: list[str] = []
         needs_review: list[str] = []
         needs_review_details: list[str] = []
-        conclusion_total = 0
-        conclusion_confirmed = 0
-        conclusion_rejected = 0
-        conclusion_needs_review = 0
+        # Вердикты вывода собираются парами «ключ основания — вердикт»:
+        # счёт по записям завышал число, когда на одну строку источника
+        # ссылались дважды.
+        conclusion_verdicts: list[tuple[str, SupportStatus]] = []
         oov: set[str] = set()
         oov_context = ""
         verdicts: list[ClaimVerdict] = []
@@ -1052,8 +1059,10 @@ class Workflow:
         for text, source, is_conclusion in Workflow._sources_of(data):
             named = getattr(source, "source_id", "") or ""
             quote = getattr(source, "quote", "") or ""
-            if is_conclusion:
-                conclusion_total += 1
+            # Ключ основания — строка источника. Безымянное основание
+            # (модель прислала имя поля вместо ссылки) различается по
+            # цитате: два разных утверждения — это два основания.
+            key = citation_key(named) or f"без источника: {quote}"
 
             external = Workflow._external_text(named, state)
             if external:
@@ -1073,12 +1082,12 @@ class Workflow:
                         f"{_named_source(named)}: {external_support.detail}"
                     )
                     if is_conclusion:
-                        conclusion_needs_review += 1
+                        conclusion_verdicts.append((key, SupportStatus.NEEDS_REVIEW))
                 else:
                     rejected += 1
                     details.append(f"{_named_source(named)}: {external_support.detail}")
                     if is_conclusion:
-                        conclusion_rejected += 1
+                        conclusion_verdicts.append((key, SupportStatus.NO_DATA))
                 continue
 
             support = bundle.verify_claim(
@@ -1103,7 +1112,7 @@ class Workflow:
                     )
                 )
                 if is_conclusion:
-                    conclusion_rejected += 1
+                    conclusion_verdicts.append((key, SupportStatus.NO_DATA))
                 continue
             verdicts.append(
                 ClaimVerdict(
@@ -1117,17 +1126,17 @@ class Workflow:
             if support.is_usable:
                 confirmed.append(support.citation)
                 if is_conclusion:
-                    conclusion_confirmed += 1
+                    conclusion_verdicts.append((key, SupportStatus.CONFIRMED))
             elif support.status is SupportStatus.NEEDS_REVIEW:
                 needs_review.append(support.citation)
                 needs_review_details.append(f"{_named_source(named)}: {support.detail}")
                 if is_conclusion:
-                    conclusion_needs_review += 1
+                    conclusion_verdicts.append((key, SupportStatus.NEEDS_REVIEW))
             else:
                 rejected += 1
                 details.append(f"{_named_source(named)}: {support.detail}")
                 if is_conclusion:
-                    conclusion_rejected += 1
+                    conclusion_verdicts.append((key, SupportStatus.NO_DATA))
 
         confirmed_metrics, rejected_metrics, metric_details, metric_verdicts = (
             Workflow._verify_metrics(data)
@@ -1144,10 +1153,8 @@ class Workflow:
             rejected=rejected,
             details=details,
             conclusion=Workflow._conclusion_verdict(
-                conclusion_total,
-                conclusion_confirmed,
-                conclusion_rejected,
-                conclusion_needs_review,
+                tally_grounds(conclusion_verdicts),
+                ground_buckets(conclusion_verdicts),
             ),
             needs_review=needs_review,
             needs_review_details=needs_review_details,

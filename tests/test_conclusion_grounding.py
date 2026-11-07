@@ -185,6 +185,98 @@ def test_confirmed_conclusion_evidence_counts_as_grounds(
     assert grounding.citations
 
 
+def test_conclusion_counts_unique_grounds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Повторная ссылка на тот же источник — одно основание, а не два.
+
+    В прогоне `demo-v9` стратегия и фиксация решения объявляли по четыре
+    основания вывода, и все вели на две строки таблицы: `#row0` и `#row1`
+    по два раза. В журнале стояло «проверено 4, подтверждено 4», отчёт
+    складывал шаги и печатал «проверено 8, подтверждено 8», а раздел «Что
+    измерено» того же документа — «уникальных оснований 2». Документ
+    спорил сам с собой: доля выглядела лучше, чем была.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["checked"] == 1
+    assert grounding.conclusion["confirmed"] == 1
+    assert grounding.conclusion["status"] == "подкреплено"
+
+
+def test_repeated_ground_with_single_rejection_is_not_confirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Повтор подтверждённой цитаты не перекрывает отказ по той же строке.
+
+    Основание — это строка источника. Если по ней прошли и подтверждение,
+    и выдумка, основание считается отклонённым: иначе достаточно повторить
+    верную цитату, чтобы рядом стоящая выдумка перестала быть видна.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote="база выросла до 99,9 млн"),
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["checked"] == 1
+    assert grounding.conclusion["confirmed"] == 0
+    assert grounding.conclusion["rejected"] == 1
+    assert grounding.conclusion["status"] == "неподкреплено"
+
+
+def test_conclusion_grounds_are_named_in_journal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Шаг называет основания вывода ключами, а не только счётчиками.
+
+    Отчёт собирает вывод из двух шагов — стратегии и фиксации решения, —
+    и ссылки у них одни и те же. Без ключей в журнале отчёт не может
+    отличить повтор от нового основания и складывает записи.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    grounds = grounding.conclusion["grounds"]
+    assert grounds["confirmed"] == ["project/numbers.csv#row0"]
+    assert grounds["rejected"] == []
+    assert grounds["needs_review"] == []
+
+
 def test_verdicts_are_kept_for_every_ground(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

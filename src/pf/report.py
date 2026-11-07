@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from pf.ground import GroundTally, SupportStatus, citation_key, conclusion_status, tally_grounds
 from pf.journal import Journal, journal_path
 from pf.state import load
 
@@ -98,6 +99,10 @@ class ConclusionRecord:
         rejected: Сколько отклонено.
         grounds: Подтверждённые ссылки вывода.
         rejected_grounds: Отклонённые ссылки вывода.
+        unique: Посчитаны ли счётчики по уникальным основаниям. Журнал до
+            этого правила называет только записи; если в нём были отказы,
+            распределить их по уникальным ключам нечем, и отчёт говорит
+            «записей» вместо «оснований».
     """
 
     direction: str = ""
@@ -115,6 +120,7 @@ class ConclusionRecord:
     rejected: int = 0
     grounds: list[str] = field(default_factory=list)
     rejected_grounds: list[str] = field(default_factory=list)
+    unique: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -416,14 +422,23 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
         Строки раздела про основания вывода.
     """
     lines: list[str] = []
+    # Счёт идёт по уникальным основаниям: две ссылки на одну строку
+    # источника — одно основание. Старый журнал называет только записи, и
+    # отчёт говорит это словом «записей», а не выдаёт их за основания.
+    label = "уникальных оснований" if conclusion.unique else "записей"
     numbers = (
-        f"проверено {conclusion.checked}, подтверждено {conclusion.confirmed}, "
+        f"{label}: проверено {conclusion.checked}, подтверждено {conclusion.confirmed}, "
         f"отклонено {conclusion.rejected}"
     )
     if conclusion.status == "неподкреплено":
         lines.append(
             f"**Основания вывода: вывод не подкреплён** — ни одно основание не "
             f"подтверждено ({numbers})."
+        )
+    elif conclusion.status == "ждёт проверки":
+        lines.append(
+            f"**Основания вывода: ждут проверки** — ни одно не подтверждено, "
+            f"подтвердить их нечем ({numbers})."
         )
     elif conclusion.status == "подкреплено частично":
         lines.append(f"**Основания вывода: подкреплено частично** ({numbers}).")
@@ -450,26 +465,6 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
             lines.append(f"- {detail}")
         lines.append("")
     return lines
-
-
-def _citation_key(citation: str) -> str:
-    """Ключ основания: путь и якорь, без повторов.
-
-    Ссылка может выглядеть как ``проект/файл.csv#row3#p3`` — с
-    продублированным якорем. Для счёта уникальных оснований это один
-    и тот же факт, а не два.
-
-    Args:
-        citation: Ссылка на основание.
-
-    Returns:
-        Нормализованный ключ.
-    """
-    path, _, fragment = citation.partition("#")
-    parts = [part for part in fragment.split("#") if part]
-    if not parts:
-        return path
-    return f"{path}#{parts[0]}"
 
 
 def rejection_kind(detail: str) -> str:
@@ -604,25 +599,80 @@ def _text_list(value: Any) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
-def _conclusion_status(checked: int, confirmed: int, rejected: int) -> str:
-    """Статус оснований вывода — то же правило, что в рабочем процессе.
+#: Как вердикт основания называется в журнале шага.
+_STATUS_BY_BUCKET: dict[str, SupportStatus] = {
+    "confirmed": SupportStatus.CONFIRMED,
+    "rejected": SupportStatus.NO_DATA,
+    "needs_review": SupportStatus.NEEDS_REVIEW,
+}
+
+
+def _declared_ground_keys(detail: dict[str, Any]) -> list[str]:
+    """Ключи оснований вывода, объявленных на шаге.
+
+    Основания вывода лежат в трёх местах результата: ``product.evidence``,
+    ``communication.promise_grounding`` и ``commitments[].basis``. Журнал
+    хранит их целиком, поэтому уникальные основания считаются и по
+    старому журналу — в нём нет только раскладки по вердиктам.
 
     Args:
-        checked: Сколько оснований вывода проверено.
-        confirmed: Сколько подтверждено.
-        rejected: Сколько отклонено.
+        detail: Результат шага из журнала.
 
     Returns:
-        «подкреплено», «подкреплено частично», «неподкреплено» либо
-        «не проверялось», если проверки в журнале нет.
+        Ключи оснований в порядке объявления, без повторов.
     """
-    if checked <= 0:
-        return "не проверялось"
-    if confirmed <= 0:
-        return "неподкреплено"
-    if rejected > 0:
-        return "подкреплено частично"
-    return "подкреплено"
+    declared: list[Any] = []
+    declared.extend(_mapping(detail.get("product")).get("evidence") or [])
+    declared.extend(_mapping(detail.get("communication")).get("promise_grounding") or [])
+    for commitment in detail.get("commitments") or []:
+        if isinstance(commitment, dict):
+            declared.extend(commitment.get("basis") or [])
+
+    keys: list[str] = []
+    for item in declared:
+        if not isinstance(item, dict):
+            continue
+        key = citation_key(str(item.get("source_id") or ""))
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _journal_tally(checks: list[dict[str, Any]], declared: list[str]) -> GroundTally | None:
+    """Счёт оснований вывода по тому, что журнал действительно знает.
+
+    Три случая различаются, и путать их нельзя:
+
+    1. в проверке есть ключи оснований — считаем по ним, объединяя шаги:
+       стратегия и решение ссылаются на одни и те же строки;
+    2. ключей нет, но и отказов нет — значит все объявленные основания
+       подтверждены, и уникальных ровно столько, сколько объявлено;
+    3. ключей нет и отказы есть — распределить их по уникальным ключам
+       нечем (неизвестно, какая из повторных ссылок отклонена), поэтому
+       отчёт назовёт записи, а не основания.
+
+    Args:
+        checks: Блоки ``conclusion_check`` из журнала.
+        declared: Ключи объявленных оснований вывода.
+
+    Returns:
+        Счёт по уникальным основаниям либо ``None``, если журнал не
+        позволяет его посчитать.
+    """
+    if all(isinstance(check.get("grounds"), dict) for check in checks):
+        verdicts: list[tuple[str, SupportStatus]] = []
+        for check in checks:
+            grounds = _mapping(check.get("grounds"))
+            for bucket, status in _STATUS_BY_BUCKET.items():
+                for key in grounds.get(bucket) or []:
+                    verdicts.append((citation_key(str(key)), status))
+        return tally_grounds(verdicts)
+    if declared and all(
+        int(check.get("rejected") or 0) == 0 and int(check.get("needs_review") or 0) == 0
+        for check in checks
+    ):
+        return GroundTally(checked=len(declared), confirmed=len(declared))
+    return None
 
 
 def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
@@ -652,9 +702,28 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         )
         if isinstance(check, dict)
     ]
-    checked = sum(int(check.get("checked") or 0) for check in checks)
-    confirmed = sum(int(check.get("confirmed") or 0) for check in checks)
-    rejected = sum(int(check.get("rejected") or 0) for check in checks)
+    declared: list[str] = []
+    for recorded in (strategy_detail, keeper_detail):
+        for key in _declared_ground_keys(recorded):
+            if key not in declared:
+                declared.append(key)
+
+    tally = _journal_tally(checks, declared) if checks else GroundTally()
+    if tally is None:
+        # Журнал называет только записи: так было до правила уникальных
+        # оснований, и распределить отказы по ключам нечем. Выдать записи
+        # за уникальные основания значило бы соврать в удобную сторону.
+        checked = sum(int(check.get("checked") or 0) for check in checks)
+        confirmed = sum(int(check.get("confirmed") or 0) for check in checks)
+        rejected = sum(int(check.get("rejected") or 0) for check in checks)
+        needs_review = sum(int(check.get("needs_review") or 0) for check in checks)
+        unique = False
+    else:
+        checked = tally.checked
+        confirmed = tally.confirmed
+        rejected = tally.rejected
+        needs_review = tally.needs_review
+        unique = True
 
     grounds: list[str] = []
     rejected_grounds: list[str] = []
@@ -681,12 +750,13 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         compare_against=str(verification.get("compare_against") or ""),
         observation_period=str(verification.get("observation_period") or ""),
         adverse_effects=_text_list(verification.get("adverse_effects")),
-        status=_conclusion_status(checked, confirmed, rejected),
+        status=conclusion_status(checked, confirmed, rejected, needs_review),
         checked=checked,
         confirmed=confirmed,
         rejected=rejected,
         grounds=grounds,
         rejected_grounds=rejected_grounds,
+        unique=unique,
     )
 
 
@@ -764,7 +834,7 @@ def build_session_report(session_id: str) -> SessionReport:
     # одни и те же абзацы: четыре записи — это два разных факта.
     # Называть их четырьмя основаниями неверно, так доля выглядит
     # лучше, чем она есть.
-    unique_citations = {_citation_key(citation) for citation in all_citations}
+    unique_citations = {citation_key(citation) for citation in all_citations}
     unique_sources = {citation.split("#", 1)[0] for citation in all_citations}
 
     state = load(session_id)

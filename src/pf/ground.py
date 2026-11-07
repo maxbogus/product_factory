@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
@@ -127,6 +128,157 @@ def mark_external(support: Support) -> Support:
         status=SupportStatus.NEEDS_REVIEW,
         detail="внешний источник: цитата найдена дословно, требует проверки",
     )
+
+
+#: Насколько вердикт «хуже» для основания. Худший вердикт побеждает: если
+#: на одну строку источника сослались и подтверждённой цитатой, и выдумкой,
+#: основание считается отклонённым — иначе повтор верной цитаты прятал бы
+#: рядом стоящую выдумку.
+_SEVERITY: dict[SupportStatus, int] = {
+    SupportStatus.CONFIRMED: 0,
+    SupportStatus.NEEDS_REVIEW: 1,
+    SupportStatus.NO_DATA: 2,
+}
+
+#: Имена групп вердиктов — так они попадают в журнал шага.
+GROUND_BUCKETS: tuple[str, ...] = ("confirmed", "rejected", "needs_review")
+
+
+def citation_key(source_id: str) -> str:
+    """Ключ основания: путь и первый якорь, без повторов.
+
+    Ссылка приходит как ``приложение/файл.csv#row3#p3`` — якорь может
+    продублироваться. Для счёта оснований это одна строка таблицы, а не
+    две, поэтому ключ у них общий. Без общего ключа отчёт печатал
+    «уникальных оснований 2» и «проверено 8» в одном документе.
+
+    Args:
+        source_id: Ссылка на источник из ответа модели.
+
+    Returns:
+        Нормализованный ключ основания.
+    """
+    path, _, fragment = source_id.partition("#")
+    parts = [part for part in fragment.split("#") if part]
+    return f"{path}#{parts[0]}" if parts else path
+
+
+@dataclass(frozen=True, slots=True)
+class GroundTally:
+    """Счёт оснований по уникальным ключам.
+
+    Attributes:
+        checked: Сколько уникальных оснований проверялось.
+        confirmed: Сколько из них подтверждено.
+        rejected: Сколько отклонено.
+        needs_review: Сколько ждёт проверки человеком.
+    """
+
+    checked: int = 0
+    confirmed: int = 0
+    rejected: int = 0
+    needs_review: int = 0
+
+
+def _worst_by_key(verdicts: Iterable[tuple[str, SupportStatus]]) -> dict[str, SupportStatus]:
+    """Худший вердикт по каждому ключу основания.
+
+    Args:
+        verdicts: Пары «ключ основания — вердикт».
+
+    Returns:
+        Словарь «ключ — худший вердикт» в порядке появления ключей.
+    """
+    worst: dict[str, SupportStatus] = {}
+    for key, status in verdicts:
+        current = worst.get(key)
+        if current is None or _SEVERITY[status] > _SEVERITY[current]:
+            worst[key] = status
+    return worst
+
+
+def ground_buckets(verdicts: Iterable[tuple[str, SupportStatus]]) -> dict[str, list[str]]:
+    """Ключи оснований, разложенные по вердиктам.
+
+    Нужно, чтобы отчёт мог объединить шаги: у стратегии и фиксации решения
+    одни и те же строки источника, и складывать их счётчики нельзя.
+
+    Args:
+        verdicts: Пары «ключ основания — вердикт».
+
+    Returns:
+        Словарь ``confirmed`` / ``rejected`` / ``needs_review`` со ключами.
+    """
+    names = {
+        SupportStatus.CONFIRMED: "confirmed",
+        SupportStatus.NO_DATA: "rejected",
+        SupportStatus.NEEDS_REVIEW: "needs_review",
+    }
+    buckets: dict[str, list[str]] = {name: [] for name in GROUND_BUCKETS}
+    for key, status in _worst_by_key(verdicts).items():
+        buckets[names[status]].append(key)
+    return buckets
+
+
+def tally_grounds(verdicts: Iterable[tuple[str, SupportStatus]]) -> GroundTally:
+    """Посчитать основания по уникальным ключам.
+
+    Повторная ссылка на ту же строку источника — одно основание. Именно
+    этого не хватало: в прогоне ``demo-v9`` стратегия и решение объявляли
+    по четыре основания из двух строк, и документ называл их и «8 из 8»,
+    и «уникальных 2» одновременно.
+
+    Args:
+        verdicts: Пары «ключ основания — вердикт».
+
+    Returns:
+        Счёт по уникальным ключам, худший вердикт побеждает.
+    """
+    buckets = ground_buckets(verdicts)
+    return GroundTally(
+        checked=sum(len(keys) for keys in buckets.values()),
+        confirmed=len(buckets["confirmed"]),
+        rejected=len(buckets["rejected"]),
+        needs_review=len(buckets["needs_review"]),
+    )
+
+
+def conclusion_status(
+    checked: int,
+    confirmed: int,
+    rejected: int,
+    needs_review: int = 0,
+) -> str:
+    """Статус оснований вывода — единственное место с этим правилом.
+
+    Три состояния различаются принципиально: «подкреплено» — хотя бы одно
+    основание подтверждено и ни одно не отклонено; «подкреплено частично» —
+    часть отклонена или ждёт проверки; «неподкреплено» — ни одного
+    подтверждённого. Молчать нельзя: вывод без основания выглядит в
+    документе так же, как вывод с основанием.
+
+    Правило было записано дважды — в рабочем процессе и в отчёте, — и
+    версии разошлись: отчёт не знал про «ждёт проверки» и называл такой
+    вывод подкреплённым. Теперь правило одно.
+
+    Args:
+        checked: Сколько было проверено.
+        confirmed: Сколько подтверждено.
+        rejected: Сколько отклонено.
+        needs_review: Сколько ждёт проверки человеком.
+
+    Returns:
+        Статус оснований вывода.
+    """
+    if checked <= 0:
+        return "не проверялось"
+    if confirmed <= 0 and needs_review > 0:
+        return "ждёт проверки"
+    if confirmed <= 0:
+        return "неподкреплено"
+    if rejected > 0 or needs_review > 0:
+        return "подкреплено частично"
+    return "подкреплено"
 
 
 @dataclass(frozen=True, slots=True)
