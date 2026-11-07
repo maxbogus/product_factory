@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Any
 
 from pf.ground import SupportStatus, verify_quote
-from pf.journal import Journal, journal_path
 from pf.schemas import (
     Analysis,
     Claim,
@@ -35,7 +34,7 @@ from pf.schemas import (
     Variants,
     VerificationPlan,
 )
-from pf.state import Phase, SessionState, list_sessions, load, save
+from pf.state import Phase, SessionState, load, save
 
 EVAL_CASES = Path(__file__).resolve().parent.parent.parent / "eval" / "cases" / "scenarios.jsonl"
 
@@ -354,12 +353,36 @@ def _d11_resume_keeps_phase() -> str:
 
 
 def _d12_cost_visible() -> str:
-    """Расход виден и разложен по ролям."""
-    sessions = list_sessions()
-    if not sessions:
-        return "Стоимость: нет сессий"
-    journal = Journal(journal_path(sessions[0]))
-    return f"Стоимость: {journal.total_cost_units:.6f} По ролям: {journal.cost_by_role()}"
+    """Расход виден и разложен по ролям.
+
+    Журнал строится во временном каталоге, а не читается из ``state/``:
+    ``state/`` в ``.gitignore``, поэтому на чистом клоне кейс падал —
+    «не найдено ожидаемое 'По ролям'», и ``make ci`` краснел у того, кто
+    просто склонировал репозиторий. Проверка не должна зависеть от
+    артефактов чужого прогона.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from pf.journal import Journal, StepRecord
+
+    with tempfile.TemporaryDirectory() as directory:
+        journal = Journal(Path(directory) / "session-eval-cost.jsonl")
+        journal.append(
+            StepRecord(
+                ordinal=1, role="collector", phase="collecting", summary="шаг", cost_units=0.001
+            )
+        )
+        journal.append(
+            StepRecord(
+                ordinal=2, role="analyst", phase="analyzing", summary="шаг", cost_units=0.002
+            )
+        )
+        total = journal.total_cost_units
+        by_role = journal.cost_by_role()
+
+    roles = ", ".join(f"{role}: {cost:.6f}" for role, cost in by_role.items())
+    return f"Стоимость: {total:.6f} По ролям: {roles}"
 
 
 def _variant(title: str, objections: list[str] | None = None) -> Any:

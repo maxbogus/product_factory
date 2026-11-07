@@ -85,6 +85,10 @@ make lint           # ruff check
 make format         # ruff format
 make typecheck      # mypy --strict
 make ci             # всё вместе
+make next-task      # выбрать 1–2 задачи на сессию по RICE
+make tasks-check    # проверить индекс задач, карточки и доказательства
+make docs-check     # проверить документы: числа, make-цели, пути
+make canon          # сверить числа канона (docs/canon.py) с деревом
 uv run pf --help    # команды агента
 uv run pf lexicon stats  # лексическое покрытие и очередь незнакомых слов
 uv run pf lexicon oov    # что ждёт распознания
@@ -108,6 +112,12 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
 - `src/pf/corpus.py` — `DOMAIN_TERMS` и `STRONG_DOMAIN_TERMS`: словарь
   предметной области. При смене темы агента правится здесь.
 - `prompts/roles/*.md` — 9 файлов, по одному на роль.
+- `docs/TASKS.md` — индекс задач: фазы, SP, RICE, критерии приёмки.
+  Гейт `make tasks-check`; карточки — `docs/tasks/`.
+- `docs/HANDOFF.md` — состояние работы между сессиями; журнал —
+  `docs/sessions/`.
+- `docs/canon.py` — единственный источник чисел, которые называют
+  `README.md` и `docs/DESCRIPTION.md`. Гейт `make docs-check`.
 - `docs/decisions.md` — почему всё так.
 - `docs/DESCRIPTION.md` — описание работы для сдачи (обновлять вместе с кодом).
 - `docs/VIDEO_SCRIPT.md` — сценарий видеозаписи.
@@ -178,6 +188,25 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
 - **MCP-серверы требуют `mcp==1.28.0`** (на 2.x декораторы `@app.list_tools`
   убраны) и живут в своём окружении; путь — `PF_MCP_DIR`.
 
+
+## Как ведётся работа
+
+Работа идёт сессиями по 1–2 задачи. Порядок:
+
+1. `docs/HANDOFF.md` — где остановились и что дальше.
+2. `make next-task` — 1–2 задачи с наибольшим RICE из `docs/TASKS.md`.
+3. Взять карточку `docs/tasks/<ID>.md` (для задач от 3 SP), статус в
+   индексе → `🔄`.
+4. **Сначала падающий тест**: критерий приёмки из индекса обязан краснеть
+   до работы.
+5. `make ci` зелёный → статус `✅`, в карточке `**Доказательство:**` с
+   путём к тесту, который это держит.
+6. `docs/sessions/<дата>-session-N.md`, обновить `docs/HANDOFF.md`,
+   записать шаг в `~/.cline/memory/ml-sessions.jsonl`, коммит.
+
+Числа, которые называют документы, живут в `docs/canon.py`. Меняете число в
+коде — сначала `make canon` (он сверит с деревом), потом документы;
+`make docs-check` не даст им разойтись.
 
 ## Проверка перед коммитом
 

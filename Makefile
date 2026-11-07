@@ -9,7 +9,8 @@ PYTHON ?= python3
 
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
-        lexicon lexicon-oov contracts-check scenarios-check demo-doc replay
+        lexicon lexicon-oov contracts-check scenarios-check demo-doc replay \
+        canon tasks-check docs-check next-task
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -104,6 +105,21 @@ ci: ## Полный прогон проверок
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory eval
 	@$(MAKE) --no-print-directory contracts-check
+	@$(MAKE) --no-print-directory canon
+	@$(MAKE) --no-print-directory tasks-check
+	@$(MAKE) --no-print-directory docs-check
+
+canon: ## Сверить числа канона (docs/canon.py) с деревом репозитория
+	@$(UV) run python docs/canon.py
+
+docs-check: ## Проверить поставляемые документы: числа, make-цели, пути
+	@$(UV) run python scripts/docs_check.py
+
+tasks-check: ## Проверить индекс задач и карточки: статусы, критерии, доказательства
+	@$(UV) run python scripts/tasks_gate.py
+
+next-task: ## Выбрать 1–2 задачи на сессию по RICE
+	@$(UV) run python scripts/next_task.py
 
 materials: ## Показать материалы проекта (документы, таблицы, данные)
 	@$(UV) run pf materials

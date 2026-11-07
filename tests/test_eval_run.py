@@ -11,6 +11,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from pf.config import settings
 from pf.evalrun import Case, Expectation, load_cases, run_all
 
 
@@ -44,6 +47,28 @@ def test_expectations_are_known() -> None:
     """У кейсов только известные ожидания."""
     for case in load_cases():
         assert case.expectation in set(Expectation)
+
+
+def test_d12_empty_state_still_passes(tmp_path: Path, monkeypatch) -> None:
+    """Расход считается по журналу, а не по `state/` прошлого прогона.
+
+    `state/` и `journal/` в `.gitignore`, поэтому на чистом клоне кейсов
+    `D-12` падал: «не найдено ожидаемое 'По ролям'», и `make ci` краснел у
+    того, кто просто склонировал репозиторий. Проверка не должна зависеть
+    от артефактов чужой работы — ни в успехе, ни в провале.
+    """
+    monkeypatch.setattr(settings, "state_dir", tmp_path / "state")
+    monkeypatch.setattr(settings, "journal_dir", tmp_path / "journal")
+
+    results = run_all()
+    failed = [f"{result.case_id}: {result.detail}" for result in results if not result.passed]
+
+    assert not failed, "; ".join(failed)
+    assert not (tmp_path / "state").exists(), "проверка не должна создавать сессии"
+    journal_dir = tmp_path / "journal"
+    assert not journal_dir.exists() or not list(journal_dir.glob("*.jsonl")), (
+        "проверка не должна оставлять журналы"
+    )
 
 
 def test_case_parsing_keeps_optional_fields() -> None:
