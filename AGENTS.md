@@ -67,7 +67,8 @@ INTAKE → PLANNING → ROUTING → COLLECTING → ANALYZING → OPTIONS → RED
 make setup          # зависимости (uv sync --extra dev)
 make doctor         # проверка готовности: Python, Ollama, модель, корпус, промпты
 make demo           # демонстрационная задача целиком
-make test           # 259 детерминированных тестов, без модели
+make demo-doc SESSION=demo-v7  # пересобрать demo/RESULT.md из журнала
+make test           # детерминированные тесты, без модели
 make test-slow      # тесты с живой моделью
 make eval           # eval-сценарии: правила поведения агента
 make bench          # замеры: агент против обычного чата
@@ -105,6 +106,17 @@ uv run pf --help    # команды агента
   пришло «JSON не закрыт» — поднимите `PF_MAX_TOKENS`.
 - **Проверка оснований ловит пересказ, а не ложь по смыслу.** Поэтому
   дополнительно проверяется релевантность источника (`SourceBundle.is_relevant`).
+- **Вывод проверяется как факт.** `Workflow._sources_of` собирает ссылки из
+  `product.evidence`, `communication.promise_grounding` и
+  `commitments[].basis`; статус оснований вывода пишется в журнал шага
+  (`detail["conclusion_check"]`). Гейт `conclusion-evidence-is-grounded`
+  покраснеет, если проверка снова начнёт смотреть только в факты.
+- **Документ демонстрации обязан отвечать на вопрос.** Раздел «Вывод»
+  собирается из журнала (`pf.report.conclusion_markdown`), а не пишется
+  руками: иначе он разойдётся с прогоном. `make demo-doc SESSION=...`.
+- **Тесты не пишут в `state/` и `journal/`.** Каталоги подменяются на
+  `tmp_path` в `tests/test_scenarios.py`; иначе после `make test` в дереве
+  остаются `session-scenario-*` файлы.
 - **Пустые цитаты и пустые `source_id` не роняют шаг**, но и не считаются
   основанием: они попадают в `rejected_details`.
 - **Журнал append-only.** Не переписывайте `journal/*.jsonl` — это след.
