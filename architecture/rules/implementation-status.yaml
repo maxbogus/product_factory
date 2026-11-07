@@ -1,0 +1,158 @@
+# Статус реализации возможностей агента — машинное зеркало плана.
+#
+# Зачем дублировать документ машинно-читаемым реестром: гейт
+# `implemented-means-module-and-test` проверяет, что каждая заявленная
+# реализация действительно есть в коде (модуль и тест существуют), а
+# каждая нереализованная — объяснена. Документ без такого гейта один раз
+# разошёлся с кодом.
+#
+# status:
+#   implemented       — реализовано и покрыто тестом;
+#   partial           — реализована часть (указано, какая);
+#   not_implemented   — не реализовано, указан гэп.
+#
+# module — путь к модулю в этом репозитории (обязателен для implemented);
+# test   — путь к тесту (обязателен для implemented);
+# reason — обязателен для всех статусов кроме implemented.
+version: 1
+
+methods:
+  - id: metric-grounding
+    title: Проверка расчётной метрики по строке источника
+    status: implemented
+    module: src/pf/sources.py
+    test: tests/test_sources.py
+    note: >
+      Метрика проверяется по полям, а не по типу: схема ответа агента и
+      внутренний класс — разные классы с одинаковыми полями.
+
+  - id: row-index-by-table
+    title: Номер строки в сводке считается по исходной таблице
+    status: implemented
+    module: src/pf/analysis.py
+    test: tests/test_analysis.py
+    note: Ряд (Series) несёт номера своих строк вместе с собой.
+
+  - id: aggregate-by-recomputation
+    title: Агрегат (среднее, медиана, размах, изменение) проверяется пересчётом
+    status: implemented
+    module: src/pf/sources.py
+    test: tests/test_sources.py
+    note: Входы агрегата видны в блоке расчётов, чтобы модель могла их скопировать.
+
+  - id: report-metrics-with-status
+    title: Отчёт показывает расчёты со статусом проверки
+    status: implemented
+    module: src/pf/report.py
+    test: tests/test_state_journal.py
+    note: Отклонённый расчёт нельзя выдать за посчитанный.
+
+  - id: unique-grounds-counting
+    title: Отчёт различает записи и уникальные основания
+    status: implemented
+    module: src/pf/report.py
+    test: tests/test_state_journal.py
+    note: Сборщик и аналитик цитируют одни и те же абзацы — это три факта, а не семь.
+
+  - id: constraint-check
+    title: Ограничения задачи проверяются кодом
+    status: not_implemented
+    reason: >
+      Ограничения собираются в intake и больше нигде не читаются. В
+      демо-прогоне ограничение брифа «цену снижать нельзя» потерялось, и
+      выбранным направлением стало «Снизить цену на тарифы». Нужен
+      src/pf/constraints.py и проверка направления в фазе strategy.
+
+  - id: hypothesis-verification
+    title: Гипотезы получают вердикт после целевого сбора
+    status: not_implemented
+    reason: >
+      Гипотезы формулируются, но не проверяются: нет фазы с вердиктом
+      supported/refuted/unknown и нет целевого добирающего сбора по пробелам
+      аналитика.
+
+  - id: domain-reference
+    title: Тематический справочник со своим статусом
+    status: not_implemented
+    reason: >
+      Справочника нет. Без него модель опирается на приоритеты из весов,
+      а не на явный проверяемый источник знания о применимости.
+
+  - id: expert-role
+    title: Экспертная роль после критики
+    status: not_implemented
+    reason: >
+      Роли эксперта нет. Отличие от redteam: redteam критикует варианты,
+      эксперт приносит знание о применимости идей к рынку.
+
+  - id: demo-document-generated
+    title: Документ демонстрации генерируется из журнала
+    status: implemented
+    module: scripts/build_demo_doc.py
+    test: tests/test_demo_doc_generated.py
+    note: >
+      Документ собирается из журнала: подтверждённые основания — только
+      те, что код подтвердил и ни разу не отверг; у каждого расчёта видна
+      формула или честная пометка, что её нет. Тест сверяет документ с
+      журналом, поэтому руками его править нельзя.
+
+  - id: metric-formula-required
+    title: У расчёта обязательна формула
+    status: implemented
+    module: src/pf/schemas.py
+    test: tests/test_schemas.py
+    note: >
+      Без формулы число нельзя пересчитать, а значит — нельзя
+      подтвердить. Докстринг схемы обещал это с самого начала, но поле
+      принимало пустую строку, и модель присылала значение без формулы.
+
+  - id: plan-progress-brief
+    title: План получает пробелы, гипотезы и посчитанные метрики
+    status: implemented
+    module: src/pf/workflow.py
+    test: tests/test_workflow_inputs.py
+    note: >
+      Планировщик видел только постановку задачи и потому либо повторял
+      её, либо спрашивал заново то, на что уже есть ответ. Роутер по той
+      же причине решал «куда дальше» вслепую.
+
+  - id: routing-role-aliases
+    title: Русские названия ролей понимаются роутером
+    status: implemented
+    module: src/pf/roles.py
+    test: tests/test_routing.py
+    note: >
+      Модель отвечает «план», «Сбор источников», а реестр — английские
+      идентификаторы. Без приведения решение роутера отбрасывалось как
+      неизвестное, и работа шла по порядку.
+
+  - id: journaled-decisions
+    title: Решения роутера и второе мнение субагента попадают в журнал
+    status: implemented
+    module: src/pf/workflow.py
+    test: tests/test_state_journal.py
+    note: >
+      Раньше и то и другое лежало в состоянии сессии, которое не
+      поставляется вместе с результатом: исправление ошибочного выбора
+      существовало, но было недоказуемо.
+
+  - id: rejection-classes
+    title: Отчёт показывает отказы по классам и долю расчётов с формулой
+    status: implemented
+    module: src/pf/report.py
+    test: tests/test_state_journal.py
+    note: >
+      Группировка нужна, чтобы видеть, что чинить: промпт, контекст или
+      проверку. Это подпись для человека, а не решение о статусе.
+
+  - id: scenario-step-gate
+    title: Гейт проверяет подключение сценариев и определения шагов
+    status: implemented
+    module: scripts/contracts_check.py
+    test: tests/test_contracts.py
+    note: >
+      pytest-bdd строит тесты из файла сценариев, и в исходниках их нет:
+      проверка по тексту тестов объявляла непокрытыми все сценарии.
+      Гейт разбирает AST и ловит именно ту ошибку, что была в прогоне, —
+      шаг без определения.
+
