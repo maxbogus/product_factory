@@ -53,6 +53,14 @@ _SKIP_HEADING = re.compile(
     re.IGNORECASE,
 )
 
+#: Признаки посчитанной величины. В строке таблицы лежат исходные
+#: значения, а «изменение за период» — результат расчёта: такого текста
+#: в источнике нет. Отличает неверный канал оформления от выдумки.
+_COMPUTED_MARKERS = re.compile(
+    r"(изменени|средн|медиан|сумм|разниц|рост|падени|темп|доля|cagr|average|mean|delta)",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Passage:
@@ -285,6 +293,21 @@ class SourceBundle:
                             paragraph_index=row,
                             detail="значение из расчёта найдено в строке таблицы",
                         )
+                    # Число могло быть посчитано, а не взято из строки:
+                    # «изменение за период: 0 %» в таблице не лежит. Это
+                    # не выдумка, но и не цитата — называем причину, чтобы
+                    # модель переложила величину в metrics.
+                    if _looks_computed(quote):
+                        return Support(
+                            quote=quote,
+                            source_id=source_id,
+                            status=SupportStatus.NEEDS_REVIEW,
+                            paragraph_index=row,
+                            detail=(
+                                "значение посчитано, а не процитировано — "
+                                "оформи как метрику в metrics: с формулой и входами"
+                            ),
+                        )
                     return Support(
                         quote=quote,
                         source_id=source_id,
@@ -426,6 +449,12 @@ def _aggregate_from_inputs(
         return max(numbers) - min(numbers)
     if "медиан" in text:
         return median(numbers)
+    # «Сумма / количество» называет входы явно: sum и count. Складывать
+    # их как наблюдения нельзя — 87 и 1 дали бы среднее 44 вместо 87.
+    total = _named_input(inputs, ("sum", "сумма"))
+    count = _named_input(inputs, ("count", "количество"))
+    if "сумм" in text and total is not None and count:
+        return total / count
     if "средн" in text or "сумма" in text:
         return mean(numbers)
     if "изменение" in text or "процент" in text or "первое" in text:
@@ -434,6 +463,33 @@ def _aggregate_from_inputs(
         return None
     if len(numbers) >= 2:
         return change_percent(numbers[0], numbers[-1])
+    return None
+
+
+def _named_input(inputs: dict[str, Any], names: tuple[str, ...]) -> float | None:
+    """Число из входа с одним из ожидаемых имён.
+
+    Входы называют по-разному: `{"sum": 87, "count": 1}` или
+    `{"сумма": 87, "количество": 1}`. Имя — часть смысла, поэтому
+    ищем по ключу, а не по порядку.
+
+    Args:
+        inputs: Входные значения метрики.
+        names: Допустимые имена в нижнем регистре.
+
+    Returns:
+        Число либо ``None``, если входа с таким именем нет.
+    """
+    from pf.analysis import parse_number
+
+    for key, raw in inputs.items():
+        if str(key).strip().lower() not in names:
+            continue
+        if isinstance(raw, (list, tuple)):
+            continue
+        parsed = parse_number(str(raw))
+        if parsed is not None:
+            return parsed
     return None
 
 
@@ -511,7 +567,7 @@ def verify_metric(
     # искать по строке с якорем нельзя — якорь отделяется, искомым
     # остаётся путь.
     clean_id, anchor_row = split_source_id(source_id)
-    material = next((m for m in materials if m.source_id == clean_id), None)
+    material = _find_material(clean_id, materials)
     if material is None:
         return Support(
             quote=name,
@@ -639,6 +695,50 @@ def _article_rows(article: Article) -> list[str]:
                 " ".join(f"{key}: {value}" for key, value in row.items()) for row in material.rows
             ]
     return []
+
+
+def _find_material(clean_id: str, materials: list[Material]) -> Material | None:
+    """Найти материал по идентификатору, допуская короткое имя файла.
+
+    Модель часто присылает «numbers.csv» вместо «project/numbers.csv».
+    Для фактов это учтено в ``SourceBundle._resolve``, а для метрик —
+    нет: проверка отклоняла верный расчёт с «источник не найден среди
+    материалов». В прогоне `demo-v5` так потерялись все посчитанные
+    метрики.
+
+    Args:
+        clean_id: Идентификатор источника без якоря.
+        materials: Материалы проекта.
+
+    Returns:
+        Материал либо ``None``, если он не найден.
+    """
+    found = next((item for item in materials if item.source_id == clean_id), None)
+    if found is not None:
+        return found
+    tail = clean_id.rsplit("/", 1)[-1]
+    stem = tail.rsplit(".", 1)[0]
+    return next(
+        (
+            item
+            for item in materials
+            if item.source_id.rsplit("/", 1)[-1] == tail
+            or item.source_id.rsplit("/", 1)[-1].rsplit(".", 1)[0] == stem
+        ),
+        None,
+    )
+
+
+def _looks_computed(quote: str) -> bool:
+    """Похожа ли цитата на посчитанную величину, а не на текст источника.
+
+    Args:
+        quote: Цитата из ответа модели.
+
+    Returns:
+        В цитате есть слово-признак расчёта.
+    """
+    return bool(_COMPUTED_MARKERS.search(quote))
 
 
 def _first_number(text: str) -> float | None:

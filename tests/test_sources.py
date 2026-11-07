@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from pf.corpus import Article
+from pf.ground import SupportStatus
 from pf.materials import load_materials
 from pf.sources import SourceBundle, collect, score_passages
 
@@ -185,6 +186,108 @@ def test_wrong_number_in_table_row_is_rejected(
         quote="МТС, абонентская база: 99",
     )
     assert not support.is_usable
+
+
+def test_computed_value_quote_requires_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Посчитанная величина в цитате — не выдумка, но и не цитата.
+
+    Модель берёт из блока РАСЧЁТЫ величину «изменение за период: 0 %» и
+    вставляет её в факт как дословную цитату. В строке таблицы такого
+    текста нет, и проверка права его отклонить. Но причина обязана быть
+    названа: значение посчитано, а не процитировано, — его место в
+    `metrics`, с формулой и входами. Глухое «цитата не найдена» читается
+    как выдумка модели, хотя это неверный канал оформления.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text(
+        "оператор,показатель,значение\nМТС,абонентская база,87\n", encoding="utf-8"
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+    support = bundle.verify_claim(
+        "Показатели стабильны",
+        source_id="project/numbers.csv#row0",
+        paragraph=None,
+        quote="МТС, абонентская база: изменение за период: 0 %",
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW
+    assert "посчитано" in support.detail
+    assert "метрик" in support.detail
+
+
+def test_verify_metric_resolves_short_source_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Короткое имя источника разворачивается и для метрики.
+
+    Модель присылает «numbers.csv» вместо «project/numbers.csv». Для
+    фактов это решено (`_resolve`), а метрики отклонялись с «источник не
+    найден среди материалов», хотя строка, значение и формула были
+    верны. В прогоне `demo-v5` так потерялись все посчитанные метрики.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,82\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Абонентская база МТС",
+        value=82.0,
+        unit="млн",
+        source_id="numbers.csv",
+        row=0,
+        formula="значение из колонки «значение», строка 1",
+        inputs={"значение": "82"},
+    )
+
+    support = verify_metric(metric, materials)
+
+    assert support.is_usable, support.detail
+
+
+def test_sum_over_count_uses_declared_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """«Сумма / количество» считается по названным входам.
+
+    Модель присылает `{"sum": 87, "count": 1}` — это сумма и количество.
+    Раньше проверка видела два числа, считала их наблюдениями и получала
+    среднее 44 вместо 87; верный расчёт отклонялся, хотя формула и входы
+    согласованы.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    from pf.analysis import Metric
+    from pf.sources import verify_metric
+
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,87\n", encoding="utf-8")
+    materials = load_materials(tmp_path)
+    metric = Metric(
+        name="Абонентская база МТС",
+        value=87.0,
+        unit="млн",
+        source_id="project/numbers.csv",
+        row=0,
+        formula="Сумма / количество",
+        inputs={"sum": 87, "count": 1},
+    )
+
+    support = verify_metric(metric, materials)
+
+    assert support.is_usable, support.detail
 
 
 def test_verify_metric_accepts_metric_from_answer_schema(tmp_path: Path) -> None:
