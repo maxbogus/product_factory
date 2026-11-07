@@ -27,10 +27,12 @@ __all__ = [
     "cagr",
     "change_percent",
     "compute_from_rows",
+    "group_series",
     "mean",
     "median",
     "parse_number",
     "percentile",
+    "summarize_groups",
     "summarize_series",
 ]
 
@@ -262,6 +264,128 @@ def compute_from_rows(
             )
         )
     return metrics
+
+
+def group_series(
+    rows: list[dict[str, str]],
+    *,
+    label_column: str,
+    group_columns: tuple[str, ...] = (),
+) -> list[list[dict[str, str]]]:
+    """Разделить строки на ряды по подписи.
+
+    Таблица может содержать разные операторы, показатели и годы.
+    Считать изменение по всем строкам сразу бессмысленно: из 87 млн
+    абонентов МТС и 5,7 млн абонентов МТС Беларусь получается
+    «-16,67 %», что не означает ничего. Ряды разделяются по подписи,
+    и изменение считается внутри каждого.
+
+    Ряды разделяются и по показателю: у одного оператора бывают
+    разные показатели (абонентская база — 87 млн, доля на рынке —
+    6,2 %), и складывать их в один ряд тоже нельзя.
+
+    Args:
+        rows: Строки таблицы.
+        label_column: Колонка с подписью ряда.
+        group_columns: Дополнительные колонки, по которым ряд должен
+            быть один и тот же.
+
+    Returns:
+        Список рядов — каждый список строк с одинаковой подписью.
+    """
+    groups: dict[tuple[str, ...], list[dict[str, str]]] = {}
+    for row in rows:
+        label = str(row.get(label_column, ""))
+        extra = tuple(str(row.get(column, "")) for column in group_columns)
+        groups.setdefault((label, *extra), []).append(row)
+    return list(groups.values())
+
+
+def summarize_groups(
+    groups: list[list[dict[str, str]]],
+    *,
+    value_column: str,
+    source_id: str,
+    name: str,
+    unit: str = "",
+) -> list[Metric]:
+    """Сводные метрики по каждому ряду отдельно.
+
+    Args:
+        groups: Ряды строк.
+        value_column: Колонка со значением.
+        source_id: Идентификатор источника данных.
+        name: Базовое название метрики.
+        unit: Единица измерения.
+
+    Returns:
+        Список метрик: по каждому ряду — изменение, среднее, медиана
+        и размах.
+    """
+    summaries: list[Metric] = []
+    for group in groups:
+        # Порядок наблюдений важен: изменение считается от первого к
+        # последнему. Если строки лежат в таблице не по времени, ряд
+        # надо упорядочить по периоду, иначе «изменение» окажется
+        # обратным.
+        group = sorted(group, key=lambda row: _period_key(row))
+        metrics = compute_from_rows(
+            group,
+            value_column=value_column,
+            source_id=source_id,
+            name=name,
+            unit=unit,
+        )
+        if not metrics:
+            continue
+        # Название ряда: оператор и показатель — иначе в отчёте
+        # «изменение» без указания, что именно менялось.
+        parts = [
+            str(group[0].get(column, ""))
+            for column in ("оператор", "показатель")
+            if group[0].get(column)
+        ]
+        label = ", ".join(parts) if parts else name
+        series_name = f"{name} ({label})" if label else name
+        summaries.extend(summarize_series(metrics, name=series_name, unit=unit))
+    return summaries
+
+
+def _period_key(row: dict[str, str]) -> tuple[int, float, str]:
+    """Ключ упорядочивания строк по периоду.
+
+    Периоды бывают разными: датами («13.01.2026»), годами («2018»),
+    текстом («конец июля», «3-й квартал 2024»). Для сравнения нужен
+    числовой ключ, а текстовый остаётся последним — тогда порядок
+    сохраняется хотя бы стабильным.
+
+    Args:
+        row: Строка таблицы.
+
+    Returns:
+        Кортеж для сортировки.
+    """
+    for column in ("период", "дата", "period", "date"):
+        raw = str(row.get(column, "")).strip()
+        if not raw:
+            continue
+        # ISO-дата: 2026-01-13
+        if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+            return (0, float(raw[:10].replace("-", "")), raw)
+        # Год: 2018
+        if raw[:4].isdigit() and len(raw) == 4:
+            return (1, float(raw), raw)
+        # Русская дата: 13.01.2026
+        numbers = raw.replace("г.", "").split()
+        parts = [p for p in numbers[0].split(".") if p.isdigit()]
+        if len(parts) == 3:
+            day, month, year = parts
+            return (0, float(f"{year}{month:0>2}{day:0>2}"), raw)
+        # Число в начале: 3-й квартал 2024
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if digits:
+            return (2, float(digits), raw)
+    return (3, 0.0, "")
 
 
 def summarize_series(

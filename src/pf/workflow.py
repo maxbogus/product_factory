@@ -206,6 +206,12 @@ BaseModelType = Any
 
 #: Соответствие «роль → фаза». По нему решение роутера превращается в
 #: следующий шаг рабочего процесса.
+#: Колонки, которые задают период, а не различие величин. Значения
+#: «2017», «2018», «конец июля» — это точки одного ряда во времени.
+_PERIOD_COLUMNS: frozenset[str] = frozenset(
+    {"период", "дата", "period", "date", "месяц", "квартал", "год", "time", "day"}
+)
+
 #: Фазы, которым нужны собранные источники. Для остальных набор не
 #: собирается: это экономит время и не засоряет контекст модели.
 _PHASES_WITH_SOURCES: frozenset[Phase] = frozenset(
@@ -886,7 +892,7 @@ class Workflow:
         Returns:
             Текст блока с расчётами либо пустая строка.
         """
-        from pf.analysis import compute_from_rows, summarize_series
+        from pf.analysis import compute_from_rows, group_series, summarize_groups
         from pf.materials import load_materials
 
         materials = load_materials()
@@ -918,7 +924,32 @@ class Workflow:
                 f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
                 for metric in metrics[:10]
             ]
-            summary = summarize_series(metrics, name=material.title, unit=metrics[0].unit)
+            # Изменение считается по рядам: разные операторы и разные
+            # годы нельзя складывать в один ряд, иначе получится
+            # бессмысленная величина.
+            # Ряд — это одна и та же величина во времени: тот же
+            # оператор И тот же показатель. Иначе в ряд попадает
+            # абонентская база рядом с долей на рынке.
+            # Период — ось времени внутри ряда, а не признак ряда:
+            # «2017», «2018» — это точки одной величины. А вот
+            # показатель — признак: база и доля на рынке разные.
+            group_columns = tuple(
+                name
+                for name in columns
+                if name not in {value_column, label_column} and name not in _PERIOD_COLUMNS
+            )
+            groups = group_series(
+                material.rows,
+                label_column=label_column or "",
+                group_columns=group_columns,
+            )
+            summary = summarize_groups(
+                groups,
+                value_column=value_column,
+                source_id=material.source_id,
+                name=material.title,
+                unit=metrics[0].unit,
+            )
             lines.extend(
                 f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
                 for metric in summary

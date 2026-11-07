@@ -293,3 +293,67 @@ def test_analysis_metric_without_source_is_marked_not_reproducible() -> None:
         metrics=[{"name": "Что-то", "value": 1.0, "unit": "шт"}],
     )
     assert analysis.metrics[0].is_reproducible is False
+
+
+def test_strategy_accepts_flat_product_answer() -> None:
+    """Плоский ответ стратегии должен собираться в блоки.
+
+    Модель иногда отвечает так: `product` — короткая строка, а поля
+    разложены на верхний уровень ответа. Без поддержки этого весь
+    шаг терялся: стратегия отбрасывалась, хотя по сути была заполнена.
+    """
+    from pf.schemas import Strategy
+
+    strategy = Strategy.model_validate(
+        {
+            "product": "тариф",
+            "audience": "Абоненты мобильного тарифа",
+            "alternatives": ["Оставить как есть"],
+            "chosen_direction": "Прозрачность тарифов",
+            "deliberate_omissions": ["Не снижать цену"],
+            "value_to_cost": "Рост удержания окупает потерю маржи",
+            "evidence": [],
+            "communication": {
+                "audience": "Клиенты",
+                "barrier": "Непрозрачность подписок",
+                "key_message": "Покажем все подписки до подтверждения",
+            },
+            "verification": {
+                "expected_change": "Рост удержания на 3 %",
+                "compare_against": "База января",
+                "observation_period": "6 месяцев",
+                "adverse_effects": ["Падение маржи"],
+            },
+        }
+    )
+    assert strategy.product.audience == "Абоненты мобильного тарифа"
+    assert strategy.product.chosen_direction == "Прозрачность тарифов"
+    assert strategy.communication.key_message
+
+
+def test_strategy_accepts_field_synonyms() -> None:
+    """Синонимы полей продуктовой стратегии принимаются."""
+    from pf.schemas import Strategy
+
+    strategy = Strategy.model_validate(
+        {
+            "product": {
+                "аудитория": "Клиенты",
+                "name": "Прозрачность тарифов",
+                "отказы": ["Не снижать цену"],
+            },
+            "communication": {
+                "audience": "Клиенты",
+                "barrier": "Непрозрачность",
+                "key_message": "Покажем подписки",
+            },
+            "verification": {
+                "expected_change": "Рост",
+                "compare_against": "База",
+                "observation_period": "6 месяцев",
+                "adverse_effects": ["Маржа"],
+            },
+        }
+    )
+    assert strategy.product.audience == "Клиенты"
+    assert strategy.product.chosen_direction == "Прозрачность тарифов"

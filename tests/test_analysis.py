@@ -332,3 +332,57 @@ def test_control_grounding_rate_collapses() -> None:
     assert real.grounding_rate == 1.0
     assert fabricated.grounding_rate == 0.0
     assert fabricated.grounding_rate < 0.1
+
+
+def test_series_are_grouped_before_change_is_computed() -> None:
+    """Изменение считается по одному ряду, а не по всем строкам.
+
+    Таблица может содержать разные операторов и разные годы. Считать
+    изменение по всем строкам сразу бессмысленно: из 87 млн абонентов
+    МТС и 5,7 млн абонентов МТС Беларусь получается «-16,67 %», что
+    не означает ничего. Ряды надо разделять по подписи и считать
+    изменение внутри каждого.
+    """
+    from pf.analysis import group_series, summarize_groups
+
+    rows = [
+        {"оператор": "МТС", "значение": "87"},
+        {"оператор": "МТС", "значение": "82"},
+        {"оператор": "МТС Беларусь", "значение": "5.7"},
+    ]
+    groups = group_series(rows, label_column="оператор")
+    assert len(groups) == 2
+
+    summaries = summarize_groups(
+        groups,
+        value_column="значение",
+        source_id="project/data/x.csv",
+        name="Абонентская база",
+    )
+    changes = [m for m in summaries if "изменение" in m.name]
+    assert len(changes) == 2
+    # Ряд МТС: 87 -> 82 = -5,75 %. Ряд МТС Беларусь: одна точка, ноль.
+    by_name = {m.name: m.value for m in changes}
+    mts = next(v for k, v in by_name.items() if "МТС:" in k or "(МТС)" in k)
+    belarus = next(v for k, v in by_name.items() if "Беларусь" in k)
+    assert mts == pytest.approx(-5.747, abs=0.01)
+    assert belarus == 0.0
+
+
+def test_change_within_one_series_is_computed() -> None:
+    """Внутри ряда изменение считается по первому и последнему."""
+    from pf.analysis import group_series, summarize_groups
+
+    rows = [
+        {"оператор": "МТС", "значение": "100"},
+        {"оператор": "МТС", "значение": "110"},
+    ]
+    groups = group_series(rows, label_column="оператор")
+    summaries = summarize_groups(
+        groups,
+        value_column="значение",
+        source_id="project/data/x.csv",
+        name="Абонентская база",
+    )
+    change = next(m for m in summaries if "изменение" in m.name)
+    assert change.value == pytest.approx(10.0)

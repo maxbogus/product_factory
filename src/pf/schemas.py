@@ -787,6 +787,23 @@ class Strategy(BaseModel):
             data["verification"] = verification
 
         product = _as_mapping(data.get("product"))
+        # Модель иногда отвечает плоско: `product` — короткая строка
+        # («тариф»), а все поля разложены на верхний уровень ответа.
+        # Тогда блок собирается из них.
+        if not product:
+            flat_keys = {
+                "audience",
+                "alternatives",
+                "chosen_direction",
+                "deliberate_omissions",
+                "value_to_cost",
+                "evidence",
+            }
+            if flat_keys & set(data.keys()):
+                product = {key: data[key] for key in flat_keys if key in data}
+                # Название продукта, если модель дала его строкой.
+                if isinstance(data.get("product"), str) and data["product"].strip():
+                    product.setdefault("name", data["product"])
         if product:
             product["value_to_cost"] = as_text(product.get("value_to_cost"))
             product["alternatives"] = as_text_list(product.get("alternatives"))
