@@ -514,6 +514,81 @@ def _input_numbers(inputs: dict[str, Any]) -> list[Any]:
     return result
 
 
+def _significant_words(text: str) -> set[str]:
+    """Значимые слова текста: без скобок, цифр и коротких служебных.
+
+    Скобки отбрасываются: «удержание клиентов (МТС, абонентская база)» —
+    это метрика про удержание, а база в скобках лишь уточняет, откуда
+    взято число. Если оставить скобки, подмена показателя не видна.
+
+    Args:
+        text: Название метрики или текст строки.
+
+    Returns:
+        Множество слов длиной от четырёх букв.
+    """
+    without_notes = re.sub(r"\([^)]*\)", " ", text)
+    return set(re.findall(r"[a-zа-яё]{4,}", without_notes.lower().replace("ё", "е")))
+
+
+def _row_indicator(row: dict[str, Any]) -> str:
+    """Показатель, который объявляет сама строка таблицы.
+
+    Колонка «показатель» — это утверждение источника о том, что за число в
+    строке. Если её нет, строка говорит только «значение», и сравнивать
+    название метрики не с чем: имя показателя берётся из заголовка файла.
+
+    Args:
+        row: Строка таблицы.
+
+    Returns:
+        Значение колонки-показателя либо пустая строка.
+    """
+    for key, value in row.items():
+        name = str(key).strip().lower()
+        if name in {"показатель", "показатели", "метрика", "metric", "indicator"}:
+            return str(value)
+    return ""
+
+
+def _name_matches_row(name: str, row_text: str) -> bool:
+    """Имя показателя относится к тому, что стоит в строке.
+
+    Args:
+        name: Название метрики.
+        row_text: Текст строки таблицы.
+
+    Returns:
+        Хотя бы одно значимое слово названия встречается в строке.
+    """
+    words = _significant_words(name)
+    if not words:
+        return True
+    return bool(words & _significant_words(row_text))
+
+
+def _is_identity_calculation(inputs: dict[str, Any], formula: str) -> bool:
+    """Формула вырождается в копирование значения.
+
+    «Сумма / количество» по одному наблюдению (87 / 1) и «среднее» по
+    одному значению — это не расчёт: результат равен входу. Такой формулой
+    модель закрывает требование «покажи, как считал», и переписанное из
+    строки число выглядит посчитанным.
+
+    Args:
+        inputs: Входные значения метрики.
+        formula: Формула расчёта.
+
+    Returns:
+        Формула есть, но считать по ней нечего.
+    """
+    text = formula.lower()
+    if not any(marker in text for marker in ("сумм", "средн", "колич")):
+        return False
+    count = _named_input(inputs, ("count", "количество"))
+    return count == 1
+
+
 def verify_metric(
     metric: Any,
     materials: list[Material],
@@ -616,6 +691,17 @@ def verify_metric(
     # выводится из входов, основание подтверждено.
     recomputed = _aggregate_from_inputs(value, inputs, formula)
     if recomputed is not None:
+        # Формула-тождество: 87 / 1 = 87. Число переписано из строки, а не
+        # посчитано, — и подтверждать его как расчёт нельзя.
+        if _is_identity_calculation(inputs, formula):
+            return Support(
+                quote=formatted,
+                source_id=source_id,
+                status=SupportStatus.NO_DATA,
+                detail=(
+                    "формула — тождество: значение не пересчитано, а переписано из строки источника"
+                ),
+            )
         if not _matches_any(value, [recomputed], allowed):
             return Support(
                 quote=formatted,
@@ -632,6 +718,21 @@ def verify_metric(
         )
 
     # 1. Значение из указанной строки источника.
+    if row is not None and 0 <= row < len(material.rows):
+        # Строка сама говорит, что за показатель в ней, — и это утверждение
+        # сильнее названия метрики. Если строка называет абонентскую базу,
+        # а метрика — удержание, число в строке есть, а показатель другой.
+        indicator = _row_indicator(material.rows[row])
+        if indicator and not _name_matches_row(name, indicator):
+            return Support(
+                quote=formatted,
+                source_id=source_id,
+                status=SupportStatus.NO_DATA,
+                detail=(
+                    "имя показателя не совпало с колонкой строки: в строке "
+                    f"показатель «{indicator}», а метрика говорит о другом"
+                ),
+            )
     if row_values and not _matches_any(value, row_values, allowed):
         return Support(
             quote=formatted,

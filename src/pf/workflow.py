@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +41,44 @@ from pf.state import Phase, SessionState, save
 
 if TYPE_CHECKING:
     from pf.analysis import Metric
+
+
+@dataclass(frozen=True, slots=True)
+class GroundingResult:
+    """Итог проверки оснований одного шага.
+
+    Attributes:
+        citations: Подтверждённые ссылки.
+        rejected: Сколько оснований отброшено.
+        details: Что и почему отброшено.
+        conclusion: Статус оснований вывода либо ``None``, если вывода
+            в результате нет (факты, план, варианты — это не вывод).
+    """
+
+    citations: list[str] = field(default_factory=list)
+    rejected: int = 0
+    details: list[str] = field(default_factory=list)
+    conclusion: dict[str, Any] | None = None
+
+
+def _named_source(source_id: str) -> str:
+    """Как назвать источник в пояснении отказа.
+
+    Модель иногда ставит в ``source_id`` имя поля из входа — «query»,
+    «verification». Это не источник, и в журнале должно быть видно, что
+    вместо ссылки пришло поле, а не что «источник не относится к задаче».
+
+    Args:
+        source_id: Значение, которое модель указала как источник.
+
+    Returns:
+        Подпись для пояснения.
+    """
+    if not source_id:
+        return "источник не назван"
+    if "/" in source_id or "." in source_id:
+        return source_id
+    return f"источник не назван — вместо ссылки указано поле «{source_id}»"
 
 
 def _metric_line(metric: Any) -> str:
@@ -471,59 +510,311 @@ class Workflow:
         )
         return "\n".join(lines)
 
+    # ── Противоречия ────────────────────────────────────────────────────────
+
+    #: Слова о падении показателя.
+    DECLINE_MARKERS: tuple[str, ...] = (
+        "падает",
+        "снижается",
+        "уменьшается",
+        "сокращается",
+        "упало",
+        "снизилось",
+        "снизился",
+    )
+    #: Слова о неизменности показателя.
+    STABLE_MARKERS: tuple[str, ...] = (
+        "не изменилось",
+        "не изменился",
+        "не меняется",
+        "без изменений",
+        "осталось прежним",
+    )
+    #: Слова о росте показателя.
+    GROWTH_MARKERS: tuple[str, ...] = (
+        "растет",
+        "выросло",
+        "вырос",
+        "увеличилось",
+        "увеличился",
+    )
+    #: Слова, которые встречаются почти в любом утверждении: показатель они
+    #: не определяют и общим предметом факты не делают.
+    GENERIC_WORDS: frozenset[str] = frozenset(
+        {
+            "клиент",
+            "клиентов",
+            "клиенты",
+            "квартал",
+            "квартала",
+            "последний",
+            "данные",
+            "данных",
+            "может",
+            "могут",
+        }
+    )
+
+    @classmethod
+    def _polarity(cls, text: str) -> str | None:
+        """Направление, о котором говорит утверждение.
+
+        Args:
+            text: Текст утверждения.
+
+        Returns:
+            ``decline``, ``stable``, ``growth`` либо ``None``, если
+            направление не названо.
+        """
+        normalized = text.lower().replace("ё", "е")
+        if any(marker in normalized for marker in cls.STABLE_MARKERS):
+            return "stable"
+        if any(marker in normalized for marker in cls.DECLINE_MARKERS):
+            return "decline"
+        if any(marker in normalized for marker in cls.GROWTH_MARKERS):
+            return "growth"
+        return None
+
+    @classmethod
+    def _topic_words(cls, text: str) -> set[str]:
+        """Слова, которые называют предмет утверждения.
+
+        Args:
+            text: Текст утверждения.
+
+        Returns:
+            Множество значимых слов без служебных.
+        """
+        normalized = text.lower().replace("ё", "е")
+        return set(re.findall(r"[а-я]{5,}", normalized)) - cls.GENERIC_WORDS
+
+    @classmethod
+    def _find_contradictions(cls, facts: list[Any]) -> list[str]:
+        """Найти противоречащие утверждения об одном показателе.
+
+        Два факта могут быть подтверждены дословно и при этом говорить
+        противоположное: «удержание падает» и «удержание не изменилось за
+        последний квартал». Проверка цитат этого не ловит — она смотрит на
+        дословность, а не на смысл. Молча стоять рядом такие факты не
+        должны: вывод, собранный из них, опирается на противоречие.
+
+        Args:
+            facts: Проверенные утверждения разбора.
+
+        Returns:
+            Пробелы вида «противоречие: …».
+        """
+        statements: list[tuple[set[str], str, str]] = []
+        for claim in facts:
+            text = str(getattr(claim, "text", "")).strip()
+            polarity = cls._polarity(text)
+            if polarity is None or not text:
+                continue
+            statements.append((cls._topic_words(text), polarity, text))
+
+        gaps: list[str] = []
+        for index, (left_topics, left_polarity, left_text) in enumerate(statements):
+            for right_topics, right_polarity, right_text in statements[index + 1 :]:
+                if left_polarity == right_polarity:
+                    continue
+                if not (left_topics & right_topics):
+                    continue
+                gaps.append(
+                    f"противоречие: «{left_text}» и «{right_text}» говорят разное об "
+                    "одном показателе — какой из фактов верен, из данных не следует"
+                )
+        return gaps
+
     # ── Проверка оснований ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _stems(text: str) -> set[str]:
+        """Основы слов текста — показатель сравнивается без словоформ.
+
+        Args:
+            text: Текст утверждения.
+
+        Returns:
+            Множество основ длиной шесть букв.
+        """
+        return {word[:6] for word in re.findall(r"[а-яё]{5,}", text.lower().replace("ё", "е"))}
+
+    @staticmethod
+    def _check_success_criteria(data: Any) -> list[str]:
+        """Критерии успеха обязаны говорить о показателе плана.
+
+        План проверки отвечает на вопрос «как поймём, что сработало».
+        Критерий про другой показатель («снижение текучести кадров» при
+        плане про удержание) проверить нечем: он не следует из плана и не
+        связан с решением.
+
+        Args:
+            data: Результат роли стратегии.
+
+        Returns:
+            Строки отклонений для журнала.
+        """
+        verification = getattr(data, "verification", None)
+        if verification is None:
+            return []
+        expected = str(getattr(verification, "expected_change", "") or "")
+        criteria = list(getattr(verification, "success_criteria", None) or [])
+        if not expected or not criteria:
+            return []
+        expected_stems = Workflow._stems(expected)
+        if not expected_stems:
+            return []
+
+        notes: list[str] = []
+        for criterion in criteria:
+            text = str(criterion).strip()
+            if not text:
+                continue
+            if Workflow._stems(text) & expected_stems:
+                continue
+            notes.append(f"критерий успеха «{text}»: критерий не относится к показателю плана")
+        return notes
+
+    @staticmethod
+    def _sources_of(data: Any) -> list[tuple[str, Any, bool]]:
+        """Все основания результата: утверждение, ссылка, это вывод или нет.
+
+        Основание — не только факт. Стратегия ссылается на материалы через
+        ``product.evidence`` и ``communication.promise_grounding``, решение —
+        через ``commitments[].basis``. Раньше эти ссылки не проверялись
+        вовсе, и вывод мог опираться на файл, которого нет в материалах.
+
+        Args:
+            data: Результат роли.
+
+        Returns:
+            Тройки «текст утверждения — основание — относится к выводу».
+        """
+        pairs: list[tuple[str, Any, bool]] = []
+
+        for claim in getattr(data, "facts", None) or []:
+            text = getattr(claim, "text", "")
+            for source in getattr(claim, "sources", None) or []:
+                pairs.append((text, source, False))
+
+        product = getattr(data, "product", None)
+        direction = getattr(product, "chosen_direction", "") if product is not None else ""
+        for source in getattr(product, "evidence", None) or []:
+            pairs.append((direction, source, True))
+
+        communication = getattr(data, "communication", None)
+        message = getattr(communication, "key_message", "") if communication is not None else ""
+        for source in getattr(communication, "promise_grounding", None) or []:
+            pairs.append((message, source, True))
+
+        for commitment in getattr(data, "commitments", None) or []:
+            statement = getattr(commitment, "statement", "")
+            for source in getattr(commitment, "basis", None) or []:
+                pairs.append((statement, source, True))
+
+        return pairs
+
+    @staticmethod
+    def _conclusion_verdict(total: int, confirmed: int, rejected: int) -> dict[str, Any] | None:
+        """Статус оснований вывода.
+
+        Три состояния различаются принципиально: «подкреплено» — хотя бы
+        одно основание вывода подтверждено; «подкреплено частично» — часть
+        отклонена; «неподкреплено» — ни одного. Молчать нельзя: вывод без
+        основания выглядит в документе так же, как вывод с основанием.
+
+        Args:
+            total: Сколько оснований вывода проверялось.
+            confirmed: Сколько подтверждено.
+            rejected: Сколько отклонено.
+
+        Returns:
+            Статус для журнала и отчёта либо ``None``, если вывода нет.
+        """
+        if total <= 0:
+            return None
+        if confirmed <= 0:
+            status = "неподкреплено"
+        elif rejected > 0:
+            status = "подкреплено частично"
+        else:
+            status = "подкреплено"
+        return {
+            "checked": total,
+            "confirmed": confirmed,
+            "rejected": rejected,
+            "status": status,
+        }
 
     @staticmethod
     def _verify_claims(
         data: Any,
         bundle: SourceBundle | None,
-    ) -> tuple[list[str], int, list[str]]:
-        """Проверить цитаты в результате роли.
+    ) -> GroundingResult:
+        """Проверить основания в результате роли.
+
+        Проверка одна для всех: дословность цитаты и релевантность
+        источника задаче. Факт, обещание коммуникации и основание
+        обязательства проверяются одинаково — иначе вывод оказывается
+        единственным утверждением без проверки.
 
         Args:
             data: Результат роли.
             bundle: Собранные источники.
 
         Returns:
-            Пара ``(подтверждённые ссылки, число отброшенных, пояснения)``.
+            Подтверждённые ссылки, отказы, пояснения и статус оснований
+            вывода, если вывод в результате есть.
         """
         if bundle is None:
-            return [], 0, []
+            return GroundingResult()
 
-        claims = getattr(data, "facts", None) or []
         confirmed: list[str] = []
         rejected = 0
         details: list[str] = []
+        conclusion_total = 0
+        conclusion_confirmed = 0
+        conclusion_rejected = 0
 
-        for claim in claims:
-            sources = getattr(claim, "sources", None) or []
-            claim_text = getattr(claim, "text", "")
-            for source in sources:
-                support = bundle.verify_claim(
-                    claim_text,
-                    source_id=getattr(source, "source_id", ""),
-                    paragraph=getattr(source, "paragraph", None),
-                    quote=getattr(source, "quote", ""),
-                )
-                named = getattr(source, "source_id", "")
-                if not bundle.is_relevant(named):
-                    rejected += 1
-                    details.append(
-                        f"{named or 'источник не назван'}: источник не относится к задаче"
-                    )
-                    continue
-                if support.is_usable:
-                    confirmed.append(support.citation)
-                else:
-                    rejected += 1
-                    details.append(f"{named or 'источник не назван'}: {support.detail}")
+        for text, source, is_conclusion in Workflow._sources_of(data):
+            named = getattr(source, "source_id", "")
+            if is_conclusion:
+                conclusion_total += 1
+            support = bundle.verify_claim(
+                text,
+                source_id=named,
+                paragraph=getattr(source, "paragraph", None),
+                quote=getattr(source, "quote", ""),
+            )
+            if not bundle.is_relevant(named):
+                rejected += 1
+                details.append(f"{_named_source(named)}: источник не относится к задаче")
+                if is_conclusion:
+                    conclusion_rejected += 1
+                continue
+            if support.is_usable:
+                confirmed.append(support.citation)
+                if is_conclusion:
+                    conclusion_confirmed += 1
+            else:
+                rejected += 1
+                details.append(f"{_named_source(named)}: {support.detail}")
+                if is_conclusion:
+                    conclusion_rejected += 1
 
         confirmed_metrics, rejected_metrics, metric_details = Workflow._verify_metrics(data)
         confirmed.extend(confirmed_metrics)
         rejected += rejected_metrics
         details.extend(metric_details)
 
-        return confirmed, rejected, details
+        return GroundingResult(
+            citations=confirmed,
+            rejected=rejected,
+            details=details,
+            conclusion=Workflow._conclusion_verdict(
+                conclusion_total, conclusion_confirmed, conclusion_rejected
+            ),
+        )
 
     @staticmethod
     def _verify_metrics(data: Any) -> tuple[list[str], int, list[str]]:
@@ -771,15 +1062,29 @@ class Workflow:
         role_name, payload, context = self._step_inputs(state, bundle)
 
         data, usage = self._call_role(role_name, payload, context)
-        citations, rejected, details = self._verify_claims(data, bundle)
+        grounding = self._verify_claims(data, bundle)
+        # Критерии успеха проверяются вместе с основаниями: это тоже
+        # утверждение о том, что и как будет измерено.
+        criteria_notes = self._check_success_criteria(data) if phase is Phase.STRATEGY else []
+        if bundle is None and phase in (Phase.ANALYZING, Phase.STRATEGY):
+            # Роутер может повести вперёд, перескочив сбор источников.
+            # Тогда проверять основания нечем, и шаг обязан сказать это
+            # прямо: пустой список отказов читается как «всё в порядке».
+            criteria_notes.append(
+                "источники не собраны: проверять основания нечем — шаг выполнен без материалов"
+            )
+        if grounding.conclusion is not None:
+            # Статус оснований вывода — часть того же шага: он попадает
+            # в журнал вместе с выводом, а не остаётся в состоянии сессии.
+            state.results["conclusion_check"] = grounding.conclusion
 
         result = StepResult(
             role=role_name,
             phase=phase,
             data=data,
-            citations=citations,
-            rejected=rejected,
-            rejected_details=details,
+            citations=grounding.citations,
+            rejected=grounding.rejected + len(criteria_notes),
+            rejected_details=[*grounding.details, *criteria_notes],
             cost_units=usage.cost_units,
             tokens=usage.total_tokens,
             prompt_tokens=usage.prompt_tokens,
@@ -798,6 +1103,11 @@ class Workflow:
         # и в поставляемый отчёт не попадёт.
         if phase is Phase.ANALYZING:
             claims = getattr(data, "facts", None) or []
+            # Противоречие проверяется до записи шага: факты, говорящие
+            # разное об одном показателе, — это пробел, а не два основания.
+            contradictions = self._find_contradictions(list(claims))
+            if contradictions:
+                data.gaps = [*list(getattr(data, "gaps", None) or []), *contradictions]
             report = self._run_fact_check(state, bundle, list(claims))
             if report is not None:
                 state.results["fact_check"] = {
@@ -1286,6 +1596,12 @@ class Workflow:
             fact_check = state.results.get("fact_check")
             if isinstance(fact_check, dict):
                 detail["fact_check"] = fact_check
+        if result.phase in (Phase.STRATEGY, Phase.KEEPER):
+            # Статус оснований вывода пишется вместе с выводом: иначе он
+            # останется в состоянии сессии и в поставляемый отчёт не попадёт.
+            conclusion = state.results.pop("conclusion_check", None)
+            if isinstance(conclusion, dict):
+                detail["conclusion_check"] = conclusion
         journal = Journal(journal_path(state.session_id))
         record = StepRecord(
             ordinal=state.steps_done,

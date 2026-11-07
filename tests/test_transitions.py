@@ -502,3 +502,20 @@ def test_confirmed_citation_is_recorded_in_journal() -> None:
     assert records
     assert records[0].citations
     assert records[0].citations[0].startswith("telecom/Мегафон (компания)#p")
+
+
+def test_step_without_sources_says_grounds_were_not_checked() -> None:
+    """Шаг без собранных источников говорит, что проверять было нечем.
+
+    Роутер может повести вперёд, перескочив сбор источников. Тогда
+    аналитик работает без материалов, и пустой список отказов читается
+    как «всё в порядке». Молчать нельзя: шаг обязан сказать, что
+    основания не проверялись.
+    """
+    workflow = _workflow()
+    state = _state()
+    state.phase = Phase.ANALYZING
+
+    result = workflow.run_step(state, None)
+
+    assert any("источники не собраны" in detail for detail in result.rejected_details)
