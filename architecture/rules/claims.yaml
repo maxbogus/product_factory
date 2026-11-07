@@ -1,0 +1,91 @@
+# Числа, которые показывает агент, — реестр заявлений (source of truth).
+#
+# Зачем. В демо-прогоне модель выдала «3,1 млрд ₽ в год» и «+2 п.п.» как
+# числа, подкреплённые рассуждением: 77 млн абонентов по 400 ₽ в месяц. Ни
+# 77 млн, ни 400 ₽ не встречаются ни в материалах, ни в корпусе, а
+# арифметика неверна (3,1 млрд — это 77 млн × 400 ₽ × 0,1 за один месяц).
+# Второе число вообще было целью, поданной как измеренный результат.
+#
+# Без реестра такие числа выглядят как обычные числа в отчёте. Реестр
+# делает их видно и требует пометить: факт, цель или внешнее утверждение.
+#
+# kind:
+#   computed      — посчитано кодом по данным, воспроизводимо;
+#   target        — целевое значение, НЕ измеренное (показывать с пометкой «цель»);
+#   external_fact — утверждение извне, воспроизводимо ссылкой на источник;
+#   unverified    — основания нет; в поставляемых документах появляться не должно.
+#
+# source      — откуда берётся значение (для computed — строка источника);
+# verified_by — имя теста, который это проверяет (обязательно для computed);
+# note        — пояснение для человека.
+version: 1
+
+claims:
+  # --- Посчитанное кодом: воспроизводимо -----------------------------------
+  - id: subscriber-base-mts-ru
+    title: Абонентская база МТС в России
+    kind: computed
+    value: 82
+    unit: млн
+    source: project/data/telecom_open_metrics.csv#row1
+    verified_by: tests/test_sources.py::test_verify_metric_accepts_anchor_inside_source_id
+    note: >
+      Считается кодом из строки таблицы и пересчитывается при проверке.
+      Строка 1, а не 0: в строке 0 — консолидированная база (87 млн).
+
+  - id: subscriber-base-tele2
+    title: Абонентская база Tele2
+    kind: computed
+    value: 38.9
+    unit: млн
+    source: project/data/telecom_open_metrics.csv#row3
+    verified_by: tests/test_sources.py::test_verify_metric_accepts_anchor_inside_source_id
+    note: Строка 4 таблицы.
+
+  - id: virtual-operators-growth
+    title: Численность абонентов виртуальных операторов в России
+    kind: computed
+    value: "6 → 12"
+    unit: млн
+    source: project/data/telecom_open_metrics.csv#row5..row8
+    verified_by: tests/test_analysis.py::test_aggregate_carries_observations_not_only_count
+    note: >
+      Ряд за 2017–2020 годы. Изменение считается внутри ряда: разные
+      операторы и разные годы не складываются.
+
+  # --- Цели: НЕ измеренные --------------------------------------------------
+  - id: retention-target-plus-2pp
+    title: Ожидаемый прирост удержания
+    kind: target
+    value: "+2 п.п."
+    unit: п.п.
+    source: нет — значение появилось в ответе модели без основания
+    verified_by: tests/test_schemas.py::test_change_without_baseline_is_flagged
+    note: >
+      ЦЕЛЬ, а не измерение. Baseline в материалах отсутствует: текущего
+      уровня удержания ни в одном источнике нет. Показывать с пометкой
+      «цель» либо заменить на «сначала измерить уровень за период N».
+
+  - id: price-cut-margin-risk
+    title: Потеря маржи при снижении цены
+    kind: unverified
+    value: "3,1 млрд ₽ в год"
+    source: >
+      нет — ни 77 млн, ни 400 ₽ не встречаются ни в материалах, ни в
+      корпусе; арифметика не сходится с годовым расходом
+    verified_by: tests/test_sources.py::test_recomputation_follows_formula_kind
+    note: >
+      ЧИСЛО ВЫДУМАНО МОДЕЛЬЮ. В поставляемых документах появляться не
+      должно, пока у него не появится источник и формула.
+
+  # --- Внешние утверждения ---------------------------------------------------
+  - id: telecom-market-open-data
+    title: Данные об абонентской базе операторов связи
+    kind: external_fact
+    value: "операторы, рыночные доли, динамика по годам"
+    source: project/data/telecom_open_metrics.csv
+    verified_by: tests/test_sources.py::test_verify_metric_accepts_metric_from_answer_schema
+    note: >
+      Открытые данные из Википедии, зафиксированные в project/. Причин
+      оттока по конкретным тарифам в них нет — и это названо прямо, а не
+      выдумано.

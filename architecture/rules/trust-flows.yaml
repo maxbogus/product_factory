@@ -1,0 +1,91 @@
+# Потоки данных между зонами доверия (граф для проверки ацикличности)
+#
+# Направление: source -> target означает «данные идут от source к target».
+# Поле direction: read | write | inbound | outbound.
+#
+# Проверка trust-graph-is-acyclic ищет цикл, который содержит связь
+# direction=write и пересекает границу доверия: такой цикл означает, что
+# данные проходят границу без контроля. Прочие циклы допустимы.
+#
+# Ключевое правило этого агента: write в журнал идёт ТОЛЬКО из
+# grounding-gate. Модель не может сама объявить своё основание
+# подтверждённым — иначе проверка цитат превратилась бы в самооценку.
+version: 1
+
+flows:
+  - from: task-input
+    to: model-output
+    direction: outbound
+    data: вопрос, цель, ограничения, доступные данные
+    trust_change: untrusted -> untrusted
+
+  - from: model-output
+    to: grounding-gate
+    direction: outbound
+    data: факты, гипотезы, прогнозы, метрики со ссылками на источники
+    trust_change: untrusted -> trusted
+    # Выход модели уходит на проверку, а не сразу в журнал. Проверка
+    # решает, что подтверждено; без неё основание не появляется.
+
+  - from: grounding-gate
+    to: journal
+    direction: write
+    data: подтверждённые ссылки, отклонения с причинами, расход по шагам
+    trust_change: trusted -> trusted
+
+  - from: materials
+    to: model-output
+    direction: outbound
+    data: блок МАТЕРИАЛЫ — свои документы и таблицы
+    trust_change: semi-trusted -> untrusted
+
+  - from: corpus
+    to: model-output
+    direction: outbound
+    data: блок ИСТОЧНИКИ — отобранные абзацы корпуса
+    trust_change: trusted -> untrusted
+
+  - from: web
+    to: model-output
+    direction: outbound
+    data: блок ВНЕШНИЕ ИСТОЧНИКИ — статус всегда «требует проверки»
+    trust_change: untrusted -> untrusted
+
+  - from: knowledge
+    to: model-output
+    direction: outbound
+    data: блок СПРАВОЧНИК — знание о применимости, не факт о кейсе
+    trust_change: semi-trusted -> untrusted
+
+  - from: grounding-gate
+    to: model-output
+    direction: outbound
+    data: выдержки из подтверждённых источников для следующего шага
+    trust_change: trusted -> untrusted
+
+  - from: model-output
+    to: human
+    direction: outbound
+    data: вопрос человеку, когда без его решения работа потеряла бы смысл
+    trust_change: untrusted -> trusted
+
+  - from: human
+    to: model-output
+    direction: inbound
+    data: ответ человека, возвращаемый в контекст следующего шага
+    trust_change: trusted -> untrusted
+    # Ответ на запрос: замыкает поток model-output -> human, но не образует
+    # цикл с записью, поскольку ответ не может сам подтвердить основание.
+    is_response: true
+
+  - from: corpus
+    to: grounding-gate
+    direction: read
+    data: исходный текст статьи для дословной проверки цитаты
+    trust_change: trusted -> trusted
+
+  - from: materials
+    to: grounding-gate
+    direction: read
+    data: строки таблицы для пересчёта величины
+    trust_change: semi-trusted -> trusted

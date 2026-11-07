@@ -1,0 +1,121 @@
+# Fitness-функции архитектуры (source of truth для сценариев и гейтов)
+#
+# Каждое правило — автоматическая проверка, нарушение = exit 1.
+# id соответствует проверке в scripts/contracts_check.py.
+#
+# Здесь описано, что система обязана соблюдать. Реализация проверок —
+# в scripts/contracts_check.py; сами правила — источник истины, а код
+# только исполняет их.
+#
+# status:
+#   active  — правило проверяется сейчас;
+#   planned — правило ещё не проверяется, потому что соответствующая
+#             возможность не реализована. Такое правило не молчит: гейт
+#             печатает его как известный гэп. Когда возможность появится,
+#             статус меняется на active — и правило начинает проверяться.
+version: 1
+
+rules:
+  - id: all-trust-zones-declared
+    status: active
+    description: Каждая зона доверия, упомянутая в последовательностях, объявлена в реестре
+    severity: critical
+    stop_criterion: S1
+    check: zones_declared
+    registry: architecture/rules/trust-zones.yaml
+    rationale: >
+      Необъявленная зона — это неконтролируемая зона. Реестр — единственный
+      список зон доверия, и от него зависят проверки потоков.
+
+  - id: trust-graph-is-acyclic
+    status: active
+    description: Нет циклов с записью, пересекающих границу доверия
+    severity: critical
+    stop_criterion: S1
+    check: acyclic
+    registry: architecture/rules/trust-flows.yaml
+    rationale: >
+      Цикл с записью означает, что данные проходят границу доверия без
+      контроля. Главный случай: если бы модель могла писать в журнал
+      напрямую, проверка цитат превратилась бы в самооценку модели.
+
+  - id: only-grounding-gate-writes-journal
+    status: active
+    description: Запись в журнал идёт только из зоны проверки оснований
+    severity: critical
+    stop_criterion: S1
+    check: write_sources_subset
+    registry: architecture/rules/trust-flows.yaml
+    allowed_write_zones: [grounding-gate]
+    rationale: >
+      Подтверждённым основание делает код, а не модель. Если бы модель
+      могла сама записать «подтверждено», весь механизм честности
+      превратился бы в отчёт о самом себе.
+
+  - id: external-sources-never-confirmed
+    status: active
+    description: Внешний источник не может получить статус «подтверждено»
+    severity: critical
+    stop_criterion: S1
+    check: external_sources_marked
+    untrusted_zones: [web]
+    marking: ВНЕШНИЕ ИСТОЧНИКИ
+    required_note: не подтверждено
+    rationale: >
+      Дословность внешней цитаты проверяется, но подтвердить внешний
+      источник нечем: никто не знает, что за страницу отдала выдача.
+      Поэтому его статус — всегда «требует проверки» человеком. Проверка
+      ищет в коде отметку о статусе: без неё внешний источник выглядит
+      в контексте как подтверждённый.
+
+  - id: domain-reference-is-not-case-fact
+    description: Тематический справочник не пополняет подтверждённые основания по делу
+    severity: high
+    stop_criterion: S2
+    status: planned
+    check: domain_reference_marked
+    marking: СПРАВОЧНИК
+    required_note: не факт о кейсе
+    planned_reason: >
+      Справочника нет (см. implementation-status.yaml: domain-reference).
+      Пока блока «СПРАВОЧНИК» в контексте не существует, проверять нечего.
+      Правило станет active вместе со справочником.
+    rationale: >
+      Справочник отвечает на вопрос «как это обычно бывает», а не «что
+      было у нас». Смешивать эти вещи — подмена источника: знание о
+      применимости выдаётся за факт о конкретном кейсе. Поэтому блок
+      справочника обязан быть помечен отдельным заголовком.
+
+  - id: every-claim-has-verification
+    status: active
+    description: У каждого числа в реестре заявлений есть источник и проверка
+    severity: high
+    stop_criterion: S2
+    check: claims_have_verification
+    registry: architecture/rules/claims.yaml
+    rationale: >
+      «3,1 млрд ₽ в год» и «+2 п.п.» — числа, которые появились в ответе
+      модели без основания. Реестр заявлений делает их видно: у факта
+      обязана быть строка источника и имя проверки, у цели — пометка,
+      что это цель, а не измерение.
+
+  - id: implemented-means-module-and-test
+    status: active
+    description: Для реализованной возможности объявлены модуль и тест, и они существуют
+    severity: high
+    stop_criterion: S2
+    check: implementation_status_valid
+    registry: architecture/rules/implementation-status.yaml
+    rationale: >
+      Документ без такого гейта один раз разошёлся с кодом: возможность
+      была помечена реализованной, а модуль и тест отсутствовали.
+
+  - id: every-scenario-has-test
+    status: active
+    description: Каждый сценарий из tests/features покрыт исполняемым тестом
+    severity: high
+    stop_criterion: S2
+    check: scenarios_covered
+    rationale: >
+      Сценарий без исполнения — это описание намерения. Он выглядит как
+      проверка, но ничего не проверяет, и со временем расходится с кодом.
