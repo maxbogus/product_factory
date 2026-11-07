@@ -36,6 +36,8 @@ from pf.ground import (
 from pf.journal import Journal, StepRecord, journal_path
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
+    CLOSE_DIRECTION_TITLES,
+    KEEP_CURRENT_TITLES,
     Analysis,
     DecisionRecord,
     NextStep,
@@ -497,6 +499,19 @@ class Workflow:
                 "Придумывать свои названия (Churn Rate, Retention Rate, метрика X) "
                 "нельзя: их нет в источниках, и основание будет отброшено. "
                 "Если нужного материала нет — запиши это в gaps."
+            )
+        elif "нет полюса" in error:
+            # Формулировки берутся из схемы, а не переписываются здесь:
+            # иначе подсказка разойдётся с проверкой, как разошёлся
+            # `.env.example` с умолчаниями кода.
+            keep = "», «".join(KEEP_CURRENT_TITLES[:3])
+            close = "», «".join(CLOSE_DIRECTION_TITLES[:3])
+            hint = (
+                "\n\nВАЖНО: в наборе нет обязательных вариантов-полюсов. "
+                f"Честный набор содержит оба: «{keep}» и «{close}». "
+                "Нужны сами варианты с такими названиями, а не маркеры: "
+                "`keep_current_marker` и `close_direction_marker` выводятся "
+                "из названий, заполнять их не требуется."
             )
         elif "String should have at least 1 character" in error:
             hint = (

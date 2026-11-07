@@ -93,15 +93,142 @@ def test_variant_without_objection_is_rejected() -> None:
 
 
 def test_identical_variant_titles_are_rejected() -> None:
-    """Три одинаково названных варианта — это один вариант."""
-    with pytest.raises(ValidationError):
+    """Три одинаково названных варианта — это один вариант.
+
+    Причина названа точно: проверка полюсов идёт следом и тоже отклонила бы
+    такой набор, но тогда ошибка говорила бы не о том, что случилось.
+    """
+    with pytest.raises(ValidationError, match="различаться"):
         Variants(variants=[_variant("Одинаковый")] * 3)
 
 
 def test_three_distinct_variants_pass() -> None:
-    """Три разных варианта проходят."""
-    variants = Variants(variants=[_variant("А"), _variant("Б"), _variant("В")])
+    """Три разных варианта с обоими полюсами проходят."""
+    variants = Variants(
+        variants=[
+            _variant("Оставить как есть"),
+            _variant("Закрыть направление"),
+            _variant("Снизить цену"),
+        ]
+    )
     assert len(variants.variants) == 3
+
+
+# ── Полюса вариантов ─────────────────────────────────────────────────────────
+# Полюс — свойство набора, а не декларации. Проверялось обратное: набор
+# «А/Б/В» проходил схему с пустыми маркерами, а обработчики eval-кейсов
+# `D-05`/`D-06` возвращали ровно ту строку, которую искал кейс, — упасть они
+# не могли. В двух сохранённых прогонах из 25 маркер «Закрыть направление»
+# стоял при наборе, где варианта с таким названием нет.
+
+
+def _variant_list(*titles: str) -> list[Variant]:
+    """Собрать набор вариантов по названиям.
+
+    Args:
+        *titles: Названия вариантов.
+
+    Returns:
+        Список вариантов с возражениями.
+    """
+    return [_variant(title) for title in titles]
+
+
+def test_poles_missing_keep_current_is_rejected() -> None:
+    """Набор без «оставить как есть» — не с чем сравнивать предлагаемое."""
+    with pytest.raises(ValidationError, match="оставить как есть"):
+        Variants(variants=_variant_list("Снизить цену", "Усилить сервис", "Закрыть направление"))
+
+
+def test_poles_missing_close_direction_is_rejected() -> None:
+    """Набор без «закрыть направление» не допускает, что направление не работает."""
+    with pytest.raises(ValidationError, match="закрыть направление"):
+        Variants(variants=_variant_list("Снизить цену", "Усилить сервис", "Оставить как есть"))
+
+
+def test_poles_full_set_is_accepted() -> None:
+    """Оба полюса каноническими названиями — набор проходит."""
+    variants = Variants(
+        variants=_variant_list("Оставить как есть", "Закрыть направление", "Снизить цену")
+    )
+    assert variants.keep_current_marker == "Оставить как есть"
+    assert variants.close_direction_marker == "Закрыть направление"
+
+
+def test_poles_synonym_title_is_a_pole() -> None:
+    """Синоним полюса принимается, а маркер получает фактическое название.
+
+    Маркер не подменяется канонической строкой: в журнале и отчёте должно
+    стоять название, которое есть в наборе, иначе документ сошлётся на
+    вариант, которого нет.
+    """
+    variants = Variants(
+        variants=_variant_list("Оставить без изменений", "Свернуть направление", "Снизить цену")
+    )
+    assert variants.keep_current_marker == "Оставить без изменений"
+    assert variants.close_direction_marker == "Свернуть направление"
+
+
+def test_poles_declared_marker_does_not_replace_variant() -> None:
+    """Объявленный маркер не заменяет вариант.
+
+    В прогоне `session-bench-agent-qwen2-5-7b-215753-1` маркер «Закрыть
+    направление» стоял при трёх вариантах без такого названия. Проверка шла
+    по маркеру, поэтому расхождение не было видно.
+    """
+    payload = {
+        "variants": [
+            variant.model_dump()
+            for variant in _variant_list("Оставить как есть", "Снизить цену", "Усилить сервис")
+        ],
+        "keep_current_marker": "Оставить как есть",
+        "close_direction_marker": "Закрыть направление",
+    }
+    with pytest.raises(ValidationError, match="закрыть направление"):
+        Variants.model_validate(payload)
+
+
+def test_poles_error_names_both_required_concepts() -> None:
+    """Отказ называет оба обязательных понятия.
+
+    Модель исправляет ответ по тексту ошибки: «нужен полюс» без названий
+    заставил бы её угадывать формулировку, и шаг тратил бы попытки.
+    """
+    with pytest.raises(ValidationError) as error:
+        Variants(variants=_variant_list("Снизить цену", "Усилить сервис", "Повысить прозрачность"))
+    message = str(error.value).lower().replace("ё", "е")
+    assert "оставить как есть" in message
+    assert "закрыть направление" in message
+
+
+def test_poles_negated_title_is_not_a_pole() -> None:
+    """«Не закрывать направление» — не полюс, хотя формулировка внутри есть."""
+    with pytest.raises(ValidationError, match="закрыть направление"):
+        Variants(
+            variants=_variant_list("Оставить как есть", "Не закрывать направление", "Снизить цену")
+        )
+
+
+def test_poles_formulations_do_not_overlap() -> None:
+    """Формулировки полюсов не пересекаются.
+
+    Если одна формулировка попадёт в оба списка, вариант закроет сразу два
+    полюса и набор с одним вариантом пройдёт проверку — тавтология вернётся
+    с другой стороны.
+    """
+    from pf.schemas import (
+        CLOSE_DIRECTION_TITLES,
+        KEEP_CURRENT_TITLES,
+        POLE_CLOSE_DIRECTION,
+        POLE_KEEP_CURRENT,
+        pole_of,
+    )
+
+    for title in KEEP_CURRENT_TITLES:
+        assert pole_of(title) == POLE_KEEP_CURRENT
+    for title in CLOSE_DIRECTION_TITLES:
+        assert pole_of(title) == POLE_CLOSE_DIRECTION
+    assert not set(KEEP_CURRENT_TITLES) & set(CLOSE_DIRECTION_TITLES)
 
 
 def test_task_frame_requires_core_fields() -> None:
@@ -200,17 +327,19 @@ def test_variants_accept_bare_list() -> None:
     """Голый список вариантов принимается.
 
     Модель часто отвечает именно так — и раньше это давало ошибку
-    валидации вместо принятого ответа.
+    валидации вместо принятого ответа. Полюса при этом обязательны и в
+    голом списке: форма ответа не отменяет требования к набору.
     """
     variants = Variants.model_validate(
         [
-            {"title": "А", "summary": "с", "objections": ["о"]},
-            {"title": "Б", "summary": "с", "objections": ["о"]},
-            {"title": "В", "summary": "с", "objections": ["о"]},
+            {"title": "Оставить как есть", "summary": "с", "objections": ["о"]},
+            {"title": "Закрыть направление", "summary": "с", "objections": ["о"]},
+            {"title": "Снизить цену", "summary": "с", "objections": ["о"]},
         ]
     )
     assert len(variants.variants) == 3
     assert all(item.objections for item in variants.variants)
+    assert variants.keep_current_marker == "Оставить как есть"
 
 
 def test_key_message_cannot_name_a_competitor() -> None:

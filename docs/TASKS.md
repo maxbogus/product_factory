@@ -52,7 +52,7 @@
 |---|---|---|---|---|---|---|---|
 | T-00 | 0 | Инфраструктура работы и проверок: индекс, handoff, `tasks-check`, `next-task`, `canon`, `docs-check` | 4 | — | ✅ | — | `make tasks-check docs-check` |
 | T-01 | 1 | `D-12` не зависит от `state/`: `make ci` зелёный на чистом клоне | 1 | 28.5 | ✅ | — | `uv run pytest tests/test_eval_run.py -k empty_state -q` |
-| T-02 | 1 | Полюса вариантов проверяет схема; `D-05`, `D-06`, `D-09` перестают быть тавтологиями | 2 | 7.2 | ⬜ | — | `uv run pytest tests/test_schemas.py -k poles -q` |
+| T-02 | 1 | Полюса вариантов проверяет схема; `D-05`, `D-06`, `D-09` перестают быть тавтологиями | 2 | 7.2 | ✅ | — | `uv run pytest tests/test_schemas.py -k poles -q` |
 | T-03 | 1 | «Подкреплено» считается по уникальным источникам, а не по записям | 2 | 7.6 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k unique -q` |
 | T-04 | 1 | Числа в документах совпадают с каноном | 1 | 8.1 | ✅ | T-00 | `make docs-check` |
 | T-05 | 1 | Согласованность заявлений: README-цикл, `demo/BRIEF.md` про веб, оговорка про `--extra documents`, `.env.example` ↔ умолчания | 2 | 4.1 | ✅ | T-04 | `uv run pytest tests/test_documents_consistency.py -q` |

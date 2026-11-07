@@ -108,3 +108,85 @@ def test_case_d15_ungrounded_conclusion_is_rejected() -> None:
 
     assert "неподкреплено" in result
     assert "подтверждено" not in result
+
+
+# ── Кейсы полюсов и пробелов проверяют схему, а не себя ──────────────────────
+# Обработчики `D-05`, `D-06` и `D-09` возвращали ровно ту строку, которую искал
+# кейс: `D-05` печатал «Закрыть направление» при любом поведении схемы. Кейс не
+# мог упасть. Теперь текст приходит из отказа схемы — и эти проверки держат, что
+# отказ действительно наступает.
+
+
+def test_case_d05_text_comes_from_schema_rejection() -> None:
+    """Кейс D-05: текст результата — сообщение схемы, а не подставленная строка."""
+    from pf.evalrun import _d05_keep_current_required
+
+    result = _d05_keep_current_required()
+
+    # Проверяется, какой именно полюс отсутствует: общий текст отказа
+    # называет оба, и широкая подстрока прошла бы на чужом отказе.
+    assert "нет полюса «оставить как есть»" in result
+
+
+def test_case_d06_text_comes_from_schema_rejection() -> None:
+    """Кейс D-06: без «закрыть направление» набор отклоняется схемой."""
+    from pf.evalrun import _d06_close_direction_required
+
+    result = _d06_close_direction_required()
+
+    assert "нет полюса «закрыть направление»" in result
+
+
+def test_case_d09_word_gap_comes_from_schema() -> None:
+    """Кейс D-09: слово «пробел» берётся из отказа схемы.
+
+    Если `Analysis` начнёт принимать пустой разбор, кейс покраснеет: текст
+    обработчика в этом случае не содержит слова «пробел».
+    """
+    from pf.evalrun import _d09_gaps_declared
+
+    result = _d09_gaps_declared()
+
+    assert "пробел" in result
+
+
+def test_case_d05_full_set_is_not_rejected() -> None:
+    """Обратная сторона: набор с полюсами схема принимает.
+
+    Без этой проверки «отказ» мог бы быть отказом на любой набор, и кейсы
+    D-05/D-06 проходили бы, ничего не проверяя.
+    """
+    variants = Variants(
+        variants=[
+            Variant(title="Оставить как есть", summary="с", objections=["о"]),
+            Variant(title="Закрыть направление", summary="с", objections=["о"]),
+            Variant(title="Снизить цену", summary="с", objections=["о"]),
+        ]
+    )
+    assert variants.keep_current_marker == "Оставить как есть"
+    assert variants.close_direction_marker == "Закрыть направление"
+
+
+def test_cases_d05_d06_go_red_without_pole_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Если проверка полюсов исчезнет, кейсы D-05/D-06 обязаны покраснеть.
+
+    Это проверка самих проверок. Две ловушки уже срабатывали: обработчик
+    возвращал текст, содержащий искомую подстроку, а общий текст отказа
+    перечисляет оба полюса, поэтому широкая подстрока совпадала и в отказе
+    из-за другого полюса. Здесь `pole_of` подменяется так, что любой набор
+    получает оба полюса, — проверка полюсов фактически выключена.
+
+    Args:
+        monkeypatch: Подмена проверки полюсов в схеме.
+    """
+    import itertools
+
+    import pf.schemas as schemas
+    from pf.evalrun import run_all
+
+    poles = itertools.cycle((schemas.POLE_KEEP_CURRENT, schemas.POLE_CLOSE_DIRECTION))
+    monkeypatch.setattr(schemas, "pole_of", lambda title: next(poles))
+    results = {result.case_id: result for result in run_all()}
+
+    assert not results["D-05-keep-current-required"].passed
+    assert not results["D-06-close-direction-required"].passed

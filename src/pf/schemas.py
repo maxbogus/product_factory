@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -442,6 +443,133 @@ class Analysis(BaseModel):
         return self
 
 
+# ── Полюса вариантов ─────────────────────────────────────────────────────────
+# Честный набор вариантов содержит оба полюса: «ничего не менять» и «направление
+# не работает». Проверять это по маркерам нельзя: маркер — утверждение модели о
+# наборе, а не свойство набора. В двух сохранённых прогонах из 25 маркер
+# «Закрыть направление» стоял при наборе, где такого варианта не было, и
+# проверка этого не видела.
+#
+# Формулировки — константы кода, а не данные словаря `knowledge/lexicon`:
+# словарь знаний описывает лексическую близость слов внутри утверждений, его
+# записи имеют статус и подтверждаются человеком. Форма ответа — контракт схемы,
+# и она не должна зависеть от наличия и состояния файла со словарём.
+
+#: Полюс «ничего не менять».
+POLE_KEEP_CURRENT = "keep_current"
+
+#: Полюс «направление не работает».
+POLE_CLOSE_DIRECTION = "close_direction"
+
+#: Формулировка полюса «ничего не менять». Первая — каноническая: её просит
+#: промпт роли `options`, она попадает в текст отказа и в подсказку модели.
+KEEP_CURRENT_TITLES: tuple[str, ...] = (
+    "оставить как есть",
+    "оставить без изменений",
+    "сохранить как есть",
+    "ничего не менять",
+    "не менять продукт",
+)
+
+#: Формулировка полюса «направление не работает».
+CLOSE_DIRECTION_TITLES: tuple[str, ...] = (
+    "закрыть направление",
+    "свернуть направление",
+    "отказаться от направления",
+    "закрыть продукт",
+)
+
+#: Знаки по краям названия, которые не влияют на смысл варианта.
+_EDGE_PUNCTUATION = " \t.,;:!?—–-…"
+
+
+def _normalize_title(title: str) -> str:
+    """Привести название варианта к сравнимому виду.
+
+    Сравнение не должно зависеть от регистра, ё, кавычек и лишних пробелов:
+    «Оставить как есть» и «оставить как есть.» — один и тот же полюс.
+
+    Args:
+        title: Название варианта от модели.
+
+    Returns:
+        Название без регистра, кавычек и краевой пунктуации.
+    """
+    text = title.lower().replace("ё", "е")
+    for char in ("«", "»", '"', "'", "`"):
+        text = text.replace(char, "")
+    return re.sub(r"\s+", " ", text).strip(_EDGE_PUNCTUATION)
+
+
+def _contains_without_negation(text: str, phrase: str) -> bool:
+    """Найти формулировку в названии, пропуская отрицание перед ней.
+
+    «Не закрывать направление» содержит «закрыть направление», но полюсом не
+    является: отрицание меняет смысл на противоположный. Учитывается только
+    отрицание прямо перед формулировкой — более далёкие конструкции
+    («нельзя всерьёз закрыть направление») распознаются как полюс.
+
+    Args:
+        text: Нормализованное название варианта.
+        phrase: Формулировка полюса.
+
+    Returns:
+        True, если формулировка есть и перед ней нет отрицания.
+    """
+    start = text.find(phrase)
+    while start != -1:
+        before = text[:start].rstrip()
+        negated = re.search(r"(?:^|[^а-я])(?:не|нельзя)$", before) is not None
+        if not negated:
+            return True
+        start = text.find(phrase, start + 1)
+    return False
+
+
+def pole_of(title: str) -> str | None:
+    """Определить, каким полюсом является название варианта.
+
+    Args:
+        title: Название варианта от модели.
+
+    Returns:
+        ``POLE_KEEP_CURRENT``, ``POLE_CLOSE_DIRECTION`` либо ``None``, если
+        название полюсом не является.
+    """
+    normalized = _normalize_title(title)
+    if not normalized:
+        return None
+    for pole, formulations in (
+        (POLE_KEEP_CURRENT, KEEP_CURRENT_TITLES),
+        (POLE_CLOSE_DIRECTION, CLOSE_DIRECTION_TITLES),
+    ):
+        for formulation in formulations:
+            if normalized.startswith(formulation) or _contains_without_negation(
+                normalized, formulation
+            ):
+                return pole
+    return None
+
+
+def _pole_requirement() -> str:
+    """Сформулировать требование к полюсам для текста отказа.
+
+    Названия обязательны в тексте: модель исправляет ответ по ошибке, и без
+    формулировок она угадывала бы, чего именно не хватает.
+
+    Returns:
+        Требование с каноническими названиями и допустимыми синонимами.
+    """
+    keep = "«" + KEEP_CURRENT_TITLES[0] + "»"
+    close = "«" + CLOSE_DIRECTION_TITLES[0] + "»"
+    keep_aliases = ", ".join(KEEP_CURRENT_TITLES[1:])
+    close_aliases = ", ".join(CLOSE_DIRECTION_TITLES[1:])
+    return (
+        f"нужен вариант {keep} (допустимо: {keep_aliases}) "
+        f"и вариант {close} (допустимо: {close_aliases})"
+    )
+
+
 class Variant(BaseModel):
     """Вариант решения с возражениями.
 
@@ -472,8 +600,9 @@ class Variants(BaseModel):
     """Набор вариантов решения.
 
     Attributes:
-        variants: Варианты — не меньше трёх.
-        keep_current_marker: Название варианта «оставить как есть».
+        variants: Варианты — не меньше трёх, включая оба полюса.
+        keep_current_marker: Название варианта «оставить как есть». Не вводится
+            моделью: выводится из набора, чтобы маркер не расходился с ним.
         close_direction_marker: Название варианта «закрыть направление».
     """
 
@@ -516,6 +645,45 @@ class Variants(BaseModel):
         titles = [v.title.strip().lower() for v in self.variants]
         if len(set(titles)) != len(titles):
             raise ValueError("названия вариантов должны различаться")
+        return self
+
+    @model_validator(mode="after")
+    def _poles(self) -> Variants:
+        """Оба полюса обязаны быть вариантами набора, а не маркерами.
+
+        Проверка идёт по названиям вариантов: маркер — это утверждение модели о
+        своём же ответе. Прогон 2026-11-07 показал, чем это кончается: маркер
+        «Закрыть направление» стоял при наборе из трёх вариантов, где такого
+        названия не было ни у одного, и проверка молчала.
+
+        Маркеры после проверки переписываются фактическими названиями: журнал и
+        отчёт ссылаются на вариант, который в наборе действительно есть.
+
+        Returns:
+            Набор с заполненными маркерами.
+
+        Raises:
+            ValueError: В наборе нет варианта одного из полюсов.
+        """
+        found: dict[str, str] = {}
+        for variant in self.variants:
+            pole = pole_of(variant.title)
+            if pole is not None:
+                found.setdefault(pole, variant.title.strip())
+        missing = []
+        if POLE_KEEP_CURRENT not in found:
+            missing.append("«" + KEEP_CURRENT_TITLES[0] + "»")
+        if POLE_CLOSE_DIRECTION not in found:
+            missing.append("«" + CLOSE_DIRECTION_TITLES[0] + "»")
+        if missing:
+            raise ValueError(
+                "в наборе нет полюса "
+                + " и ".join(missing)
+                + ", а набор без полюсов выбирает за человека: "
+                + _pole_requirement()
+            )
+        self.keep_current_marker = found[POLE_KEEP_CURRENT]
+        self.close_direction_marker = found[POLE_CLOSE_DIRECTION]
         return self
 
 
