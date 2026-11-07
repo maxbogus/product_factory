@@ -8,7 +8,8 @@ UV ?= uv
 PYTHON ?= python3
 
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
-        typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge
+        typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
+        contracts-check scenarios-check demo-doc
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -72,10 +73,10 @@ test-slow: ## Тесты с живой моделью
 	@$(UV) run pytest tests/ -m slow -q
 
 lint: ## Проверить стиль (ruff)
+	@$(UV) run ruff check src/ tests/
 
 eval: ## Выполнить eval-сценарии (правила поведения агента)
 	@$(UV) run pf eval
-	@$(UV) run ruff check src/ tests/
 
 format: ## Отформатировать код (ruff format)
 	@$(UV) run ruff format src/ tests/
@@ -86,12 +87,23 @@ format-check: ## Проверить форматирование, не меня�
 typecheck: ## Проверить типы (mypy --strict)
 	@$(UV) run mypy src/
 
+contracts-check: ## Проверить контракты: реестры против кода
+	@$(UV) run python scripts/contracts_check.py
+
+scenarios-check: ## Проверить, что сценарии покрыты тестами
+	@$(UV) run pytest tests/ -m "not slow" -q -k "scenario"
+
+demo-doc: ## Пересобрать demo/RESULT.md из журнала: make demo-doc SESSION=demo-v4
+	@test -n "$(SESSION)" || (echo "Укажите сессию: make demo-doc SESSION=..." && exit 1)
+	@$(UV) run python scripts/build_demo_doc.py --session "$(SESSION)"
+
 ci: ## Полный прогон проверок
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory format-check
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory eval
+	@$(MAKE) --no-print-directory contracts-check
 
 materials: ## Показать материалы проекта (документы, таблицы, данные)
 	@$(UV) run pf materials
