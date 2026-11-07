@@ -372,8 +372,13 @@ class Workflow:
         """
         parts = []
         if context:
-            parts.append(f"МАТЕРИАЛЫ:\n{context}")
-        parts.append("ДАННЫЕ:\n" + _as_text(payload))
+            # Заголовок обязателен: без него модель не понимает, что
+            # перед ней источники, и начинает цитировать вопросы из
+            # блока ДАННЫЕ. Идентификаторы копируются только отсюда.
+            parts.append(
+                "МАТЕРИАЛЫ (источники для цитирования, source_id копируется отсюда):\n" + context
+            )
+        parts.append("ДАННЫЕ (это вход задачи, цитировать их нельзя):\n" + _as_text(payload))
         if role_name:
             parts.append(Workflow._schema_hint(role_name))
         parts.append("Верни ТОЛЬКО JSON по схеме выше, без пояснений.")

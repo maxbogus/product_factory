@@ -103,7 +103,7 @@ def test_input_data_is_not_json() -> None:
     структурой входа вместо извлечения содержимого.
     """
     user = _user_for("collector")
-    data_block = user.split("ДАННЫЕ:")[1].split("СХЕМА ОТВЕТА")[0]
+    data_block = user.split("ДАННЫЕ")[1].split("СХЕМА ОТВЕТА")[0]
     assert "{" not in data_block
     assert "}" not in data_block
     assert "[{" not in data_block
@@ -116,6 +116,28 @@ def test_input_data_keeps_its_content() -> None:
         "",
         "collector",
     )
-    data_block = user.split("ДАННЫЕ:")[1].split("СХЕМА ОТВЕТА")[0]
+    data_block = user.split("ДАННЫЕ")[1].split("СХЕМА ОТВЕТА")[0]
     assert "удержание клиентов" in data_block
     assert "какие тарифы" in data_block
+
+
+def test_data_block_is_marked_as_not_citable() -> None:
+    """Блок входных данных помечен как непригодный для цитирования.
+
+    Модель цитировала вопросы из плана исследования, а не абзацы
+    источников: блок ДАННЫЕ шёл без пояснения, и модель путала, что
+    можно процитировать.
+    """
+    user = _user_for("collector")
+    assert "цитировать их нельзя" in user
+
+
+def test_materials_block_says_where_to_take_source_ids() -> None:
+    """Блок материалов говорит, откуда брать source_id.
+
+    Без этого модель придумывала названия источников («Churn Rate»,
+    «query») — и все её основания отклонялись.
+    """
+    user = Workflow._build_user({"query": "удержание"}, "[a/b#p1] текст", "collector")
+    materials = user.split("МАТЕРИАЛЫ")[1].split("ДАННЫЕ")[0]
+    assert "source_id" in materials
