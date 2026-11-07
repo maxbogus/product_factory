@@ -26,6 +26,7 @@ __all__ = [
     "Metric",
     "cagr",
     "change_percent",
+    "Series",
     "compute_from_rows",
     "group_series",
     "mean",
@@ -227,6 +228,7 @@ def compute_from_rows(
     name: str,
     unit: str = "",
     label_column: str = "",
+    row_indices: list[int] | None = None,
 ) -> list[Metric]:
     """Посчитать метрики по строкам таблицы.
 
@@ -240,6 +242,10 @@ def compute_from_rows(
         name: Базовое название метрики.
         unit: Единица измерения.
         label_column: Колонка с подписью строки (период, категория).
+        row_indices: Номера строк **исходной таблицы** для каждой строки
+            из ``rows``. Нужен, когда ``rows`` — часть таблицы, а не вся
+            таблица: иначе номер строки считается внутри переданного
+            списка и указывает на чужую строку.
 
     Returns:
         Список метрик — по одной на числовую строку.
@@ -252,18 +258,39 @@ def compute_from_rows(
             continue
         label = str(row.get(label_column, "")) if label_column else ""
         full_name = f"{name}, {label}" if label else name
+        table_index = row_indices[index] if row_indices else index
         metrics.append(
             Metric(
                 name=full_name,
                 value=value,
                 unit=unit,
                 source_id=source_id,
-                row=index,
-                formula=f"значение из колонки «{value_column}», строка {index + 1}",
+                row=table_index,
+                formula=f"значение из колонки «{value_column}», строка {table_index + 1}",
                 inputs={value_column: str(raw)},
             )
         )
     return metrics
+
+
+@dataclass(frozen=True, slots=True)
+class Series:
+    """Ряд наблюдений одной величины во времени.
+
+    Ряд несёт не только строки, но и номера этих строк в исходной
+    таблице. Связь обязана быть вместе с рядом: если её передавать
+    отдельно, её легко не передать — и метрика получит номер строки
+    внутри ряда вместо номера строки таблицы. Тогда «82 млн» укажет на
+    строку, где лежит 87, и проверка справедливо отвергнет верный
+    расчёт.
+
+    Attributes:
+        rows: Строки ряда.
+        row_indices: Номера этих строк в исходной таблице.
+    """
+
+    rows: list[dict[str, str]]
+    row_indices: list[int]
 
 
 def group_series(
@@ -271,7 +298,7 @@ def group_series(
     *,
     label_column: str,
     group_columns: tuple[str, ...] = (),
-) -> list[list[dict[str, str]]]:
+) -> list[Series]:
     """Разделить строки на ряды по подписи.
 
     Таблица может содержать разные операторы, показатели и годы.
@@ -291,18 +318,22 @@ def group_series(
             быть один и тот же.
 
     Returns:
-        Список рядов — каждый список строк с одинаковой подписью.
+        Список рядов — каждый со своим набором строк и номерами этих
+        строк в исходной таблице.
     """
-    groups: dict[tuple[str, ...], list[dict[str, str]]] = {}
-    for row in rows:
+    groups: dict[tuple[str, ...], list[int]] = {}
+    for table_index, row in enumerate(rows):
         label = str(row.get(label_column, ""))
         extra = tuple(str(row.get(column, "")) for column in group_columns)
-        groups.setdefault((label, *extra), []).append(row)
-    return list(groups.values())
+        groups.setdefault((label, *extra), []).append(table_index)
+    return [
+        Series(rows=[rows[index] for index in indices], row_indices=list(indices))
+        for indices in groups.values()
+    ]
 
 
 def summarize_groups(
-    groups: list[list[dict[str, str]]],
+    groups: list[Series],
     *,
     value_column: str,
     source_id: str,
@@ -317,33 +348,39 @@ def summarize_groups(
         source_id: Идентификатор источника данных.
         name: Базовое название метрики.
         unit: Единица измерения.
-
     Returns:
         Список метрик: по каждому ряду — изменение, среднее, медиана
         и размах.
     """
     summaries: list[Metric] = []
-    for group in groups:
+    for series in groups:
         # Порядок наблюдений важен: изменение считается от первого к
         # последнему. Если строки лежат в таблице не по времени, ряд
         # надо упорядочить по периоду, иначе «изменение» окажется
-        # обратным.
-        group = sorted(group, key=lambda row: _period_key(row))
+        # обратным. Порядок задаётся индексами, а не перестановкой
+        # строк: так номер строки остаётся номером строки таблицы.
+        order = sorted(
+            range(len(series.rows)),
+            key=lambda position: _period_key(series.rows[position]),
+        )
+        ordered = [series.rows[position] for position in order]
+        indices = [series.row_indices[position] for position in order]
         metrics = compute_from_rows(
-            group,
+            ordered,
             value_column=value_column,
             source_id=source_id,
             name=name,
             unit=unit,
+            row_indices=indices,
         )
         if not metrics:
             continue
         # Название ряда: оператор и показатель — иначе в отчёте
         # «изменение» без указания, что именно менялось.
         parts = [
-            str(group[0].get(column, ""))
+            str(series.rows[0].get(column, ""))
             for column in ("оператор", "показатель")
-            if group[0].get(column)
+            if series.rows[0].get(column)
         ]
         label = ", ".join(parts) if parts else name
         series_name = f"{name} ({label})" if label else name

@@ -369,6 +369,68 @@ def test_series_are_grouped_before_change_is_computed() -> None:
     assert belarus == 0.0
 
 
+def test_group_summary_row_points_to_table_row() -> None:
+    """Сводка по ряду ссылается на свою строку исходной таблицы.
+
+    Первый ряд занимает строки 0 и 1, второй — строку 2. Раньше сводка
+    второго ряда ссылалась на строку 0: индекс считался внутри ряда, а
+    не по таблице. Из-за этого «38,9 млн» указывало на строку, где
+    лежит 87, и проверка справедливо отвергала верный расчёт.
+    """
+    from pf.analysis import group_series, summarize_groups
+
+    rows = [
+        {"оператор": "МТС", "значение": "87"},
+        {"оператор": "МТС", "значение": "82"},
+        {"оператор": "Tele2", "значение": "38.9"},
+    ]
+    groups = group_series(rows, label_column="оператор")
+    summaries = summarize_groups(
+        groups,
+        value_column="значение",
+        source_id="project/data/x.csv",
+        name="Абонентская база",
+    )
+
+    tele2 = [m for m in summaries if "Tele2" in m.name]
+    assert tele2, "сводка для Tele2 не найдена"
+    for metric in tele2:
+        assert metric.row == 2, f"сводка Tele2 должна ссылаться на строку 2, а не {metric.row}"
+
+
+def test_group_summary_rows_follow_period_order() -> None:
+    """Номера строк в сводке следуют за порядком наблюдений.
+
+    Ряд упорядочивается по периоду, и наблюдения меняются местами
+    относительно таблицы: строка 1 — 2023 год, строка 0 — 2024. Значит
+    «изменение за период» ссылается на последнее наблюдение (строка 0),
+    а «среднее» — на первое (строка 1). Индексы остаются индексами
+    таблицы, а не позициями внутри отсортированного ряда.
+    """
+    from pf.analysis import group_series, summarize_groups
+
+    rows = [
+        {"оператор": "МТС", "период": "2024", "значение": "87"},
+        {"оператор": "МТС", "период": "2023", "значение": "80"},
+    ]
+    groups = group_series(rows, label_column="оператор")
+    summaries = summarize_groups(
+        groups,
+        value_column="значение",
+        source_id="project/data/x.csv",
+        name="Абонентская база",
+    )
+
+    change = next(m for m in summaries if "изменение" in m.name)
+    average = next(m for m in summaries if "среднее" in m.name)
+    assert change.row == 0, (
+        f"изменение должно ссылаться на последнее наблюдение (строка 0), а не {change.row}"
+    )
+    assert average.row == 1, (
+        f"среднее должно ссылаться на первое наблюдение (строка 1), а не {average.row}"
+    )
+
+
 def test_change_within_one_series_is_computed() -> None:
     """Внутри ряда изменение считается по первому и последнему."""
     from pf.analysis import group_series, summarize_groups
