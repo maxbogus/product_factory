@@ -118,3 +118,68 @@ def test_router_can_ask_human() -> None:
     assert workflow.route_next(_state(), result) is Phase.OPTIONS
     assert result.data.need_human is True
     assert result.data.question == "А или Б?"
+
+
+def test_russian_role_name_is_understood() -> None:
+    """Русское название роли понимается, а не считается неизвестным.
+
+    Модель отвечает «план», «сбор источников», «критик» — это те же
+    роли. Раньше любое русское имя давало «маршрут неизвестен», и
+    решение роутера молча отбрасывалось.
+    """
+    workflow = _workflow({})
+    state = _state()
+    result = _result(NextStep(role="план", reason="нужно уточнить вопросы"))
+
+    workflow.route_next(state, result)
+
+    assert "неизвестен" not in state.results["routing_note"]
+
+
+def test_role_title_resolves_to_phase() -> None:
+    """Название роли из реестра («Сбор источников») тоже понимается."""
+    workflow = _workflow({})
+    state = _state()
+    result = _result(NextStep(role="Сбор источников", reason="нужны основания"))
+
+    assert workflow.route_next(state, result) is Phase.COLLECTING
+    assert state.results["routing_decision"]["accepted"] is True
+
+
+def test_replan_is_allowed_when_gaps_remain() -> None:
+    """Возврат к плану разрешён, когда разбор объявил пробелы.
+
+    Без возврата план никогда не уточняется: роутер видит пробелы и
+    просит вернуться, а код молча идёт дальше.
+    """
+    workflow = _workflow({})
+    state = _state(Phase.ANALYZING)
+    state.results["analyzing"] = {"gaps": ["нет разбивки оттока по причинам"]}
+    result = _result(NextStep(role="план", reason="пробелы не закрыты"))
+
+    assert workflow.route_next(state, result) is Phase.PLANNING
+    assert state.results["routing_decision"]["accepted"] is True
+    assert state.results["replans"] == 1
+
+
+def test_replan_without_gaps_is_corrected() -> None:
+    """Без пробелов возврат к плану — повтор, и он исправляется."""
+    workflow = _workflow({})
+    state = _state(Phase.OPTIONS)
+    state.results["analyzing"] = {"gaps": []}
+    result = _result(NextStep(role="план", reason="хочу переписать план"))
+
+    assert workflow.route_next(state, result) is Phase.REDTEAM
+    assert "план повторять незачем" in state.results["routing_note"]
+
+
+def test_second_replan_is_corrected() -> None:
+    """Второй возврат к плану запрещён: это уже цикл."""
+    workflow = _workflow({})
+    state = _state(Phase.ANALYZING)
+    state.results["analyzing"] = {"gaps": ["пробел"]}
+    state.results["replans"] = 1
+    result = _result(NextStep(role="план", reason="ещё раз"))
+
+    assert workflow.route_next(state, result) is Phase.OPTIONS
+    assert "повторный возврат" in state.results["routing_note"]

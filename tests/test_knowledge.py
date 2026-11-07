@@ -90,3 +90,38 @@ def test_every_role_has_method_mapping() -> None:
 def test_knowledge_is_empty_without_files() -> None:
     """Без файлов знаний подсказка пуста, а не ломает сборку."""
     assert knowledge_for("analyst") == ""
+
+
+def test_analyst_prompt_forbids_quoting_computed_values() -> None:
+    """Промпт аналитика запрещает цитировать посчитанные величины.
+
+    Модель брала из блока РАСЧЁТЫ строку «изменение за период: 0 %» и
+    вставляла её в факт как дословную цитату. В источнике такого текста
+    нет — проверка отклоняла факт, хотя модель не выдумывала число,
+    а оформляла его не тем каналом.
+    """
+    prompt = load_prompt("analyst")
+    assert "Посчитанную величину нельзя цитировать" in prompt
+
+
+def test_collector_prompt_sends_computed_numbers_to_metrics() -> None:
+    """Промпт сборщика велит переносить расчёт в `metrics`, а не в цитату.
+
+    Раньше промпт разрешал брать числа из блока РАСЧЁТЫ «как основания».
+    Модель поняла это буквально и вставила посчитанную величину в
+    `quote` факта — а такой цитаты в источнике нет.
+    """
+    prompt = load_prompt("collector")
+    assert "переноси в `metrics`" in prompt
+
+
+def test_planner_prompt_handles_second_pass() -> None:
+    """Промпт планировщика описывает повторный проход.
+
+    Без правила о повторном проходе план на втором заходе повторяет
+    первый: планировщик не знает, что уже выяснено, и спрашивает то же
+    самое. Теперь ему приходят пробелы и посчитанные числа.
+    """
+    prompt = load_prompt("planner")
+    assert "Повторный проход" in prompt
+    assert "gaps" in prompt

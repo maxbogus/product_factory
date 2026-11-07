@@ -118,6 +118,71 @@ ROLES: dict[str, Role] = {
 }
 
 
+#: Как роли называют себя в ответе. Модель отвечает по-русски и в
+#: свободной форме («план», «сбор источников», «критик»), а реестр —
+#: английские идентификаторы. Без этой таблицы решение роутера молча
+#: отбрасывалось как «неизвестное», и работа шла по порядку.
+ROLE_ALIASES: dict[str, str] = {
+    "intake": "intake",
+    "постановка": "intake",
+    "постановка задачи": "intake",
+    "уточнение": "intake",
+    "planner": "planner",
+    "план": "planner",
+    "планировщик": "planner",
+    "план исследования": "planner",
+    "router": "router",
+    "маршрут": "router",
+    "маршрутизация": "router",
+    "collector": "collector",
+    "сбор": "collector",
+    "сборщик": "collector",
+    "сбор источников": "collector",
+    "analyst": "analyst",
+    "анализ": "analyst",
+    "аналитик": "analyst",
+    "разбор": "analyst",
+    "разбор источников": "analyst",
+    "options": "options",
+    "варианты": "options",
+    "варианты решения": "options",
+    "генератор": "options",
+    "redteam": "redteam",
+    "критика": "redteam",
+    "критик": "redteam",
+    "критическая проверка": "redteam",
+    "strategy": "strategy",
+    "стратегия": "strategy",
+    "стратег": "strategy",
+    "keeper": "keeper",
+    "решение": "keeper",
+    "фиксация": "keeper",
+    "фиксация решения": "keeper",
+}
+
+
+def resolve_role(name: str) -> str:
+    """Привести название роли к идентификатору реестра.
+
+    Сначала — таблица синонимов, затем — русские названия из реестра
+    (``title_ru``), затем — само название: неизвестную роль вызывающий
+    код обработает как ошибку маршрута.
+
+    Args:
+        name: Название роли из ответа модели.
+
+    Returns:
+        Идентификатор роли либо нормализованное название.
+    """
+    key = " ".join(name.strip().lower().split())
+    if key in ROLE_ALIASES:
+        return ROLE_ALIASES[key]
+    for role in ROLES.values():
+        if key == " ".join(role.title_ru.lower().split()):
+            return role.name
+    return key
+
+
 @lru_cache(maxsize=1)
 def prompts_root() -> Path:
     """Каталог с промптами ролей."""

@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pf import roles
 from pf.config import Settings, settings
@@ -37,6 +37,9 @@ from pf.schemas import (
 )
 from pf.sources import SourceBundle, collect
 from pf.state import Phase, SessionState, save
+
+if TYPE_CHECKING:
+    from pf.analysis import Metric
 
 
 def _metric_line(metric: Any) -> str:
@@ -69,6 +72,20 @@ def _metric_line(metric: Any) -> str:
             f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula}; {inputs})"
         )
     return f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
+
+
+def _calculations_block(source_id: str, lines: list[str]) -> str:
+    """Блок РАСЧЁТЫ по одному источнику.
+
+    Args:
+        source_id: Идентификатор материала.
+        lines: Строки расчётов.
+
+    Returns:
+        Текст блока с заголовком.
+    """
+    header = f"РАСЧЁТЫ по {source_id} (числа посчитаны кодом, source_id копируется отсюда):"
+    return header + "\n" + "\n".join(lines)
 
 
 def _describe_fields(
@@ -613,36 +630,126 @@ class Workflow:
         Returns:
             Фаза, которая должна выполняться следующей.
         """
-        from pf.roles import ROLES
+        from pf.roles import ROLES, resolve_role
 
         default = state.phase.next
         data = result.data
         if not isinstance(data, NextStep):
             return default
 
-        chosen = data.role.strip().lower()
+        # Модель называет роль по-русски: «план», «Сбор источников».
+        # Реестр — английские идентификаторы, поэтому имя приводится к
+        # ним: иначе решение роутера отбрасывалось как «неизвестное».
+        chosen = resolve_role(data.role)
         if chosen not in ROLES:
-            state.results["routing_note"] = (
-                f"маршрут «{data.role}» неизвестен — идём по порядку: {default.title_ru}"
-            )
+            note = f"маршрут «{data.role}» неизвестен — идём по порядку: {default.title_ru}"
+            self._remember_routing(state, data.role, default, accepted=False, note=note)
             return default
 
         target = _PHASE_BY_ROLE.get(chosen)
         if target is None:
+            note = f"маршрут «{data.role}» без фазы — идём по порядку: {default.title_ru}"
+            self._remember_routing(state, data.role, default, accepted=False, note=note)
             return default
 
         order = list(Phase)
+        if target is Phase.PLANNING and order.index(state.phase) > order.index(Phase.PLANNING):
+            return self._route_to_planning(state, data, default)
+
         if order.index(target) <= order.index(state.phase):
-            state.results["routing_note"] = (
+            note = (
                 f"маршрут «{data.role}» ведёт назад — исправлено, "
                 f"идём по порядку: {default.title_ru}"
             )
+            self._remember_routing(state, data.role, default, accepted=False, note=note)
             return default
 
-        state.results["routing_note"] = (
-            f"маршрут: {data.role} — {target.title_ru}. Причина: {data.reason or 'не указана'}"
-        )
+        note = f"маршрут: {data.role} — {target.title_ru}. Причина: {data.reason or 'не указана'}"
+        self._remember_routing(state, data.role, target, accepted=True, note=note)
         return target
+
+    #: Сколько раз за сессию можно вернуться к плану. Один возврат — это
+    #: уточнение по объявленным пробелам; второй — уже хождение по кругу.
+    MAX_REPLANS = 1
+
+    def _route_to_planning(
+        self,
+        state: SessionState,
+        data: NextStep,
+        default: Phase,
+    ) -> Phase:
+        """Решить, можно ли вернуться к плану.
+
+        Возврат осмыслен, только если разбор объявил пробелы: тогда план
+        уточняется по ним. Без пробелов это повтор уже сделанного, а
+        второй возврат — цикл. Планировщику при возврате приходят сами
+        пробелы и посчитанные числа (см. ``_progress_brief``), иначе
+        уточнять было бы нечем.
+
+        Args:
+            state: Состояние сессии.
+            data: Решение роутера.
+            default: Фаза, которая выполняется при отказе от возврата.
+
+        Returns:
+            Фаза плана, если возврат разрешён, иначе обычный порядок.
+        """
+        analysis = state.results.get(Phase.ANALYZING.value, {})
+        gaps = analysis.get("gaps") if isinstance(analysis, dict) else None
+        replans = int(state.results.get("replans") or 0)
+        if gaps and replans < self.MAX_REPLANS:
+            state.results["replans"] = replans + 1
+            note = (
+                f"маршрут: возврат к плану — разбор объявил {len(gaps)} пробел(ов). "
+                f"Причина: {data.reason or 'не указана'}"
+            )
+            self._remember_routing(state, data.role, Phase.PLANNING, accepted=True, note=note)
+            return Phase.PLANNING
+        if replans >= self.MAX_REPLANS:
+            note = (
+                f"маршрут «{data.role}»: повторный возврат к плану запрещён — "
+                f"идём по порядку: {default.title_ru}"
+            )
+        else:
+            note = (
+                f"маршрут «{data.role}» ведёт назад, но пробелов не объявлено — "
+                f"план повторять незачем, идём по порядку: {default.title_ru}"
+            )
+        self._remember_routing(state, data.role, default, accepted=False, note=note)
+        return default
+
+    @staticmethod
+    def _remember_routing(
+        state: SessionState,
+        role: str,
+        target: Phase,
+        *,
+        accepted: bool,
+        note: str,
+    ) -> None:
+        """Запомнить решение роутера — для человека и для журнала.
+
+        Журнал append-only, а решение принимается после записи текущего
+        шага: дописать его в уже записанную строку нельзя. Поэтому
+        решение кладётся в состояние, и его забирает ближайшая запись —
+        та, ради которой решение и принято. Иначе требование
+        «исправлять ошибочный выбор» выполнялось бы, но нигде не было
+        видно.
+
+        Args:
+            state: Состояние сессии.
+            role: Роль, которую предложил роутер.
+            target: Фаза, которая будет выполнена.
+            accepted: Решение принято или исправлено.
+            note: Объяснение для человека.
+        """
+        state.results["routing_note"] = note
+        state.results["routing_decision"] = {
+            "role": role,
+            "target": target.value,
+            "accepted": accepted,
+            "note": note,
+        }
 
     # ── Шаги ─────────────────────────────────────────────────────────────────
 
@@ -683,12 +790,12 @@ class Workflow:
         state.results[phase.value] = self._serialize(data)
         state.steps_done += 1
         state.cost_units += usage.cost_units
-        self._record(state, result)
-        self._apply_hooks(state, result)
 
-        # Субагент включается после разбора: он перепроверяет основания
-        # с другой стороны — не «найдена ли цитата», а «относится ли
-        # источник к задаче». Его отчёт виден в журнале.
+        # Субагент включается до записи шага: его отчёт — часть того же
+        # шага. Он перепроверяет основания с другой стороны: не «найдена
+        # ли цитата», а «относится ли источник к задаче». Если писать
+        # его после записи, второе мнение останется в состоянии сессии
+        # и в поставляемый отчёт не попадёт.
         if phase is Phase.ANALYZING:
             claims = getattr(data, "facts", None) or []
             report = self._run_fact_check(state, bundle, list(claims))
@@ -708,6 +815,9 @@ class Workflow:
                         for item in report.findings
                     ],
                 }
+
+        self._record(state, result)
+        self._apply_hooks(state, result)
         return result
 
     def _search_web(self, state: SessionState) -> list[Any]:
@@ -776,6 +886,67 @@ class Workflow:
                 "Продолжить или снять предел?"
             )
 
+    #: Сколько записей каждого вида уходит в сводку прогресса. Длинный
+    #: вход вытесняет схему ответа: модель возвращает структуру входа
+    #: вместо своей. Предел измерен на блоке РАСЧЁТЫ.
+    MAX_PROGRESS_ITEMS = 8
+
+    @classmethod
+    def _progress_brief(cls, state: SessionState) -> dict[str, Any]:
+        """Сводка того, что уже выяснено.
+
+        Планировщик без неё не может уточнить план: он видит только
+        постановку задачи и потому либо повторяет её, либо спрашивает
+        заново то, на что уже есть ответ. Роутер без неё решает «куда
+        дальше» вслепую.
+
+        Подтверждённые основания берутся из журнала, а не из ответа
+        модели: подтверждает код, и только он.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Сводка: подтверждённые ссылки, число отказов, пробелы,
+            гипотезы и посчитанные кодом метрики.
+        """
+        records = Journal(journal_path(state.session_id)).read()
+        confirmed: list[str] = []
+        rejected = 0
+        for record in records:
+            for citation in record.citations:
+                if citation not in confirmed:
+                    confirmed.append(citation)
+            rejected += len(record.rejected_details)
+
+        analysis = state.results.get(Phase.ANALYZING.value, {})
+        if not isinstance(analysis, dict):
+            analysis = {}
+        gaps = [str(item) for item in (analysis.get("gaps") or [])]
+        hypotheses = [
+            str(item.get("text", ""))
+            for item in (analysis.get("hypotheses") or [])
+            if isinstance(item, dict)
+        ]
+        metrics = [
+            {
+                "name": metric.name,
+                "value": metric.value,
+                "unit": metric.unit,
+                "citation": metric.citation,
+                "formula": metric.formula,
+            }
+            for metric in cls._computed_metric_records()
+        ]
+        limit = cls.MAX_PROGRESS_ITEMS
+        return {
+            "confirmed": confirmed[:limit],
+            "rejected": rejected,
+            "gaps": gaps[:limit],
+            "hypotheses": hypotheses[:limit],
+            "metrics": metrics[:limit],
+        }
+
     def _step_inputs(
         self,
         state: SessionState,
@@ -827,12 +998,27 @@ class Workflow:
 
         if phase is Phase.PLANNING:
             frame = state.results.get(Phase.INTAKE.value, {})
-            return "planner", {"task": frame}, ""
+            payload: dict[str, Any] = {
+                "task": frame,
+                "progress": self._progress_brief(state),
+            }
+            previous = state.results.get(Phase.PLANNING.value, {})
+            if previous:
+                payload["previous_plan"] = previous
+            return "planner", payload, ""
 
         if phase is Phase.ROUTING:
             frame = state.results.get(Phase.INTAKE.value, {})
             plan = state.results.get(Phase.PLANNING.value, {})
-            return "router", {"task": frame, "plan": plan}, ""
+            return (
+                "router",
+                {
+                    "task": frame,
+                    "plan": plan,
+                    "progress": self._progress_brief(state),
+                },
+                "",
+            )
 
         if phase is Phase.COLLECTING:
             plan = state.results.get(Phase.PLANNING.value, {})
@@ -929,19 +1115,16 @@ class Workflow:
         return context if isinstance(context, str) else ""
 
     @staticmethod
-    def _computed_metrics(state: SessionState) -> str:
-        """Готовые расчёты по материалам проекта.
+    def _computed_metric_records() -> list[Metric]:
+        """Готовые расчёты по материалам проекта — как данные.
 
         Считать должен код, а не модель: числа из таблиц — это то, что
-        можно пересчитать и проверить. Агенту отдаются уже посчитанные
-        значения с указанием строки и формулы, чтобы он опирался на них
-        при построении плана проверки.
-
-        Args:
-            state: Состояние сессии.
+        можно пересчитать и проверить. Записи нужны и блоку РАСЧЁТЫ для
+        контекста, и плану: планировщик получает числа, чтобы не
+        спрашивать заново о том, что уже измерено.
 
         Returns:
-            Текст блока с расчётами либо пустая строка.
+            Список метрик с provenance либо пустой список.
         """
         from pf.analysis import (
             PERIOD_COLUMNS,
@@ -952,9 +1135,8 @@ class Workflow:
         )
         from pf.materials import load_materials
 
-        materials = load_materials()
-        blocks: list[str] = []
-        for material in materials:
+        records: list[Metric] = []
+        for material in load_materials():
             if not material.rows:
                 continue
             columns = list(material.rows[0].keys())
@@ -978,7 +1160,7 @@ class Workflow:
             )
             if not metrics:
                 continue
-            lines = [_metric_line(metric) for metric in metrics[:MAX_METRICS_IN_CONTEXT]]
+            records.extend(metrics[:MAX_METRICS_IN_CONTEXT])
             # Изменение считается по рядам: разные операторы и разные
             # годы нельзя складывать в один ряд, иначе получится
             # бессмысленная величина.
@@ -1006,13 +1188,32 @@ class Workflow:
                 name=material.title,
                 unit=metrics[0].unit,
             )
-            lines.extend(_metric_line(metric) for metric in summary[:MAX_METRICS_IN_CONTEXT])
-            blocks.append(
-                f"РАСЧЁТЫ по {material.source_id} "
-                "(числа посчитаны кодом, source_id копируется отсюда):\n" + "\n".join(lines)
-            )
-        if not blocks:
-            return ""
+            records.extend(summary[:MAX_METRICS_IN_CONTEXT])
+        return records
+
+    @classmethod
+    def _computed_metrics(cls, state: SessionState) -> str:
+        """Блок РАСЧЁТЫ для контекста модели.
+
+        Args:
+            state: Состояние сессии. Расчёты берутся из материалов, но
+                подпись единая для всех фаз — поэтому параметр сохранён.
+
+        Returns:
+            Текст блока с расчётами либо пустая строка.
+        """
+        blocks: list[str] = []
+        source_id = ""
+        lines: list[str] = []
+        for metric in cls._computed_metric_records():
+            if metric.source_id != source_id:
+                if source_id:
+                    blocks.append(_calculations_block(source_id, lines))
+                source_id = metric.source_id
+                lines = []
+            lines.append(_metric_line(metric))
+        if source_id:
+            blocks.append(_calculations_block(source_id, lines))
         return "\n\n".join(blocks)
 
     @classmethod
@@ -1077,13 +1278,21 @@ class Workflow:
 
     def _record(self, state: SessionState, result: StepResult) -> None:
         """Записать шаг в журнал и сохранить состояние."""
+        detail = self._serialize(result.data)
+        decision = state.results.pop("routing_decision", None)
+        if isinstance(decision, dict):
+            detail["routing"] = decision
+        if result.phase is Phase.ANALYZING:
+            fact_check = state.results.get("fact_check")
+            if isinstance(fact_check, dict):
+                detail["fact_check"] = fact_check
         journal = Journal(journal_path(state.session_id))
         record = StepRecord(
             ordinal=state.steps_done,
             role=result.role,
             phase=result.phase.value,
             summary=self._summarize(result),
-            detail=self._serialize(result.data),
+            detail=detail,
             citations=result.citations,
             rejected_details=result.rejected_details,
             prompt_tokens=result.prompt_tokens,
