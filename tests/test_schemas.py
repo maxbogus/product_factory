@@ -14,6 +14,7 @@ from pf.schemas import (
     Claim,
     CommunicationStrategy,
     DecisionRecord,
+    MetricRef,
     NextStep,
     ProductStrategy,
     ResearchPlan,
@@ -23,6 +24,38 @@ from pf.schemas import (
     Variants,
     VerificationPlan,
 )
+
+
+def test_metric_without_formula_is_rejected() -> None:
+    """Метрика без формулы — не расчёт: пересчитать её нечем.
+
+    Докстринг схемы обещает «обязательно формулу», а поле принимало
+    пустую строку. Модель этим пользовалась: присылала значение и
+    строку, а формулу опускала — и число попадало в отчёт как
+    подтверждённое, хотя проверить его пересчётом было нельзя.
+    """
+    with pytest.raises(ValidationError):
+        MetricRef(
+            name="Абонентская база МТС",
+            value=82.0,
+            unit="млн",
+            source_id="project/data/numbers.csv",
+            row=0,
+        )
+
+
+def test_metric_with_formula_is_accepted() -> None:
+    """С формулой метрика принимается: её можно пересчитать."""
+    metric = MetricRef(
+        name="Абонентская база МТС",
+        value=82.0,
+        unit="млн",
+        source_id="project/data/numbers.csv",
+        row=0,
+        formula="значение из колонки «значение», строка 1",
+        inputs={"значение": "82"},
+    )
+    assert metric.formula
 
 
 def _variant(title: str, **kwargs: object) -> Variant:
@@ -286,11 +319,23 @@ def test_analysis_accepts_metrics_with_provenance() -> None:
 
 
 def test_analysis_metric_without_source_is_marked_not_reproducible() -> None:
-    """Метрика без источника принимается, но помечается как непроверяемая."""
+    """Метрика без источника принимается, но помечается как непроверяемая.
+
+    Формула при этом обязательна: без неё метрика не проходит схему
+    вообще. Здесь проверяется другое — отсутствие источника делает
+    расчёт непроверяемым, хотя формально он валиден.
+    """
     from pf.schemas import Analysis
 
     analysis = Analysis(
-        metrics=[{"name": "Что-то", "value": 1.0, "unit": "шт"}],
+        metrics=[
+            {
+                "name": "Что-то",
+                "value": 1.0,
+                "unit": "шт",
+                "formula": "значение из строки 1",
+            }
+        ],
     )
     assert analysis.metrics[0].is_reproducible is False
 

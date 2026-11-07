@@ -194,7 +194,10 @@ class MetricRef(BaseModel):
     unit: str = Field(default="")
     source_id: str = Field(default="")
     row: int | None = Field(default=None)
-    formula: str = Field(default="")
+    # Формула обязательна: без неё число нельзя пересчитать, а значит —
+    # нельзя подтвердить. Докстринг обещал это с самого начала, но поле
+    # принимало пустую строку, и модель присылала значение без формулы.
+    formula: str = Field(min_length=1)
     inputs: dict[str, Any] = Field(default_factory=dict)
     note: str = Field(default="")
 
