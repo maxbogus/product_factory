@@ -79,8 +79,15 @@ class Support:
 
     @property
     def citation(self) -> str:
-        """Человекочитаемая ссылка на источник."""
+        """Человекочитаемая ссылка на источник.
+
+        Якорь один: если в идентификаторе уже есть ``#rowN`` или
+        ``#pN``, второй не добавляется. Иначе ссылка выходила бы
+        «project/файл.csv#row3#p3» — такой якорь не открывается.
+        """
         if self.paragraph_index is None:
+            return self.source_id
+        if "#" in self.source_id:
             return self.source_id
         return f"{self.source_id}#p{self.paragraph_index}"
 
