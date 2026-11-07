@@ -23,10 +23,20 @@ from pf.corpus import (
     STRONG_DOMAIN_TERMS,
     Article,
     Corpus,
+    domain_lemmas,
     get_corpus,
+    lemmatize,
+    strong_domain_lemmas,
     tokenize,
 )
-from pf.ground import Support, SupportStatus, split_source_id, verify_claim, verify_quote
+from pf.ground import (
+    Support,
+    SupportStatus,
+    find_quote,
+    split_source_id,
+    verify_claim,
+    verify_quote,
+)
 from pf.materials import Material
 
 #: Минимальная длина абзаца, пригодного для цитирования.
@@ -247,6 +257,41 @@ class SourceBundle:
             if paragraph is None:
                 paragraph = parsed_paragraph
             candidates = self._resolve(clean_id)
+            # Ссылка на строку таблицы (#rowN) — это не абзац, а строка.
+            # Цитата из неё ищется в самой строке, а не в склеенном тексте
+            # материала: иначе цитата вида «...: среднее: 82» (это
+            # посчитанная величина) никогда не нашлась бы.
+            if "#row" in source_id and candidates:
+                row = parsed_paragraph
+                article = candidates[0]
+                rows = _article_rows(article)
+                if row is not None and 0 <= row < len(rows):
+                    row_text = rows[row]
+                    found, _ = find_quote(row_text, quote) if quote else (False, None)
+                    if found:
+                        return Support(
+                            quote=quote,
+                            source_id=source_id,
+                            status=SupportStatus.CONFIRMED,
+                            paragraph_index=row,
+                            detail="цитата найдена в строке таблицы",
+                        )
+                    # Число из расчёта: проверяем, что оно есть в строке.
+                    number = _first_number(quote)
+                    if number is not None and _row_has_number(row_text, number):
+                        return Support(
+                            quote=quote,
+                            source_id=source_id,
+                            status=SupportStatus.CONFIRMED,
+                            paragraph_index=row,
+                            detail="значение из расчёта найдено в строке таблицы",
+                        )
+                    return Support(
+                        quote=quote,
+                        source_id=source_id,
+                        status=SupportStatus.NO_DATA,
+                        detail="цитата не найдена в строке таблицы",
+                    )
         else:
             candidates = list(self.articles)
 
@@ -390,6 +435,67 @@ def verify_metric(
             else "метрика подтверждена по материалу"
         ),
     )
+
+
+def _article_rows(article: Article) -> list[str]:
+    """Строки таблицы, если материал — таблица.
+
+    Материал проекта хранит исходные строки таблицы; у статьи корпуса
+    таких строк нет, и тогда проверка идёт обычным путём.
+
+    Args:
+        article: Статья или материал.
+
+    Returns:
+        Список строк таблицы (пустой, если это не таблица).
+    """
+    if article.section != "project":
+        return []
+    from pf.materials import load_materials
+
+    for material in load_materials():
+        if material.source_id == article.source_id:
+            return [
+                " ".join(f"{key}: {value}" for key, value in row.items()) for row in material.rows
+            ]
+    return []
+
+
+def _first_number(text: str) -> float | None:
+    """Первое число в тексте.
+
+    Args:
+        text: Текст.
+
+    Returns:
+        Число либо ``None``.
+    """
+    from pf.analysis import parse_number
+
+    for token in re.findall(r"-?\d+(?:[.,]\d+)?", text):
+        value = parse_number(token)
+        if value is not None:
+            return value
+    return None
+
+
+def _row_has_number(row_text: str, number: float) -> bool:
+    """Есть ли число в строке таблицы.
+
+    Args:
+        row_text: Текст строки.
+        number: Искомое число.
+
+    Returns:
+        Есть ли число.
+    """
+    from pf.analysis import parse_number
+
+    for token in re.findall(r"-?\d+(?:[.,]\d+)?", row_text):
+        value = parse_number(token)
+        if value is not None and abs(value - number) < 1e-9:
+            return True
+    return False
 
 
 def _matches_any(value: float, candidates: list[float], tolerance: float) -> bool:
@@ -591,15 +697,24 @@ def _score_material(
     """
     material_words: set[str] = set()
     for record in material.rows:
+        # Заголовки колонок — тоже часть материала: в них часто
+        # написано, что именно измеряется («абонентская база»).
+        for key in record:
+            material_words.update(tokenize(str(key)))
         for value in record.values():
             material_words.update(tokenize(str(value)))
     for passage in material.passages:
         material_words.update(tokenize(passage.text))
 
+    material_lemmas = {lemmatize(word) for word in material_words}
+    query_lemmas = {lemmatize(word) for word in query_terms}
+
     # Материал по предметной области: в нём есть сильный доменный
-    # признак, а запрос — тоже про предметную область.
-    strong_in_material = material_words & set(STRONG_DOMAIN_TERMS)
-    domain_in_query = query_terms & set(DOMAIN_TERMS)
+    # признак, а запрос — тоже про предметную область. Сравнение идёт
+    # по леммам: словоформы («абонентская», «абонентов») у разных
+    # слов разные, а лемма одна.
+    strong_in_material = material_lemmas & strong_domain_lemmas()
+    domain_in_query = query_lemmas & domain_lemmas()
     same_domain = bool(strong_in_material) and bool(domain_in_query)
 
     scored: list[tuple[float, int, str]] = []

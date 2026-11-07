@@ -139,3 +139,44 @@ def test_short_source_name_resolves_article() -> None:
         quote=text[:60],
     )
     assert support.is_usable, f"цитата должна подтверждаться: {support.detail}"
+
+
+def test_quote_from_table_row_is_confirmed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Цитата из расчёта подтверждается по строке таблицы.
+
+    Модель цитирует посчитанную величину («...: среднее: 82»), а в
+    строке таблицы лежит исходное число. Искать цитату надо в строке,
+    а не в склеенном тексте материала: иначе подтверждения не будет
+    никогда, и все ссылки на расчёты отклоняются.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text(
+        "оператор,абонентская база\nМТС,87\nTele2,38.9\n", encoding="utf-8"
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+    project = [a for a in bundle.articles if a.source_id.startswith("project/")]
+    assert project, "материал должен быть в срезе"
+
+    support = bundle.verify_claim(
+        "Абонентская база МТС",
+        source_id="project/numbers.csv#row0",
+        paragraph=None,
+        quote="МТС, абонентская база: 87",
+    )
+    assert support.is_usable, f"цитата из строки должна подтверждаться: {support.detail}"
+
+
+def test_wrong_number_in_table_row_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Число, которого нет в строке, не подтверждается."""
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text("оператор,значение\nМТС,87\n", encoding="utf-8")
+    bundle = collect("абоненты оператора связи тарифы удержание")
+    support = bundle.verify_claim(
+        "Абонентская база МТС",
+        source_id="project/numbers.csv#row0",
+        paragraph=None,
+        quote="МТС, абонентская база: 99",
+    )
+    assert not support.is_usable
