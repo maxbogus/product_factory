@@ -90,19 +90,29 @@ def _document_citations(text: str) -> list[str]:
 
 
 def test_demo_document_lists_only_confirmed_grounds() -> None:
-    """В документе нет основания, которое проверка отвергла.
+    """В документе нет источника, который проверка отвергла по существу.
 
     Это главный смысл документа: он показывает, что именно удалось
-    подтвердить. Ссылка на строку, которую проверка не нашла, в таблице
-    подтверждённых оснований — ложь, даже если само утверждение верно.
+    подтвердить. Ссылка на источник, который не относится к задаче или
+    которого нет в материалах, в таблице подтверждённых оснований —
+    ложь.
+
+    Отказ по форме цитаты («значение посчитано, а не процитировано»)
+    источник не дискредитирует: в прогоне `demo-v9` одна и та же строка
+    подтверждала вывод и отклонялась в факте, и вычёркивать её из
+    подтверждённых значило бы спорить с разделом «Вывод» того же
+    документа.
     """
     text = DEMO_DOC.read_text(encoding="utf-8")
     records = _journal_records(_session_id(text))
     assert records, "журнал демо-прогона не найден"
 
+    source_rejections = ("не относится к задаче", "не найден среди материалов")
     rejected: set[str] = set()
     for record in records:
         for line in record.get("rejected_details", []):
+            if not any(marker in str(line) for marker in source_rejections):
+                continue
             match = re.match(r"([^:]+):", str(line))
             if match:
                 rejected.add(match.group(1).strip())

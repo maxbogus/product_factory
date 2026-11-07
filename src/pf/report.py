@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from pf.journal import Journal, journal_path
@@ -74,6 +74,50 @@ class MetricRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ConclusionRecord:
+    """Вывод прогона: что решили и на чём это держится.
+
+    Отчёт о замере отвечает на вопрос «сколько оснований подтверждено», а
+    руководителю нужен ответ на заданный вопрос. Поэтому вывод собирается
+    из журнала так же, как расчёты: направление и обязательства — из шагов
+    стратегии и решения, статус — из проверки их оснований.
+
+    Attributes:
+        direction: Выбранное направление — что делать.
+        value_to_cost: Почему это выгоднее альтернатив.
+        deliberate_omissions: Что сознательно не учтено.
+        decision: Зафиксированное решение.
+        commitments: Принятые обязательства.
+        expected_change: Ожидаемое изменение.
+        compare_against: С чем сравниваем.
+        observation_period: Срок наблюдения.
+        adverse_effects: Нежелательные последствия.
+        status: Статус оснований вывода.
+        checked: Сколько оснований вывода проверено.
+        confirmed: Сколько подтверждено.
+        rejected: Сколько отклонено.
+        grounds: Подтверждённые ссылки вывода.
+        rejected_grounds: Отклонённые ссылки вывода.
+    """
+
+    direction: str = ""
+    value_to_cost: str = ""
+    deliberate_omissions: list[str] = field(default_factory=list)
+    decision: str = ""
+    commitments: list[dict[str, Any]] = field(default_factory=list)
+    expected_change: str = ""
+    compare_against: str = ""
+    observation_period: str = ""
+    adverse_effects: list[str] = field(default_factory=list)
+    status: str = ""
+    checked: int = 0
+    confirmed: int = 0
+    rejected: int = 0
+    grounds: list[str] = field(default_factory=list)
+    rejected_grounds: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
 class SessionReport:
     """Отчёт по одной сессии.
 
@@ -88,6 +132,7 @@ class SessionReport:
         rejected_details: Что и почему отклонено.
         question: Исходный вопрос.
         phase: Фаза, на которой остановилась сессии.
+        conclusion: Вывод прогона и статус его оснований.
     """
 
     session_id: str
@@ -107,6 +152,8 @@ class SessionReport:
     fact_check: dict[str, Any] | None = None
     rejection_kinds: dict[str, int] = field(default_factory=dict)
     metrics_with_formula: int = 0
+    conclusion: ConclusionRecord | None = None
+    contradictions: list[str] = field(default_factory=list)
 
     @property
     def total_citations(self) -> int:
@@ -205,6 +252,15 @@ class SessionReport:
                 lines.append(f"- {note}")
             lines.append("")
 
+        if self.contradictions:
+            lines.append("**Противоречия в фактах.**")
+            lines.append("")
+            for item in self.contradictions:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        lines.extend(conclusion_markdown(self.conclusion))
+
         lines.append("## Расход")
         lines.append("")
         lines.append("| Роль | Расход, усл. ед. | Токенов |")
@@ -227,6 +283,118 @@ class SessionReport:
             lines.append(f"1. {item}")
         lines.append("")
         return "\n".join(lines)
+
+
+def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
+    """Строки раздела «Вывод» — один текст для отчёта и документа демонстрации.
+
+    Два разных рендера разошлись бы в том, что именно решили: отчёт и
+    поставляемый документ обязаны говорить одно и то же.
+
+    Args:
+        conclusion: Вывод прогона либо ``None``, если работа не дошла до
+            стратегии.
+
+    Returns:
+        Строки раздела в markdown.
+    """
+    lines: list[str] = ["## Вывод", ""]
+    if conclusion is None:
+        lines.append("Вывод не получен: работа не дошла до фазы стратегии.")
+        lines.append(
+            "Ниже — то, что успели проверить; ответа на заданный вопрос в этом прогоне нет."
+        )
+        lines.append("")
+        return lines
+
+    if conclusion.direction:
+        lines.append(f"**Что делать:** {conclusion.direction}")
+        lines.append("")
+    if conclusion.value_to_cost:
+        lines.append(f"**Почему:** {conclusion.value_to_cost}")
+        lines.append("")
+    if conclusion.decision:
+        lines.append(f"**Решение:** {conclusion.decision}")
+        lines.append("")
+    if lines[-1] != "":
+        lines.append("")
+
+    if conclusion.deliberate_omissions:
+        lines.append("Осознанные отказы:")
+        lines.append("")
+        for item in conclusion.deliberate_omissions:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    if conclusion.commitments:
+        lines.append("| Обязательство | Владелец | Показатель | Условие пересмотра |")
+        lines.append("|---|---|---|---|")
+        for commitment in conclusion.commitments:
+            lines.append(
+                f"| {commitment.get('statement', '—')} | {commitment.get('owner', '—')} | "
+                f"{commitment.get('metric', '—')} | "
+                f"{commitment.get('review_condition', '—')} |"
+            )
+        lines.append("")
+
+    if conclusion.expected_change or conclusion.adverse_effects:
+        adverse = "; ".join(conclusion.adverse_effects) or "не указаны"
+        lines.append("| Что ожидаем | С чем сравниваем | Срок | Нежелательные последствия |")
+        lines.append("|---|---|---|---|")
+        lines.append(
+            f"| {conclusion.expected_change or '—'} | {conclusion.compare_against or '—'} | "
+            f"{conclusion.observation_period or '—'} | {adverse} |"
+        )
+        lines.append("")
+
+    lines.extend(_grounds_markdown(conclusion))
+    return lines
+
+
+def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
+    """Строки о том, на чём держится вывод.
+
+    Args:
+        conclusion: Вывод прогона.
+
+    Returns:
+        Строки раздела про основания вывода.
+    """
+    lines: list[str] = []
+    numbers = (
+        f"проверено {conclusion.checked}, подтверждено {conclusion.confirmed}, "
+        f"отклонено {conclusion.rejected}"
+    )
+    if conclusion.status == "неподкреплено":
+        lines.append(
+            f"**Основания вывода: вывод не подкреплён** — ни одно основание не "
+            f"подтверждено ({numbers})."
+        )
+    elif conclusion.status == "подкреплено частично":
+        lines.append(f"**Основания вывода: подкреплено частично** ({numbers}).")
+    elif conclusion.status == "подкреплено":
+        lines.append(f"**Основания вывода: подкреплено** ({numbers}).")
+    else:
+        lines.append(
+            "**Основания вывода не проверялись:** журнал этого прогона старше "
+            "правила проверки оснований вывода. Пересоберите документ после "
+            "нового прогона — иначе статус вывода неизвестен."
+        )
+    lines.append("")
+
+    if conclusion.grounds:
+        lines.append("На чём держится:")
+        lines.append("")
+        for citation in conclusion.grounds:
+            lines.append(f"- `{citation}`")
+        lines.append("")
+    if conclusion.rejected_grounds:
+        lines.append("Что отклонено:")
+        lines.append("")
+        for detail in conclusion.rejected_grounds:
+            lines.append(f"- {detail}")
+        lines.append("")
+    return lines
 
 
 def _citation_key(citation: str) -> str:
@@ -268,6 +436,16 @@ def rejection_kind(detail: str) -> str:
         return "значение посчитано как цитата"
     if "не относится к задаче" in text:
         return "источник нерелевантен"
+    if "не найден среди материалов" in text:
+        return "фантомный источник"
+    if "не совпало с колонкой" in text:
+        return "имя метрики не совпало с колонкой"
+    if "формула — тождество" in text:
+        return "формула-тождество"
+    if "критерий не относится к показателю" in text:
+        return "критерий не про показатель"
+    if "источники не собраны" in text:
+        return "источники не собраны"
     if "не имеет структуры" in text:
         return "у расчёта нет provenance"
     if "не совпадает со строкой" in text or "пересчёт по входам даёт" in text:
@@ -345,6 +523,118 @@ def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
     return list(merged.values())
 
 
+def _mapping(value: Any) -> dict[str, Any]:
+    """Значение как словарь — либо пустой словарь.
+
+    Args:
+        value: Значение из журнала.
+
+    Returns:
+        Словарь.
+    """
+    return value if isinstance(value, dict) else {}
+
+
+def _text_list(value: Any) -> list[str]:
+    """Значение как список строк.
+
+    Args:
+        value: Значение из журнала.
+
+    Returns:
+        Список непустых строк.
+    """
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _conclusion_status(checked: int, confirmed: int, rejected: int) -> str:
+    """Статус оснований вывода — то же правило, что в рабочем процессе.
+
+    Args:
+        checked: Сколько оснований вывода проверено.
+        confirmed: Сколько подтверждено.
+        rejected: Сколько отклонено.
+
+    Returns:
+        «подкреплено», «подкреплено частично», «неподкреплено» либо
+        «не проверялось», если проверки в журнале нет.
+    """
+    if checked <= 0:
+        return "не проверялось"
+    if confirmed <= 0:
+        return "неподкреплено"
+    if rejected > 0:
+        return "подкреплено частично"
+    return "подкреплено"
+
+
+def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
+    """Собрать вывод прогона из журнала.
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Вывод либо ``None``, если работа не дошла до стратегии.
+    """
+    strategy = next((r for r in records if str(getattr(r, "phase", "")) == "strategy"), None)
+    keeper = next((r for r in records if str(getattr(r, "phase", "")) == "keeper"), None)
+    if strategy is None and keeper is None:
+        return None
+
+    strategy_detail = _mapping(getattr(strategy, "detail", None))
+    keeper_detail = _mapping(getattr(keeper, "detail", None))
+    product = _mapping(strategy_detail.get("product"))
+    verification = _mapping(strategy_detail.get("verification"))
+
+    checks = [
+        check
+        for check in (
+            strategy_detail.get("conclusion_check"),
+            keeper_detail.get("conclusion_check"),
+        )
+        if isinstance(check, dict)
+    ]
+    checked = sum(int(check.get("checked") or 0) for check in checks)
+    confirmed = sum(int(check.get("confirmed") or 0) for check in checks)
+    rejected = sum(int(check.get("rejected") or 0) for check in checks)
+
+    grounds: list[str] = []
+    rejected_grounds: list[str] = []
+    for record in (strategy, keeper):
+        if record is None:
+            continue
+        for citation in getattr(record, "citations", []) or []:
+            if citation not in grounds:
+                grounds.append(citation)
+        for detail in getattr(record, "rejected_details", []) or []:
+            if detail not in rejected_grounds:
+                rejected_grounds.append(detail)
+
+    commitments = [
+        item for item in (keeper_detail.get("commitments") or []) if isinstance(item, dict)
+    ]
+    return ConclusionRecord(
+        direction=str(product.get("chosen_direction") or ""),
+        value_to_cost=str(product.get("value_to_cost") or ""),
+        deliberate_omissions=_text_list(product.get("deliberate_omissions")),
+        decision=str(keeper_detail.get("decision") or ""),
+        commitments=commitments,
+        expected_change=str(verification.get("expected_change") or ""),
+        compare_against=str(verification.get("compare_against") or ""),
+        observation_period=str(verification.get("observation_period") or ""),
+        adverse_effects=_text_list(verification.get("adverse_effects")),
+        status=_conclusion_status(checked, confirmed, rejected),
+        checked=checked,
+        confirmed=confirmed,
+        rejected=rejected,
+        grounds=grounds,
+        rejected_grounds=rejected_grounds,
+    )
+
+
 def build_session_report(session_id: str) -> SessionReport:
     """Собрать отчёт по сессии из журнала шагов.
 
@@ -362,6 +652,7 @@ def build_session_report(session_id: str) -> SessionReport:
     rejected_details: list[str] = []
     rejection_kinds: dict[str, int] = {}
     routing_notes: list[str] = []
+    contradictions: list[str] = []
     fact_check: dict[str, Any] | None = None
     total_cost = 0.0
     metrics = _collect_metrics(records)
@@ -381,6 +672,9 @@ def build_session_report(session_id: str) -> SessionReport:
         found = detail.get("fact_check")
         if isinstance(found, dict):
             fact_check = found
+        gaps = detail.get("gaps")
+        if isinstance(gaps, list):
+            contradictions.extend(str(gap) for gap in gaps if "противоречие" in str(gap).lower())
         all_citations.extend(record.citations)
         total_cost += record.cost_units
         cost_by_role[record.role] = cost_by_role.get(record.role, 0.0) + record.cost_units
@@ -413,6 +707,8 @@ def build_session_report(session_id: str) -> SessionReport:
         fact_check=fact_check,
         rejection_kinds=rejection_kinds,
         metrics_with_formula=sum(1 for metric in metrics if metric.formula.strip()),
+        conclusion=_collect_conclusion(records),
+        contradictions=contradictions,
     )
 
 
@@ -441,4 +737,5 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "rejection_kinds": report.rejection_kinds,
         "routing_notes": report.routing_notes,
         "fact_check": report.fact_check,
+        "conclusion": asdict(report.conclusion) if report.conclusion else None,
     }

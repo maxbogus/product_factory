@@ -24,7 +24,14 @@ from pathlib import Path
 
 from pf.config import settings
 from pf.journal import Journal, StepRecord, journal_path
-from pf.report import SessionReport, build_session_report
+from pf.report import SessionReport, build_session_report, conclusion_markdown
+
+#: Причины отказа, которые дискредитируют сам источник. Остальные отказы
+#: говорят о форме конкретной цитаты, а не о том, что источник чужой.
+SOURCE_REJECTIONS: tuple[str, ...] = (
+    "не относится к задаче",
+    "не найден среди материалов",
+)
 
 
 def _citation_key(citation: str) -> str:
@@ -45,17 +52,25 @@ def _citation_key(citation: str) -> str:
 
 
 def _rejected_keys(records: list[StepRecord]) -> set[str]:
-    """Ключи ссылок, которые проверка отвергла.
+    """Ключи ссылок, которые проверка отвергла **как источник**.
+
+    Отказ по форме цитаты («значение посчитано, а не процитировано»,
+    «цитата не найдена в строке») говорит о том, как оформлено одно
+    утверждение, а не о том, что источник чужой: та же строка таблицы
+    может подтверждать другой вывод. Дискредитирует источник только
+    отказ по существу — он не относится к задаче, или такого файла нет.
 
     Args:
         records: Записи журнала.
 
     Returns:
-        Множество ключей отклонённых ссылок.
+        Множество ключей дискредитированных источников.
     """
     rejected: set[str] = set()
     for record in records:
         for line in record.rejected_details:
+            if not any(marker in line for marker in SOURCE_REJECTIONS):
+                continue
             rejected.add(_citation_key(line.split(":", 1)[0].strip()))
     return rejected
 
@@ -136,7 +151,10 @@ def _render(report: SessionReport, records: list[StepRecord]) -> str:
     lines.append("## 2. Подтверждённые основания")
     lines.append("")
     lines.append("Основание подтверждает код: цитата должна найтись в источнике.")
-    lines.append("Ссылка, которую проверка хотя бы однажды отвергла, сюда не попадает.")
+    lines.append("Ссылка, которую проверка отвергла как источник — не по теме или")
+    lines.append("такого файла нет, — сюда не попадает. Отказ по форме цитаты")
+    lines.append("(«значение посчитано, а не процитировано») источник не дискредитирует:")
+    lines.append("та же строка может подтверждать другой вывод.")
     lines.append("")
     grounds = _confirmed_grounds(records)
     if grounds:
@@ -183,7 +201,9 @@ def _render(report: SessionReport, records: list[StepRecord]) -> str:
     for kind, count in sorted(report.rejection_kinds.items(), key=lambda item: (-item[1], item[0])):
         lines.append(f"| Отклонено: {kind} | {count} |")
     if report.fact_check:
-        lines.append(f"| Повторная проверка (fact-check) | {report.fact_check.get('summary', '—')} |")
+        lines.append(
+            f"| Повторная проверка (fact-check) | {report.fact_check.get('summary', '—')} |"
+        )
     lines.append("")
     if report.routing_notes:
         lines.append("**Решения роутера.**")
@@ -206,12 +226,33 @@ def _render(report: SessionReport, records: list[StepRecord]) -> str:
         lines.append("---")
         lines.append("")
 
-    lines.append("## 6. Чего этот замер не показывает")
+    lines.extend(_conclusion_section(report))
+    lines.append("---")
+    lines.append("")
+
+    lines.append("## 7. Чего этот замер не показывает")
     lines.append("")
     for item in report.limitations:
         lines.append(f"1. {item}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _conclusion_section(report: SessionReport) -> list[str]:
+    """Раздел «Вывод» для документа демонстрации.
+
+    Текст берётся из того же рендера, что и отчёт: документ и отчёт
+    обязаны одинаково говорить, что решили и на чём это держится.
+
+    Args:
+        report: Отчёт по сессии.
+
+    Returns:
+        Строки раздела в markdown.
+    """
+    section = conclusion_markdown(report.conclusion)
+    section[0] = "## 6. Вывод"
+    return section
 
 
 def build_document(session_id: str) -> str:

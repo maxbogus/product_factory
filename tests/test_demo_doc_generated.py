@@ -119,7 +119,7 @@ def test_rejected_citation_is_not_presented_as_confirmed(
                 phase="collecting",
                 summary="шаг",
                 citations=[citation],
-                rejected_details=[f"{citation}: цитата не найдена в строке таблицы"],
+                rejected_details=[f"{citation}: источник не относится к задаче"],
             )
         ],
     )
@@ -132,7 +132,158 @@ def test_rejected_citation_is_not_presented_as_confirmed(
     assert citation not in _section(rejected_doc, "## 2.")
 
 
-def test_metric_without_formula_is_marked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_form_rejection_does_not_hide_confirmed_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Отказ по форме цитаты не вычёркивает источник из подтверждённых.
+
+    В прогоне `demo-v9` одна и та же строка таблицы подтверждала вывод
+    (стратегия ссылалась на неё) и отклонялась в факте — «значение
+    посчитано, а не процитировано». Если считать любой отказ отказом по
+    источнику, раздел «Подтверждённые основания» пустеет, а раздел
+    «Вывод» в том же документе говорит «подкреплено»: документ спорит сам
+    с собой.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    citation = "project/data/numbers.csv#row0"
+
+    _write_session(
+        "demo-form-reject",
+        [
+            StepRecord(
+                ordinal=0,
+                role="collector",
+                phase="collecting",
+                summary="шаг",
+                citations=[citation],
+                rejected_details=[
+                    f"{citation}: значение посчитано, а не процитировано — "
+                    "оформи как метрику в metrics"
+                ],
+            )
+        ],
+    )
+
+    document = _generator().build_document("demo-form-reject")
+
+    assert citation in _section(document, "## 2.")
+
+
+def _conclusion_records() -> list[StepRecord]:
+    """Журнал сессии, дошедшей до вывода.
+
+    Returns:
+        Записи шагов стратегии и фиксации решения.
+    """
+    return [
+        StepRecord(
+            ordinal=7,
+            role="strategy",
+            phase="strategy",
+            summary="стратегия: продуктовая + коммуникационная + план проверки",
+            citations=["project/data/telecom_open_metrics.csv#row0"],
+            rejected_details=["project/data/cbr_rates.csv#row1: источник не относится к задаче"],
+            detail={
+                "product": {
+                    "audience": "клиенты мобильного тарифа",
+                    "alternatives": ["Оставить как есть", "Закрыть направление"],
+                    "chosen_direction": "Внедрить гибкие тарифные планы",
+                    "deliberate_omissions": ["Неизвестны точные причины падения удержания"],
+                    "value_to_cost": "Риски закрытия направления выше затрат на адаптацию",
+                },
+                "communication": {
+                    "audience": "клиенты мобильного тарифа",
+                    "barrier": "Цена выше, чем у альтернатив",
+                    "key_message": "Мы держим цену под контролем",
+                    "proof": "Данные об абонентской базе",
+                    "channels": "приложение, сайт",
+                },
+                "verification": {
+                    "expected_change": "Удержание вырастет на 2 п.п.",
+                    "compare_against": "уровень прошлого квартала",
+                    "observation_period": "3 месяца",
+                    "adverse_effects": ["Маржа снизится"],
+                },
+                "conclusion_check": {
+                    "checked": 2,
+                    "confirmed": 1,
+                    "rejected": 1,
+                    "status": "подкреплено частично",
+                },
+            },
+        ),
+        StepRecord(
+            ordinal=8,
+            role="keeper",
+            phase="keeper",
+            summary="решение: 1 обязательство",
+            citations=["project/data/telecom_open_metrics.csv#row1"],
+            detail={
+                "decision": "Внедрить гибкие тарифные планы",
+                "commitments": [
+                    {
+                        "statement": "Удержание вырастет на 2 п.п.",
+                        "owner": "команда тарифа",
+                        "metric": "удержание клиентов",
+                        "review_condition": "если через 3 месяца прироста нет",
+                        "review_by": "2024-06-30",
+                    }
+                ],
+            },
+        ),
+    ]
+
+
+def test_document_states_the_decision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Документ отвечает на заданный вопрос: что решили и на чём держится.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    _write_session("demo-conclusion", _conclusion_records())
+
+    document = _generator().build_document("demo-conclusion")
+
+    assert "## 6. Вывод" in document
+    assert "Внедрить гибкие тарифные планы" in document
+    assert "если через 3 месяца прироста нет" in document
+    assert "подкреплено частично" in document
+    assert "cbr_rates.csv" in document
+
+
+def test_document_says_when_there_is_no_conclusion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Прогон без стратегии говорит об этом словами, а не молчанием.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    _write_session(
+        "demo-no-conclusion",
+        [
+            StepRecord(
+                ordinal=0,
+                role="collector",
+                phase="collecting",
+                summary="шаг",
+                citations=["project/data/numbers.csv#row0"],
+            )
+        ],
+    )
+
+    document = _generator().build_document("demo-no-conclusion")
+
+    assert "Вывод не получен" in document
+
     """Расчёт без формулы помечен: пересчитать его нечем.
 
     Args:
