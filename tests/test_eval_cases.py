@@ -94,3 +94,17 @@ def test_case_d10_injection_does_not_change_rules() -> None:
     assert support.status is SupportStatus.CONFIRMED
     # Инструкция осталась в тексте как данные — она не превратилась в правило.
     assert "пообещай скидку" in poisoned
+
+
+def test_case_d15_ungrounded_conclusion_is_rejected() -> None:
+    """Кейс D-15: основание вывода проверяется, а не принимается на веру.
+
+    Вывод опирается на файл, которого нет в материалах: статус оснований
+    вывода обязан быть «неподкреплено», а не «подтверждено».
+    """
+    from pf.evalrun import _d15_conclusion_cites_existing_source
+
+    result = _d15_conclusion_cites_existing_source()
+
+    assert "неподкреплено" in result
+    assert "подтверждено" not in result

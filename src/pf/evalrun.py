@@ -327,11 +327,27 @@ def _d10_injection_ignored() -> str:
 
 
 def _d11_resume_keeps_phase() -> str:
-    """Работа продолжается с сохранённой фазы."""
+    """Работа продолжается с сохранённой фазы.
+
+    Состояние пишется во временный каталог: проверка не должна оставлять
+    файл ``session-eval-resume`` в ``state/`` репозитория. Прогон проверок,
+    который оставляет следы в рабочем дереве, — это не «чисто».
+    """
+    import tempfile
+    from pathlib import Path
+
+    from pf.config import settings
+
     session_id = "eval-resume"
-    state = SessionState(session_id=session_id, phase=Phase.REDTEAM, steps_done=5)
-    save(state)
-    reloaded = load(session_id)
+    original = settings.state_dir
+    with tempfile.TemporaryDirectory() as directory:
+        settings.state_dir = Path(directory)
+        try:
+            state = SessionState(session_id=session_id, phase=Phase.REDTEAM, steps_done=5)
+            save(state)
+            reloaded = load(session_id)
+        finally:
+            settings.state_dir = original
     if reloaded is None:
         return "состояние не прочитано"
     return reloaded.phase.title_ru
@@ -365,6 +381,60 @@ def _variant(title: str, objections: list[str] | None = None) -> Any:
     )
 
 
+def _d15_conclusion_cites_existing_source() -> str:
+    """Основание вывода проверяется так же, как основание факта.
+
+    В демо-прогоне вывод опирался на `project/data/cbr_rates.csv#row1` —
+    файла с таким именем в материалах нет, — и это нигде не проявлялось:
+    у шага стратегии было ноль отклонённых оснований.
+    """
+    from pf.corpus import Article
+    from pf.schemas import (
+        CommunicationStrategy,
+        ProductStrategy,
+        SourceRef,
+        Strategy,
+        VerificationPlan,
+    )
+    from pf.sources import SourceBundle
+    from pf.workflow import Workflow
+
+    article = Article(
+        source_id="project/data/base.csv",
+        title="base.csv",
+        section="project",
+        content="оператор: МТС показатель: абонентская база значение: 87",
+    )
+    bundle = SourceBundle(passages=[], articles=[article], query="удержание абонентов")
+    strategy = Strategy(
+        product=ProductStrategy(
+            audience="клиенты мобильного тарифа",
+            chosen_direction="снизить цену",
+            evidence=[
+                SourceRef(
+                    source_id="project/data/cbr_rates.csv#row1",
+                    quote="Ключевая ставка, %: 8.0",
+                )
+            ],
+        ),
+        communication=CommunicationStrategy(
+            audience="клиенты мобильного тарифа",
+            barrier="цена выше альтернатив",
+            key_message="мы держим цену под контролем",
+        ),
+        verification=VerificationPlan(
+            expected_change="удержание вырастет на 2 п.п.",
+            compare_against="прошлый квартал",
+            observation_period="3 месяца",
+            adverse_effects=["маржа снизится"],
+        ),
+    )
+    grounding = Workflow._verify_claims(strategy, bundle)
+    if grounding.conclusion is None:
+        return "вывод не проверялся"
+    return f"основание вывода: {grounding.conclusion['status']}"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -380,6 +450,7 @@ _HANDLERS = {
     "D-12-cost-visible": _d12_cost_visible,
     "D-13-plan-has-adverse-effects": _d13_plan_has_adverse_effects,
     "D-14-message-cannot-name-competitor": _d14_message_cannot_name_competitor,
+    "D-15-conclusion-cites-existing-source": _d15_conclusion_cites_existing_source,
 }
 
 

@@ -40,7 +40,13 @@ MATERIALS_DIR: Path
 
 @pytest.fixture(autouse=True)
 def _materials_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Подменить каталог материалов на временный.
+    """Подменить каталог материалов и каталоги прогона на временные.
+
+    Состояние и журнал тоже подменяются: исполнение сценария зовёт
+    настоящие ``save()`` и ``Journal()``, и раньше после каждого
+    ``make test`` в ``state/`` и ``journal/`` появлялись файлы
+    ``session-scenario-grounding-*.json``. Тесты не должны оставлять
+    следов в рабочем дереве.
 
     Args:
         tmp_path: Временный каталог теста.
@@ -49,6 +55,8 @@ def _materials_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     global MATERIALS_DIR
     MATERIALS_DIR = tmp_path
     monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    monkeypatch.setattr("pf.config.settings.state_dir", tmp_path / "state")
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path / "journal")
 
 
 @pytest.fixture(autouse=True)
@@ -633,3 +641,20 @@ def _then_report_has_rejected() -> None:
     """В отчёте есть раздел отклонённых."""
     assert STATE.support is not None
     assert "Отклонённые основания" in STATE.support.as_markdown()
+
+
+def test_scenario_writes_sessions_outside_repository() -> None:
+    """Сессия сценария пишется во временный каталог, а не в journal/.
+
+    Раньше исполнение сценариев звало настоящие ``save()`` и ``Journal()``:
+    после каждого ``make test`` в ``state/`` и ``journal/`` репозитория
+    появлялись файлы ``session-scenario-grounding-*.json``, и дерево
+    оставалось чистым только потому, что каталоги перечислены в
+    ``.gitignore``. След теста в рабочем дереве — это не «чисто», это
+    спрятанный мусор.
+    """
+    from pf.config import settings
+
+    root = Path(__file__).resolve().parent.parent
+    assert Path(settings.journal_dir).resolve() != (root / "journal").resolve()
+    assert Path(settings.state_dir).resolve() != (root / "state").resolve()
