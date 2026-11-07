@@ -209,3 +209,129 @@ def test_session_report_handles_missing_session() -> None:
     report = build_session_report("нет-такой-сессии")
     assert report.steps == 0
     assert report.grounding_rate == 0.0
+
+
+def test_session_report_lists_metrics_with_formula(tmp_path: Path) -> None:
+    """Расчёты попадают в отчёт вместе с формулой и строкой.
+
+    Отчёт должен показывать, что посчитано и по чему. Без формулы
+    таблица метрик превращается в набор чисел, которым нельзя
+    поверить: их нечем пересчитать.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-metrics"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            citations=["project/data/x.csv#row1"],
+            detail={
+                "metrics": [
+                    {
+                        "name": "Абонентская база МТС",
+                        "value": 82.0,
+                        "unit": "млн",
+                        "source_id": "project/data/x.csv#row1",
+                        "row": 1,
+                        "formula": "значение из колонки «значение», строка 2",
+                        "inputs": {"значение": "82"},
+                    }
+                ]
+            },
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert report.metrics, "расчёты должны попасть в отчёт"
+    metric = report.metrics[0]
+    assert metric.name == "Абонентская база МТС"
+    assert metric.formula == "значение из колонки «значение», строка 2"
+    assert metric.citation == "project/data/x.csv#row1"
+
+    text = report.as_markdown()
+    assert "Расчёты по данным" in text
+    assert "значение из колонки" in text
+    assert "Как считалось" in text
+
+
+def test_session_report_counts_unique_grounds(tmp_path: Path) -> None:
+    """Отчёт различает записи и уникальные основания.
+
+    Сборщик и аналитик цитируют одни и те же абзацы: семь подтверждённых
+    записей — это три разных факта, посчитанных дважды. Называть это
+    «семью подтверждёнными основаниями» неверно: так доля выглядит
+    лучше, чем она есть.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-unique"
+    journal = Journal(journal_path(session_id))
+    for ordinal, role in enumerate(("collector", "analyst")):
+        journal.append(
+            StepRecord(
+                ordinal=ordinal,
+                role=role,
+                phase="collecting" if role == "collector" else "analyzing",
+                summary="факты",
+                citations=["a#p1", "b#p2"],
+                cost_units=0.001,
+            )
+        )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert report.confirmed_citations == 4
+    assert report.unique_citations == 2
+    assert report.unique_sources == 2
+
+    text = report.as_markdown()
+    assert "Подтверждённых записей" in text
+    assert "Подтверждённых оснований" in text
+
+
+def test_session_report_does_not_show_rejected_metric_as_confirmed(tmp_path: Path) -> None:
+    """Отклонённый расчёт не подаётся как посчитанный.
+
+    В демо-документе расчёты, отклонённые проверкой, были поданы как
+    «посчитанные кодом по строкам таблицы». Отчёт так делать не должен:
+    у каждого расчёта есть статус.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-rejected-metric"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            rejected_details=["Абонентская база МТС: значение не совпадает со строкой"],
+            detail={
+                "metrics": [
+                    {
+                        "name": "Абонентская база МТС",
+                        "value": 82.0,
+                        "unit": "млн",
+                        "source_id": "project/data/x.csv#row0",
+                        "row": 0,
+                        "formula": "значение из колонки «значение», строка 1",
+                        "inputs": {},
+                    }
+                ]
+            },
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert report.metrics
+    assert report.metrics[0].status != "подтверждено"
+    assert "отклонено" in report.metrics[0].status

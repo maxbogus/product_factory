@@ -23,6 +23,43 @@ from pf.state import load
 
 
 @dataclass(frozen=True, slots=True)
+class MetricRecord:
+    """Расчётная метрика в отчёте.
+
+    У каждой метрики есть статус: посчитанное и проверенное значение
+    и отклонённое — это разные вещи, и путать их нельзя. Раньше
+    отклонённые расчёты попадали в документ как «посчитанные кодом по
+    строкам таблицы».
+
+    Attributes:
+        name: Название метрики.
+        value: Значение.
+        unit: Единица измерения.
+        citation: Ссылка на строку источника.
+        formula: Как считалось.
+        inputs: Входные значения.
+        status: Статус проверки: «подтверждено» или «отклонено».
+        detail: Пояснение для человека.
+    """
+
+    name: str
+    value: float
+    unit: str = ""
+    citation: str = ""
+    formula: str = ""
+    inputs: dict[str, Any] = field(default_factory=dict)
+    status: str = "подтверждено"
+    detail: str = ""
+
+    @property
+    def formatted(self) -> str:
+        """Значение с единицей измерения."""
+        if not self.unit:
+            return f"{self.value:.6g}"
+        return f"{self.value:.6g} {self.unit}"
+
+
+@dataclass(frozen=True, slots=True)
 class SessionReport:
     """Отчёт по одной сессии.
 
@@ -49,6 +86,9 @@ class SessionReport:
     rejected_details: list[str] = field(default_factory=list)
     question: str = ""
     phase: str = ""
+    metrics: list[MetricRecord] = field(default_factory=list)
+    unique_citations: int = 0
+    unique_sources: int = 0
 
     @property
     def total_citations(self) -> int:
@@ -106,10 +146,24 @@ class SessionReport:
         lines.append("| Показатель | Значение |")
         lines.append("|---|---:|")
         lines.append(f"| Шагов выполнено | {self.steps} |")
-        lines.append(f"| Оснований подтверждено | {self.confirmed_citations} |")
+        lines.append(f"| Подтверждённых записей | {self.confirmed_citations} |")
+        lines.append(f"| Подтверждённых оснований (уникальных) | {self.unique_citations} |")
+        lines.append(f"| Использовано источников | {self.unique_sources} |")
         lines.append(f"| Оснований отклонено | {self.rejected_citations} |")
         lines.append(f"| Доля подтверждённых | {self.grounding_rate:.0%} |")
         lines.append("")
+
+        if self.metrics:
+            lines.append("## Расчёты по данным")
+            lines.append("")
+            lines.append("| Метрика | Значение | Строка источника | Как считалось | Статус |")
+            lines.append("|---|---:|---|---|---|")
+            for metric in self.metrics:
+                lines.append(
+                    f"| {metric.name} | {metric.formatted} | "
+                    f"`{metric.citation}` | {metric.formula} | {metric.status} |"
+                )
+            lines.append("")
 
         lines.append("## Расход")
         lines.append("")
@@ -135,6 +189,83 @@ class SessionReport:
         return "\n".join(lines)
 
 
+def _citation_key(citation: str) -> str:
+    """Ключ основания: путь и якорь, без повторов.
+
+    Ссылка может выглядеть как ``проект/файл.csv#row3#p3`` — с
+    продублированным якорем. Для счёта уникальных оснований это один
+    и тот же факт, а не два.
+
+    Args:
+        citation: Ссылка на основание.
+
+    Returns:
+        Нормализованный ключ.
+    """
+    path, _, fragment = citation.partition("#")
+    parts = [part for part in fragment.split("#") if part]
+    if not parts:
+        return path
+    return f"{path}#{parts[0]}"
+
+
+def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
+    """Собрать расчёты из журнала со статусом проверки.
+
+    Расчёт попадает в отчёт только вместе со статусом: подтверждённый
+    и отклонённый нельзя показывать одинаково. Статус берётся из
+    строк отклонения того же шага.
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Список расчётов.
+    """
+    metrics: list[MetricRecord] = []
+    for record in records:
+        detail = record.detail if isinstance(record.detail, dict) else {}
+        raw_metrics = detail.get("metrics")
+        if not isinstance(raw_metrics, list):
+            continue
+        rejected_names = {line.split(":", 1)[0].strip() for line in record.rejected_details}
+        for raw in raw_metrics:
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("name", "")).strip()
+            status = "подтверждено"
+            detail_text = ""
+            if name in rejected_names:
+                status = "отклонено"
+                detail_text = next(
+                    (
+                        line
+                        for line in record.rejected_details
+                        if line.split(":", 1)[0].strip() == name
+                    ),
+                    "",
+                )
+            source_id = str(raw.get("source_id", "")).strip()
+            row = raw.get("row")
+            citation = source_id
+            if row is not None and "#" not in source_id:
+                citation = f"{source_id}#row{row}"
+            inputs = raw.get("inputs")
+            metrics.append(
+                MetricRecord(
+                    name=name,
+                    value=float(raw.get("value", 0.0)),
+                    unit=str(raw.get("unit", "") or ""),
+                    citation=citation,
+                    formula=str(raw.get("formula", "") or ""),
+                    inputs=inputs if isinstance(inputs, dict) else {},
+                    status=status,
+                    detail=detail_text,
+                )
+            )
+    return metrics
+
+
 def build_session_report(session_id: str) -> SessionReport:
     """Собрать отчёт по сессии из журнала шагов.
 
@@ -151,15 +282,25 @@ def build_session_report(session_id: str) -> SessionReport:
     rejected = 0
     rejected_details: list[str] = []
     total_cost = 0.0
+    metrics = _collect_metrics(records)
 
+    all_citations: list[str] = []
     for record in records:
         confirmed += len(record.citations)
         rejected += len(record.rejected_details)
         rejected_details.extend(record.rejected_details)
+        all_citations.extend(record.citations)
         total_cost += record.cost_units
         cost_by_role[record.role] = cost_by_role.get(record.role, 0.0) + record.cost_units
         used = record.prompt_tokens + record.completion_tokens
         tokens[record.role] = tokens.get(record.role, 0) + used
+
+    # Основания и записи — разные числа. Сборщик и аналитик цитируют
+    # одни и те же абзацы: четыре записи — это два разных факта.
+    # Называть их четырьмя основаниями неверно, так доля выглядит
+    # лучше, чем она есть.
+    unique_citations = {_citation_key(citation) for citation in all_citations}
+    unique_sources = {citation.split("#", 1)[0] for citation in all_citations}
 
     state = load(session_id)
     return SessionReport(
@@ -173,6 +314,9 @@ def build_session_report(session_id: str) -> SessionReport:
         rejected_details=rejected_details,
         question=state.question if state else "",
         phase=state.phase.value if state else "",
+        metrics=metrics,
+        unique_citations=len(unique_citations),
+        unique_sources=len(unique_sources),
     )
 
 
