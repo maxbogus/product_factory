@@ -335,3 +335,172 @@ def test_session_report_does_not_show_rejected_metric_as_confirmed(tmp_path: Pat
     assert report.metrics
     assert report.metrics[0].status != "подтверждено"
     assert "отклонено" in report.metrics[0].status
+
+
+def test_session_report_merges_same_metric_from_two_roles() -> None:
+    """Один и тот же расчёт из двух ролей — одна строка в отчёте.
+
+    Коллектор и аналитик считают одни и те же метрики по тем же строкам.
+    В отчёте это один расчёт, а не два: иначе таблица расчётов выглядит
+    вдвое убедительнее, чем есть.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-metric-dedup"
+    journal = Journal(journal_path(session_id))
+    metric = {
+        "name": "Абонентская база МТС",
+        "value": 82.0,
+        "unit": "млн",
+        "source_id": "project/data/x.csv#row0",
+        "row": 0,
+        "formula": "значение из колонки «значение», строка 1",
+        "inputs": {"значение": "82"},
+    }
+    for ordinal, role in enumerate(("collector", "analyst")):
+        journal.append(
+            StepRecord(
+                ordinal=ordinal,
+                role=role,
+                phase="collecting" if role == "collector" else "analyzing",
+                summary="расчёты",
+                detail={"metrics": [dict(metric)]},
+                cost_units=0.001,
+            )
+        )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert len(report.metrics) == 1, "одинаковый расчёт посчитан за два"
+
+
+def test_session_report_marks_metric_without_formula() -> None:
+    """Расчёт без формулы помечен: пересчитать его нечем.
+
+    Журналы прошлых прогонов содержат метрики без формулы. Показывать их
+    так же, как проверенные, нельзя: пустая колонка «Как считалось»
+    означает «проверить нечем», и это должно быть видно в отчёте.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-metric-no-formula"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="расчёты",
+            detail={
+                "metrics": [
+                    {
+                        "name": "Абонентская база МТС",
+                        "value": 82.0,
+                        "unit": "млн",
+                        "source_id": "project/data/x.csv#row0",
+                        "row": 0,
+                    }
+                ]
+            },
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    text = report.as_markdown()
+    assert "формула не указана" in text
+
+
+def test_session_report_shows_quality_control() -> None:
+    """Отчёт показывает, чем проверялись основания и что решил роутер.
+
+    Без этого «контроль качества» существует только в state: журнал
+    хранит подтверждённое и отклонённое, но не решения и не второе
+    мнение субагента. Артефакт без них выглядит лучше, чем прогон.
+    """
+    from pf.report import build_session_report
+
+    session_id = "report-quality"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            citations=["project/data/x.csv#row0"],
+            rejected_details=["Показатели стабильны: цитата не найдена в строке таблицы"],
+            detail={
+                "metrics": [
+                    {
+                        "name": "Абонентская база МТС",
+                        "value": 82.0,
+                        "unit": "млн",
+                        "source_id": "project/data/x.csv#row0",
+                        "row": 0,
+                        "formula": "значение из колонки «значение», строка 1",
+                    }
+                ],
+                "routing": {
+                    "role": "план",
+                    "target": "analyzing",
+                    "accepted": False,
+                    "note": "маршрут «план» неизвестен — идём по порядку",
+                },
+                "fact_check": {
+                    "summary": "субагент fact-check: проверено 2, подтверждено 1",
+                    "confirmed": 1,
+                    "needs_review": 0,
+                    "no_data": 1,
+                },
+            },
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    assert report.metrics_with_formula == 1
+    assert report.rejection_kinds
+    assert report.routing_notes
+
+    text = report.as_markdown()
+    assert "Контроль качества" in text
+    assert "Расчётов с формулой" in text
+    assert "Повторная проверка" in text
+    assert "Решения роутера" in text
+
+
+def test_step_record_keeps_routing_decision() -> None:
+    """Решение роутера попадает в журнал следующего шага.
+
+    Роутер решает, кто работает следующим, а код может это решение
+    исправить. Человек должен видеть исправление в отчёте, а не только
+    в состоянии сессии: иначе требование «исправлять ошибочный выбор»
+    недоказуемо.
+    """
+    from pf.schemas import NextStep
+    from pf.workflow import StepResult, Workflow
+
+    state = SessionState(session_id="journal-routing", phase=Phase.COLLECTING)
+    state.results["routing_decision"] = {
+        "role": "план",
+        "target": "collecting",
+        "accepted": False,
+        "note": "маршрут «план» неизвестен — идём по порядку: Сбор источников",
+    }
+    workflow = Workflow(client=object(), config=None)  # type: ignore[arg-type]
+    workflow._record(
+        state,
+        StepResult(
+            role="collector",
+            phase=Phase.COLLECTING,
+            data=NextStep(role="collector", reason="порядок"),
+        ),
+    )
+
+    records = Journal(journal_path("journal-routing")).read()
+    routing = records[-1].detail.get("routing")
+    assert isinstance(routing, dict)
+    assert routing["accepted"] is False

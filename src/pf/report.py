@@ -21,6 +21,10 @@ from typing import Any
 from pf.journal import Journal, journal_path
 from pf.state import load
 
+#: Подпись расчёта, у которого не указана формула. Непересчитываемое
+#: число нельзя показывать так же, как проверенное.
+NO_FORMULA = "формула не указана — пересчитать нечем"
+
 
 @dataclass(frozen=True, slots=True)
 class MetricRecord:
@@ -58,6 +62,16 @@ class MetricRecord:
             return f"{self.value:.6g}"
         return f"{self.value:.6g} {self.unit}"
 
+    @property
+    def formula_note(self) -> str:
+        """Формула расчёта или явная пометка, что её нет.
+
+        Пустая колонка «Как считалось» читалась бы как «всё в порядке»,
+        хотя означает обратное: число нечем пересчитать. Поэтому
+        отсутствие формулы называется словами.
+        """
+        return self.formula.strip() or NO_FORMULA
+
 
 @dataclass(frozen=True, slots=True)
 class SessionReport:
@@ -89,6 +103,10 @@ class SessionReport:
     metrics: list[MetricRecord] = field(default_factory=list)
     unique_citations: int = 0
     unique_sources: int = 0
+    routing_notes: list[str] = field(default_factory=list)
+    fact_check: dict[str, Any] | None = None
+    rejection_kinds: dict[str, int] = field(default_factory=dict)
+    metrics_with_formula: int = 0
 
     @property
     def total_citations(self) -> int:
@@ -161,8 +179,30 @@ class SessionReport:
             for metric in self.metrics:
                 lines.append(
                     f"| {metric.name} | {metric.formatted} | "
-                    f"`{metric.citation}` | {metric.formula} | {metric.status} |"
+                    f"`{metric.citation}` | {metric.formula_note} | {metric.status} |"
                 )
+            lines.append("")
+
+        lines.append("## Контроль качества")
+        lines.append("")
+        lines.append("| Что проверено | Значение |")
+        lines.append("|---|---:|")
+        lines.append(
+            f"| Расчётов с формулой | {self.metrics_with_formula} из {len(self.metrics)} |"
+        )
+        for kind, count in sorted(
+            self.rejection_kinds.items(), key=lambda item: (-item[1], item[0])
+        ):
+            lines.append(f"| Отклонено: {kind} | {count} |")
+        if self.fact_check:
+            summary = self.fact_check.get("summary", "—")
+            lines.append(f"| Повторная проверка (fact-check) | {summary} |")
+        lines.append("")
+        if self.routing_notes:
+            lines.append("**Решения роутера.**")
+            lines.append("")
+            for note in self.routing_notes:
+                lines.append(f"- {note}")
             lines.append("")
 
         lines.append("## Расход")
@@ -209,6 +249,36 @@ def _citation_key(citation: str) -> str:
     return f"{path}#{parts[0]}"
 
 
+def rejection_kind(detail: str) -> str:
+    """Класс отказа по тексту причины.
+
+    Группировка нужна, чтобы видеть, **что чинить**: промпт (значение
+    посчитано, а выдано за цитату), контекст (источник не по теме) или
+    проверку (у расчёта нет provenance). Это подпись для человека, а не
+    решение о статусе: статус ставит проверка, а не эта функция.
+
+    Args:
+        detail: Строка отклонения из журнала.
+
+    Returns:
+        Название класса отказа.
+    """
+    text = detail.lower()
+    if "посчитано, а не процитировано" in text:
+        return "значение посчитано как цитата"
+    if "не относится к задаче" in text:
+        return "источник нерелевантен"
+    if "не имеет структуры" in text:
+        return "у расчёта нет provenance"
+    if "не совпадает со строкой" in text or "пересчёт по входам даёт" in text:
+        return "значение не сошлось с источником"
+    if "не найдена в строке" in text:
+        return "цитата не найдена в строке"
+    if "цитата не найдена" in text:
+        return "цитата не найдена"
+    return "прочее"
+
+
 def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
     """Собрать расчёты из журнала со статусом проверки.
 
@@ -222,7 +292,7 @@ def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
     Returns:
         Список расчётов.
     """
-    metrics: list[MetricRecord] = []
+    merged: dict[tuple[str, float, str, str], MetricRecord] = {}
     for record in records:
         detail = record.detail if isinstance(record.detail, dict) else {}
         raw_metrics = detail.get("metrics")
@@ -251,19 +321,28 @@ def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
             if row is not None and "#" not in source_id:
                 citation = f"{source_id}#row{row}"
             inputs = raw.get("inputs")
-            metrics.append(
-                MetricRecord(
-                    name=name,
-                    value=float(raw.get("value", 0.0)),
-                    unit=str(raw.get("unit", "") or ""),
-                    citation=citation,
-                    formula=str(raw.get("formula", "") or ""),
-                    inputs=inputs if isinstance(inputs, dict) else {},
-                    status=status,
-                    detail=detail_text,
-                )
+            metric = MetricRecord(
+                name=name,
+                value=float(raw.get("value", 0.0)),
+                unit=str(raw.get("unit", "") or ""),
+                citation=citation,
+                formula=str(raw.get("formula", "") or ""),
+                inputs=inputs if isinstance(inputs, dict) else {},
+                status=status,
+                detail=detail_text,
             )
-    return metrics
+            # Коллектор и аналитик считают одни и те же метрики по тем же
+            # строкам. В отчёте это один расчёт: иначе таблица выглядит
+            # вдвое убедительнее, чем есть. Отклонение сильнее
+            # подтверждения — если хоть одна проверка не прошла, расчёт
+            # не выдаётся за посчитанный.
+            key = (metric.name, metric.value, metric.citation, metric.formula)
+            previous = merged.get(key)
+            if previous is None or (
+                previous.status == "подтверждено" and metric.status != "подтверждено"
+            ):
+                merged[key] = metric
+    return list(merged.values())
 
 
 def build_session_report(session_id: str) -> SessionReport:
@@ -281,6 +360,9 @@ def build_session_report(session_id: str) -> SessionReport:
     confirmed = 0
     rejected = 0
     rejected_details: list[str] = []
+    rejection_kinds: dict[str, int] = {}
+    routing_notes: list[str] = []
+    fact_check: dict[str, Any] | None = None
     total_cost = 0.0
     metrics = _collect_metrics(records)
 
@@ -289,6 +371,16 @@ def build_session_report(session_id: str) -> SessionReport:
         confirmed += len(record.citations)
         rejected += len(record.rejected_details)
         rejected_details.extend(record.rejected_details)
+        for line in record.rejected_details:
+            kind = rejection_kind(line)
+            rejection_kinds[kind] = rejection_kinds.get(kind, 0) + 1
+        detail = record.detail if isinstance(record.detail, dict) else {}
+        routing = detail.get("routing")
+        if isinstance(routing, dict) and routing.get("note"):
+            routing_notes.append(str(routing["note"]))
+        found = detail.get("fact_check")
+        if isinstance(found, dict):
+            fact_check = found
         all_citations.extend(record.citations)
         total_cost += record.cost_units
         cost_by_role[record.role] = cost_by_role.get(record.role, 0.0) + record.cost_units
@@ -317,6 +409,10 @@ def build_session_report(session_id: str) -> SessionReport:
         metrics=metrics,
         unique_citations=len(unique_citations),
         unique_sources=len(unique_sources),
+        routing_notes=routing_notes,
+        fact_check=fact_check,
+        rejection_kinds=rejection_kinds,
+        metrics_with_formula=sum(1 for metric in metrics if metric.formula.strip()),
     )
 
 
@@ -341,4 +437,8 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "question": report.question,
         "phase": report.phase,
         "limitations": report.limitations,
+        "metrics_with_formula": report.metrics_with_formula,
+        "rejection_kinds": report.rejection_kinds,
+        "routing_notes": report.routing_notes,
+        "fact_check": report.fact_check,
     }
