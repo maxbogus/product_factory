@@ -141,3 +141,76 @@ def test_materials_block_says_where_to_take_source_ids() -> None:
     user = Workflow._build_user({"query": "удержание"}, "[a/b#p1] текст", "collector")
     materials = user.split("МАТЕРИАЛЫ")[1].split("ДАННЫЕ")[0]
     assert "source_id" in materials
+
+
+def test_budget_hint_names_the_limit() -> None:
+    """Модель видит лимит ответа заранее, а не узнаёт о нём по обрыву."""
+    hint = Workflow._budget_hint()
+
+    assert "БЮДЖЕТ ОТВЕТА" in hint
+    assert "токенов" in hint
+
+
+def test_budget_hint_includes_explicit_task_limit() -> None:
+    """Явный лимит из задачи попадает в подсказку."""
+    hint = Workflow._budget_hint("не более 200 слов")
+
+    assert "не более 200 слов" in hint
+
+
+def test_budget_hint_can_be_disabled(monkeypatch) -> None:
+    """Подсказку можно выключить настройкой."""
+    monkeypatch.setattr("pf.workflow.settings.answer_limit_hint", False)
+
+    assert Workflow._budget_hint() == ""
+
+
+def test_turn_limit_is_extracted_from_constraints() -> None:
+    """Лимит читается из ограничений задачи."""
+    from pf.state import Phase, SessionState
+
+    state = SessionState(session_id="s", phase=Phase.INTAKE)
+    state.results[Phase.INTAKE.value] = {
+        "constraints": ["не более 5 пунктов в выводе"],
+    }
+
+    assert Workflow._turn_limit(state) == "не более 5 пунктов"
+
+
+def test_constraints_reach_every_role() -> None:
+    """Ограничения задачи попадают в запрос любой роли."""
+    from pf.state import Phase, SessionState
+
+    state = SessionState(session_id="s", phase=Phase.INTAKE)
+    state.results[Phase.INTAKE.value] = {"constraints": ["цену снижать нельзя"]}
+
+    blocks = Workflow._prompt_extras(state)
+    text = "\n".join(blocks)
+
+    assert "ОГРАНИЧЕНИЯ ЗАДАЧИ" in text
+    assert "цену снижать нельзя" in text
+
+
+def test_constraints_block_is_capped() -> None:
+    """Длинный блок ограничений обрезается: иначе он вытесняет схему."""
+    from pf.state import Phase, SessionState
+
+    state = SessionState(session_id="s", phase=Phase.INTAKE)
+    state.results[Phase.INTAKE.value] = {"constraints": ["очень длинное ограничение " * 100]}
+
+    block = Workflow._constraints_block(state)
+
+    assert len(block) < 1000
+    assert block.endswith("…")
+
+
+def test_extras_are_placed_before_schema() -> None:
+    """Блоки идут до схемы: схема остаётся последним, что видит модель."""
+    user = Workflow._build_user(
+        {"question": "тест"},
+        "",
+        "strategy",
+        extras=("ОГРАНИЧЕНИЯ ЗАДАЧИ (нарушать нельзя):\nцену снижать нельзя",),
+    )
+
+    assert user.index("ОГРАНИЧЕНИЯ ЗАДАЧИ") < user.index("СХЕМА ОТВЕТА")

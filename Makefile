@@ -9,7 +9,7 @@ PYTHON ?= python3
 
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
-        contracts-check scenarios-check demo-doc
+        lexicon lexicon-oov contracts-check scenarios-check demo-doc replay
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -111,6 +111,12 @@ materials: ## Показать материалы проекта (докумен
 knowledge: ## Показать хранилище знаний (выгрузки, источники, хеши)
 	@$(UV) run pf knowledge
 
+lexicon: ## Показать словарь близости и очередь распознания слов
+	@$(UV) run pf lexicon stats
+
+lexicon-oov: ## Показать незнакомые слова, ждущие распознания
+	@$(UV) run pf lexicon oov
+
 fetch-data: ## Собрать открытые данные в хранилище знаний
 	@$(UV) run python scripts/fetch_open_data.py
 
@@ -129,6 +135,9 @@ wiki-index: ## Показать статистику корпуса
 
 bench: ## Замеры: агент против обычного чата (make bench MODELS="qwen3:8b")
 	@$(UV) run python scripts/bench.py $(if $(MODELS),--models $(MODELS),) $(if $(REPEATS),--repeats $(REPEATS),)
+
+replay: ## A/B проверки оснований по сохранённым журналам (make replay SESSIONS="demo-v7 demo-v9")
+	@$(UV) run python scripts/replay_verification.py $(if $(SESSIONS),--sessions $(SESSIONS),)
 
 mcp: ## Инструменты MCP-сервера (make mcp SERVER=static-parser)
 	@$(UV) run pf mcp $(or $(SERVER),static-parser)

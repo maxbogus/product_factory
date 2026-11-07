@@ -27,6 +27,15 @@ from typing import Any
 
 import yaml
 
+try:  # pragma: no cover — зависит от окружения
+    from parse import parse as _parse_library
+except ImportError:  # pragma: no cover — pytest-bdd без parse не работает
+    _parse_library = None
+
+#: Разбор шаблонов шагов вида ``... {имя} ...``. Тип ``Any``: библиотека
+#: необязательная, и ``None`` здесь — законное состояние.
+parse_pattern: Any = _parse_library
+
 ROOT = Path(__file__).resolve().parent.parent
 RULES_DIR = ROOT / "architecture" / "rules"
 FEATURES_DIR = ROOT / "tests" / "features"
@@ -287,8 +296,16 @@ def _step_definitions() -> set[str]:
     литералы внутри одного декоратора склеиваются как в самом Python,
     и многострочный шаг не выглядит «ненайденным».
 
+    Шаг может быть объявлен двумя способами: строкой (точный текст) и
+    через ``parsers.parse("... {имя} ...")``. Второй способ нужен, когда
+    в шаге есть значение — слово, число, ссылка. Гейт обязан понимать
+    оба, иначе он объявляет корректный шаг «без определения»: ровно это
+    и случилось со сценариями распознания слов.
+
     Returns:
-        Множество нормализованных шагов.
+        Множество текстов шагов и шаблонов (без нормализации: шаблоны
+        ``parsers.parse`` нельзя нормализовать — вместе с кавычками
+        пропали бы имена параметров).
     """
     definitions: set[str] = set()
     for path in (ROOT / "tests").glob("test_*.py"):
@@ -305,8 +322,46 @@ def _step_definitions() -> set[str]:
                     continue
                 argument = decorator.args[0]
                 if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
-                    definitions.add(_normalize(argument.value))
+                    definitions.add(argument.value)
+                    continue
+                # @given(parsers.parse("...")) и @given(parsers.re("..."))
+                if (
+                    isinstance(argument, ast.Call)
+                    and argument.args
+                    and isinstance(argument.args[0], ast.Constant)
+                    and isinstance(argument.args[0].value, str)
+                ):
+                    definitions.add(argument.args[0].value)
     return definitions
+
+
+def _step_is_defined(step: str, definitions: set[str]) -> bool:
+    """Есть ли у шага определение — точное или по шаблону.
+
+    Два способа сравнения, потому что шаг объявляется двумя способами:
+
+    1. точный текст — сравнивается нормализованно (кавычки и запятые не
+       важны);
+    2. шаблон ``parsers.parse`` с именованными параметрами — сравнивается
+       как шаблон, по исходному тексту.
+
+    Args:
+        step: Текст шага из сценария.
+        definitions: Тексты и шаблоны определений.
+
+    Returns:
+        Определение найдено.
+    """
+    normalized = _normalize(step)
+    if normalized in {_normalize(item) for item in definitions}:
+        return True
+    for pattern in definitions:
+        if "{" in pattern and parse_pattern is not None:
+            if parse_pattern(pattern, step) is not None:
+                return True
+        elif pattern.startswith("^") and re.match(pattern, step):
+            return True
+    return False
 
 
 def _registered_features() -> set[str]:
@@ -365,7 +420,7 @@ def check_scenarios_covered() -> list[str]:
             if not steps:
                 problems.append(f"сценарий «{name}» не содержит шагов")
             for step in steps:
-                if _normalize(step) not in definitions:
+                if not _step_is_defined(step, definitions):
                     problems.append(f"сценарий «{name}»: шаг «{step}» без определения")
     return problems
 

@@ -36,6 +36,7 @@ from pf.ground import (
     verify_claim,
     verify_quote,
 )
+from pf.lexical import number_tolerance
 from pf.materials import Material
 
 #: Минимальная длина абзаца, пригодного для цитирования.
@@ -593,7 +594,8 @@ def verify_metric(
     metric: Any,
     materials: list[Material],
     *,
-    tolerance: float = 1e-6,
+    tolerance: float | None = None,
+    rel_tolerance: float | None = None,
 ) -> Support:
     """Проверить расчётную метрику пересчётом по строке источника.
 
@@ -611,7 +613,10 @@ def verify_metric(
     Args:
         metric: Метрика с provenance.
         materials: Материалы проекта.
-        tolerance: Допустимое расхождение при сравнении.
+        tolerance: Абсолютный допуск. По умолчанию — из настроек:
+            «77,3» подтверждает «77,26», потому что это округление, а не
+            подмена числа.
+        rel_tolerance: Относительный допуск. По умолчанию — из настроек.
 
     Returns:
         Результат проверки: подтверждено, требует проверки или нет
@@ -682,7 +687,15 @@ def verify_metric(
                     row_values.append(parsed)
 
     formatted = _format_metric(value, unit)
-    allowed = max(tolerance, _display_tolerance(value))
+    absolute = settings.metric_abs_tolerance if tolerance is None else tolerance
+    relative = settings.metric_rel_tolerance if rel_tolerance is None else rel_tolerance
+    # Допуск — максимум из трёх: точность показа числа, округление до
+    # десятой доли и относительная погрешность. Для малых величин
+    # абсолютная часть не включается: 0,1 — половина от 0,2.
+    allowed = max(
+        _display_tolerance(value),
+        number_tolerance(value, abs_tolerance=absolute, rel_tolerance=relative),
+    )
 
     # 2. Пересчёт по заявленным входам. Агрегат (среднее, медиана,
     # размах, изменение) вычислен по нескольким наблюдениям, и его

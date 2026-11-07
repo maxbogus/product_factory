@@ -504,3 +504,67 @@ def test_step_record_keeps_routing_decision() -> None:
     routing = records[-1].detail.get("routing")
     assert isinstance(routing, dict)
     assert routing["accepted"] is False
+
+
+def test_report_separates_needs_review_from_rejections() -> None:
+    """«Ожидает проверки» — не отказ: в отчёте это разные разделы."""
+    from pf.report import build_session_report
+
+    session_id = "report-needs-review"
+    Journal(journal_path(session_id)).append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            citations=["project/data/x.csv#row1"],
+            rejected_details=["bad#p1: цитата не найдена"],
+            needs_review_details=["web/Новости: внешний источник, требует проверки"],
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    text = report.as_markdown()
+
+    assert len(report.needs_review_details) == 1
+    assert "Ожидают проверки человеком" in text
+    assert "## Отклонённые основания" in text
+    # Доля подтверждённых считается по подтверждённым и отклонённым:
+    # «ждёт проверки» не должно улучшать или ухудшать её молча.
+    assert report.grounding_rate == pytest.approx(0.5)
+
+
+def test_report_shows_lexical_coverage() -> None:
+    """Отчёт показывает, сколько слов проверка поняла."""
+    from pf.report import build_session_report
+
+    session_id = "report-lexical"
+    Journal(journal_path(session_id)).append(
+        StepRecord(
+            ordinal=0,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            detail={
+                "lexical": {
+                    "total": 10,
+                    "known": 8,
+                    "oov": 2,
+                    "rate": 0.8,
+                    "oov_tokens": ["криптовалюта"],
+                }
+            },
+            cost_units=0.001,
+        )
+    )
+    save(SessionState(session_id=session_id, phase=Phase.DONE))
+
+    report = build_session_report(session_id)
+    text = report.as_markdown()
+
+    assert report.lexical is not None
+    assert report.lexical["oov"] == 2
+    assert "Лексическое покрытие" in text
+    assert "криптовалюта" in text

@@ -1,0 +1,57 @@
+# Словарь лексической близости: группы взаимозаменяемых терминов.
+#
+# Как читать:
+#   canonical — лемма понятия (первое слово группы);
+#   aliases   — остальные названия, включая латиницу;
+#   status    — approved (участвует в проверке) | proposed (ждёт человека);
+#   source    — manual | llm;
+#   added     — дата добавления;
+#   model     — модель, предложившая запись (если source: llm).
+#
+# ВАЖНО: файл дополняет встроенный набор (src/pf/synonyms.py), а не
+# заменяет его. Удаление группы отсюда не убирает её из проверки — для
+# этого нужно править встроенный набор. Записи со статусом proposed в
+# проверке НЕ участвуют: подтверждает словарь человек.
+#
+# Пополнение: `pf lexicon oov` → `pf lexicon enrich --dry-run` →
+# `pf lexicon enrich` → `pf lexicon approve <слово>`.
+version: 1
+metadata:
+  description: Словарь лексической близости — понятия, внутри которых слова взаимозаменяемы
+  updated: 2026-11-08
+  terms: 5
+terms:
+  - canonical: абонент
+    aliases:
+      - клиент
+      - пользователь
+      - subscriber
+      - customer
+    status: approved
+    source: manual
+    added: 2026-11-08
+  - canonical: удержание
+    aliases:
+      - retention
+    status: approved
+    source: manual
+    added: 2026-11-08
+  - canonical: отток
+    aliases:
+      - churn
+    status: approved
+    source: manual
+    added: 2026-11-08
+  - canonical: оператор
+    aliases:
+      - operator
+      - carrier
+    status: approved
+    source: manual
+    added: 2026-11-08
+  - canonical: мегафон
+    aliases:
+      - megafon
+    status: approved
+    source: manual
+    added: 2026-11-08

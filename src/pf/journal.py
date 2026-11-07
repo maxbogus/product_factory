@@ -51,6 +51,7 @@ class StepRecord:
     detail: dict[str, Any] = field(default_factory=dict)
     citations: list[str] = field(default_factory=list)
     rejected_details: list[str] = field(default_factory=list)
+    needs_review_details: list[str] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_units: float = 0.0

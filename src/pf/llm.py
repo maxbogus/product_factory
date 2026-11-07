@@ -42,17 +42,31 @@ class LLMUsage:
         completion_tokens: Токены в ответе.
         duration_ms: Длительность вызова.
         model: Модель, которая отвечала.
+        context_limit: Окно контекста, в котором считался промпт; ``0`` —
+            окно неизвестно (облачный провайдер).
     """
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
     duration_ms: int = 0
     model: str = ""
+    context_limit: int = 0
 
     @property
     def total_tokens(self) -> int:
         """Всего токенов."""
         return self.prompt_tokens + self.completion_tokens
+
+    @property
+    def prompt_truncated(self) -> bool:
+        """Упёрся ли промпт в окно контекста.
+
+        Ollama считает ``prompt_eval_count`` уже после обрезки: значение,
+        равное окну, означает, что начало промпта отброшено. Это не
+        «ровно столько токенов», а признак потери контекста — молча
+        игнорировать его нельзя, иначе починка окна непроверяема.
+        """
+        return self.context_limit > 0 and self.prompt_tokens >= self.context_limit
 
     @property
     def cost_units(self) -> float:
@@ -172,6 +186,10 @@ class OllamaClient:
             "options": {
                 "temperature": self.config.temperature,
                 "num_predict": self.config.effective_max_tokens,
+                # Окно задаётся явно. Без него Ollama берёт 4096 и обрезает
+                # промпт: начало контекста отбрасывается, а модель всё равно
+                # отвечает — потеря не видна ни в ответе, ни в журнале.
+                "num_ctx": self.config.effective_num_ctx,
             },
             "messages": [
                 {"role": "system", "content": system},
@@ -202,6 +220,10 @@ class OllamaClient:
             completion_tokens=int(data.get("eval_count", 0)),
             duration_ms=int(data.get("total_duration", 0) / 1_000_000),
             model=self.config.effective_model,
+            # Окно запоминается в расходе: по нему видно, упёрся ли промпт
+            # в предел. Без этого «модель ответила» не отличить от
+            # «модель видела весь контекст».
+            context_limit=self.config.effective_num_ctx,
         )
         return LLMResponse(content=message, usage=usage)
 

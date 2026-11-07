@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from pf.config import Settings
-from pf.llm import LLMError, OllamaClient, OpenAICompatibleClient, extract_json
+from pf.llm import LLMError, LLMUsage, OllamaClient, OpenAICompatibleClient, extract_json
 
 
 def _response(payload: dict[str, object]) -> httpx.Response:
@@ -115,6 +116,92 @@ def test_cloud_max_tokens_is_raised() -> None:
         llm_api_key="test-key",
     )
     assert cloud.effective_max_tokens >= 8000
+
+
+def test_ollama_payload_has_num_ctx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """В запрос к Ollama уходит явное окно контекста.
+
+    Без ``num_ctx`` Ollama берёт своё умолчание (4096) и **обрезает
+    промпт**: на сохранённых журналах 56 шагов упирались ровно в 4096
+    токенов, и начало контекста отбрасывалось молча.
+    """
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs: object) -> httpx.Response:
+        captured.update(kwargs.get("json", {}) or {})  # type: ignore[arg-type]
+        return _response({"message": {"content": "{}"}, "prompt_eval_count": 10, "eval_count": 5})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = OllamaClient(Settings(ollama_num_ctx=8192, max_tokens=2400))
+    client.complete("система", "задача")
+
+    options = captured["options"]
+    assert isinstance(options, dict)
+    assert options["num_ctx"] == 8192
+
+
+def test_num_ctx_covers_answer_limit() -> None:
+    """Окно контекста не меньше лимита ответа.
+
+    Окно — это промпт **и** ответ вместе. Если окно равно лимиту ответа,
+    на промпт не остаётся места, и обрезка гарантирована.
+    """
+    local = Settings(llm_provider="ollama", ollama_num_ctx=8192, max_tokens=2400)
+    assert local.effective_num_ctx == 8192
+
+    # Облаку окно не задаётся: его определяет провайдер, а не мы.
+    cloud = Settings(
+        llm_provider="openai",
+        ollama_num_ctx=8192,
+        llm_model="deepseek-flash",
+        llm_api_key="test-key",
+    )
+    assert cloud.effective_num_ctx == 0
+
+
+def test_num_ctx_below_answer_limit_is_rejected() -> None:
+    """Настройка, при которой ответ не влезает в окно, — ошибка, а не догадка."""
+    with pytest.raises(ValidationError, match="PF_OLLAMA_NUM_CTX"):
+        Settings(llm_provider="ollama", ollama_num_ctx=2000, max_tokens=2400)
+
+
+def test_prompt_truncation_is_detected() -> None:
+    """Упёршийся в окно промпт виден по расходу, а не угадывается.
+
+    ``prompt_eval_count`` считается уже после обрезки, поэтому значение,
+    равное окну, означает потерю начала промпта.
+    """
+    assert LLMUsage(prompt_tokens=8192, context_limit=8192).prompt_truncated is True
+    assert LLMUsage(prompt_tokens=3701, context_limit=8192).prompt_truncated is False
+    # У облака окно неизвестно: «неизвестно» — это не «обрезано».
+    assert LLMUsage(prompt_tokens=8127).prompt_truncated is False
+
+
+def test_openai_payload_has_no_num_ctx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Облачному провайдеру наше окно не навязывается."""
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs: object) -> httpx.Response:
+        captured.update(kwargs.get("json", {}) or {})  # type: ignore[arg-type]
+        return _response(
+            {
+                "choices": [{"message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 7},
+            }
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = OpenAICompatibleClient(
+        Settings(
+            llm_provider="openai",
+            llm_model="deepseek-flash",
+            llm_api_key="test-key",
+            llm_base_url="https://api.deepseek.com",
+        )
+    )
+    client.complete("система", "задача")
+
+    assert "num_ctx" not in captured
 
 
 def test_openai_payload_uses_effective_max_tokens(monkeypatch: pytest.MonkeyPatch) -> None:

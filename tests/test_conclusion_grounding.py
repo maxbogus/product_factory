@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from pf.ground import SupportStatus
 from pf.schemas import (
     Commitment,
     CommunicationStrategy,
@@ -184,6 +185,38 @@ def test_confirmed_conclusion_evidence_counts_as_grounds(
     assert grounding.citations
 
 
+def test_verdicts_are_kept_for_every_ground(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """По каждому основанию сохраняется вердикт, а не только счётчик.
+
+    Замеру нужно сопоставлять вердикты по утверждению и источнику: «58
+    против 58» не отвечает на вопрос, какие основания переехали из
+    подтверждённых в отклонённые.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [
+            SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE),
+            SourceRef(source_id="project/numbers.csv#row0", quote="база выросла до 99,9 млн"),
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    statuses = [verdict.status for verdict in grounding.verdicts]
+    assert statuses == [SupportStatus.CONFIRMED, SupportStatus.NO_DATA]
+    assert grounding.verdicts[0].is_conclusion is True
+    assert grounding.verdicts[0].source_id == "project/numbers.csv#row0"
+    # Утверждение — это вывод стратегии, а не отдельный факт: именно его
+    # подменяет вердикт, и именно по нему сопоставляются версии.
+    assert grounding.verdicts[0].claim == "снизить цену на тариф"
+
+
 def test_facts_only_result_has_no_conclusion_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -203,3 +236,113 @@ def test_facts_only_result_has_no_conclusion_block(
     grounding = Workflow._verify_claims(analysis, bundle)
 
     assert grounding.conclusion is None
+
+
+def _external_state(quote_source: str) -> object:
+    """Состояние сессии с одной внешней страницей.
+
+    Args:
+        quote_source: Текст страницы.
+
+    Returns:
+        Состояние сессии с найденной внешней страницей.
+    """
+    from types import SimpleNamespace
+
+    from pf.state import Phase, SessionState
+
+    state = SessionState(session_id="external", phase=Phase.STRATEGY)
+    state.results["web_pages"] = [
+        SimpleNamespace(
+            title="Новости",
+            url="https://example.com/news",
+            text=quote_source,
+        )
+    ]
+    return state
+
+
+def test_external_source_is_not_rejected_but_waits_for_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ссылка на веб-источник — не выдумка, а основание на проверку.
+
+    Раньше такая ссылка отклонялась как «источник не найден среди
+    собранных»: страница честно скачана, но в набор локальных
+    источников не входит. Отказ и «ждёт человека» — разные вещи.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = _external_state("МегаФон обслужил 77,26 миллиона абонентов в июне.")
+    strategy = _strategy(
+        [
+            SourceRef(
+                source_id="web/Новости",
+                quote="МегаФон обслужил 77,26 миллиона абонентов",
+            )
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle, state=state)
+
+    assert grounding.needs_review
+    assert grounding.rejected == 0
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "ждёт проверки"
+
+
+def test_external_source_with_wrong_quote_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Цитаты, которой нет на странице, нет и в основании.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = _external_state("МегаФон обслужил 77,26 миллиона абонентов в июне.")
+    strategy = _strategy(
+        [
+            SourceRef(
+                source_id="web/Новости",
+                quote="МегаФон обслужил 88,88 миллиона абонентов",
+            )
+        ]
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle, state=state)
+
+    assert grounding.needs_review == []
+    assert grounding.rejected == 1
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "неподкреплено"
+
+
+def test_oov_words_from_claims_reach_the_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Нераспознанные слова шага попадают в очередь распознания.
+
+    Args:
+        tmp_path: Временный каталог лексикона.
+        monkeypatch: Подмена настроек.
+    """
+    from pf import lexicon
+
+    monkeypatch.setattr("pf.config.settings.lexicon_dir", tmp_path)
+
+    Workflow._queue_oov(
+        {"криптовалюта"},
+        context="Криптовалюта растёт у абонентов",
+        role="analyst",
+        session="demo-v1",
+    )
+
+    records = lexicon.read_oov()
+    assert records[0].token == "криптовалюта"
+    assert records[0].sessions == ["demo-v1"]
+    assert "Криптовалюта растёт" in records[0].contexts[0]

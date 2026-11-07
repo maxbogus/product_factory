@@ -133,6 +133,9 @@ class SessionReport:
         question: Исходный вопрос.
         phase: Фаза, на которой остановилась сессии.
         conclusion: Вывод прогона и статус его оснований.
+        needs_review_details: Основания, ожидающие проверки человеком.
+        lexical: Лексическое покрытие прогона и топ незнакомых слов.
+        context: Окно контекста: сколько шагов, сколько упёрлось в предел.
     """
 
     session_id: str
@@ -154,6 +157,9 @@ class SessionReport:
     metrics_with_formula: int = 0
     conclusion: ConclusionRecord | None = None
     contradictions: list[str] = field(default_factory=list)
+    needs_review_details: list[str] = field(default_factory=list)
+    lexical: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
     @property
     def total_citations(self) -> int:
@@ -178,7 +184,7 @@ class SessionReport:
         Returns:
             Список оговорок.
         """
-        return [
+        items = [
             "Подтверждение основания — дословное совпадение цитаты с "
             "источником. Оно не гарантирует, что цитата поддерживает "
             "утждение по смыслу: честная цитата из настоящей статьи "
@@ -192,6 +198,19 @@ class SessionReport:
             "прогонами локальных моделей велик, поэтому сравнения "
             "считаются по нескольким прогонам.",
         ]
+        # Оговорка об окне контекста появляется только тогда, когда обрезка
+        # действительно была: постоянная оговорка перестаёт читаться.
+        if self.context and int(self.context.get("truncated") or 0) > 0:
+            truncated = int(self.context["truncated"])
+            steps = int(self.context.get("steps") or 0)
+            limit = int(self.context.get("limit") or 0)
+            items.append(
+                f"Промпт упирался в окно контекста ({limit} токенов) на "
+                f"{truncated} шагах из {steps}: начало запроса отброшено "
+                "моделью, поэтому часть материалов она не видела. "
+                "Поднимать окно — по замеру (`docs/decisions.md`, D-20)."
+            )
+        return items
 
     def as_markdown(self) -> str:
         """Оформить отчёт в markdown.
@@ -215,6 +234,7 @@ class SessionReport:
         lines.append(f"| Подтверждённых оснований (уникальных) | {self.unique_citations} |")
         lines.append(f"| Использовано источников | {self.unique_sources} |")
         lines.append(f"| Оснований отклонено | {self.rejected_citations} |")
+        lines.append(f"| Ожидают проверки человеком | {len(self.needs_review_details)} |")
         lines.append(f"| Доля подтверждённых | {self.grounding_rate:.0%} |")
         lines.append("")
 
@@ -237,6 +257,13 @@ class SessionReport:
         lines.append(
             f"| Расчётов с формулой | {self.metrics_with_formula} из {len(self.metrics)} |"
         )
+        if self.context:
+            lines.append(f"| Окно контекста | {int(self.context.get('limit') or 0)} |")
+            if int(self.context.get("truncated") or 0) > 0:
+                lines.append(
+                    f"| Промпт упёрся в окно | {int(self.context['truncated'])} "
+                    f"из {int(self.context.get('steps') or 0)} шагов |"
+                )
         for kind, count in sorted(
             self.rejection_kinds.items(), key=lambda item: (-item[1], item[0])
         ):
@@ -270,10 +297,38 @@ class SessionReport:
         lines.append(f"| **Итого** | **{self.total_cost_units:.6f}** | |")
         lines.append("")
 
+        if self.lexical:
+            lines.append("**Лексическое покрытие.**")
+            lines.append("")
+            lines.append("| Слов проверено | Распознано | В очереди распознания | Доля |")
+            lines.append("|---|---:|---:|---:|")
+            total = int(self.lexical.get("total", 0))
+            oov = int(self.lexical.get("oov", 0))
+            rate = float(self.lexical.get("rate", 0.0))
+            lines.append(f"| {total} | {total - oov} | {oov} | {rate:.0%} |")
+            unknown = self.lexical.get("oov_tokens") or []
+            if unknown:
+                lines.append("")
+                lines.append(
+                    "Нераспознанные слова (пополняются через `pf lexicon`): "
+                    + ", ".join(f"`{token}`" for token in unknown)
+                )
+            lines.append("")
+
         if self.rejected_details:
             lines.append("## Отклонённые основания")
             lines.append("")
             for detail in self.rejected_details:
+                lines.append(f"- {detail}")
+            lines.append("")
+
+        if self.needs_review_details:
+            # Не отказ и не подтверждение: внешний источник или иностранная
+            # страница. Отдельный раздел нужен, чтобы «ждёт проверки» не
+            # читалось как «выдумка».
+            lines.append("## Ожидают проверки человеком")
+            lines.append("")
+            for detail in self.needs_review_details:
                 lines.append(f"- {detail}")
             lines.append("")
 
@@ -658,17 +713,41 @@ def build_session_report(session_id: str) -> SessionReport:
     metrics = _collect_metrics(records)
 
     all_citations: list[str] = []
+    needs_review_details: list[str] = []
+    lexical_total = 0
+    lexical_known = 0
+    lexical_oov = 0
+    oov_tokens: list[str] = []
+    context_steps = 0
+    context_truncated = 0
+    context_limit = 0
     for record in records:
         confirmed += len(record.citations)
         rejected += len(record.rejected_details)
         rejected_details.extend(record.rejected_details)
+        needs_review_details.extend(record.needs_review_details)
         for line in record.rejected_details:
             kind = rejection_kind(line)
             rejection_kinds[kind] = rejection_kinds.get(kind, 0) + 1
         detail = record.detail if isinstance(record.detail, dict) else {}
+        lexical = detail.get("lexical")
+        if isinstance(lexical, dict):
+            lexical_total += int(lexical.get("total", 0))
+            lexical_known += int(lexical.get("total", 0)) - int(lexical.get("oov", 0))
+            lexical_oov += int(lexical.get("oov", 0))
+            for token in lexical.get("oov_tokens") or []:
+                text = str(token)
+                if text and text not in oov_tokens:
+                    oov_tokens.append(text)
         routing = detail.get("routing")
         if isinstance(routing, dict) and routing.get("note"):
             routing_notes.append(str(routing["note"]))
+        window = detail.get("context")
+        if isinstance(window, dict):
+            context_steps += 1
+            if window.get("truncated"):
+                context_truncated += 1
+            context_limit = max(context_limit, int(window.get("limit") or 0))
         found = detail.get("fact_check")
         if isinstance(found, dict):
             fact_check = found
@@ -709,6 +788,29 @@ def build_session_report(session_id: str) -> SessionReport:
         metrics_with_formula=sum(1 for metric in metrics if metric.formula.strip()),
         conclusion=_collect_conclusion(records),
         contradictions=contradictions,
+        needs_review_details=needs_review_details,
+        lexical=(
+            {
+                "total": lexical_total,
+                "known": lexical_known,
+                "oov": lexical_oov,
+                "rate": round((lexical_total - lexical_oov) / lexical_total, 4)
+                if lexical_total
+                else 0.0,
+                "oov_tokens": oov_tokens[:10],
+            }
+            if lexical_total
+            else None
+        ),
+        context=(
+            {
+                "steps": context_steps,
+                "truncated": context_truncated,
+                "limit": context_limit,
+            }
+            if context_steps
+            else None
+        ),
     )
 
 
@@ -726,6 +828,9 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "steps": report.steps,
         "confirmed_citations": report.confirmed_citations,
         "rejected_citations": report.rejected_citations,
+        "needs_review": len(report.needs_review_details),
+        "lexical": report.lexical,
+        "context": report.context,
         "grounding_rate": report.grounding_rate,
         "total_cost_units": report.total_cost_units,
         "cost_by_role": report.cost_by_role,

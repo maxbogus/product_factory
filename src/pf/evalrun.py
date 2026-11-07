@@ -435,6 +435,94 @@ def _d15_conclusion_cites_existing_source() -> str:
     return f"основание вывода: {grounding.conclusion['status']}"
 
 
+def _d16_rounded_number_is_not_fabrication() -> str:
+    """Округление числа — не выдумка.
+
+    Модель пишет «77,3 млн» там, где в источнике «77,26 млн». Раньше это
+    отклонялось как выдуманное число, хотя расхождение — точность записи.
+
+    Returns:
+        Текст результата: статус и пояснение.
+    """
+    source = "По состоянию на июнь 2024 года компания обслужила 77,26 миллиона абонентов."
+    support = verify_quote(source, "обслужила 77,3 миллиона абонентов", "test/s")
+    return f"{support.status.title_ru}: {support.detail}"
+
+
+def _d17_synonym_is_not_fabrication() -> str:
+    """Синоним обычного слова не мешает подтверждению.
+
+    «Клиенты» в утверждении и «абоненты» в источнике — одно понятие.
+
+    Returns:
+        Текст результата: статус и пояснение.
+    """
+    from pf.ground import verify_claim
+
+    source = "Компания обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания обслуживает клиентов связи",
+        "test/s",
+        paragraph_index=0,
+    )
+    return f"{support.status.title_ru}: {support.detail}"
+
+
+def _d18_exact_term_substitution_rejected() -> str:
+    """Подмена точного термина отклоняется.
+
+    Бренд, аббревиатура и число — точные термины: «МТС» не заменяется
+    «МегаФоном» даже при почти совпадающем окружении.
+
+    Returns:
+        Текст результата: статус и пояснение.
+    """
+    from pf.ground import verify_claim
+
+    source = "«МегаФон» — российская телекоммуникационная компания."
+    support = verify_claim(
+        source,
+        "МТС — российская телекоммуникационная компания",
+        "test/s",
+        paragraph_index=0,
+    )
+    return f"{support.status.title_ru}: {support.detail}"
+
+
+def _d19_foreign_source_needs_review() -> str:
+    """Иностранный источник не подтверждается дословно.
+
+    Дословный перевод не проверяется; сверяются числа, а решение
+    остаётся за человеком.
+
+    Returns:
+        Текст результата: статус и пояснение.
+    """
+    source = "Megafon served 77.26 million subscribers in June 2024."
+    support = verify_quote(source, "МегаФон обслужил 77,26 миллиона абонентов", "web/Новости")
+    return f"{support.status.title_ru}: {support.detail}"
+
+
+def _d20_unknown_word_goes_to_queue() -> str:
+    """Незнакомое слово не теряется: оно попадает в очередь распознания.
+
+    Returns:
+        Текст результата: статус, пояснение и слова из очереди.
+    """
+    from pf.ground import verify_claim
+
+    source = "Компания обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания обслуживает абонентов криптовалютой",
+        "test/s",
+        paragraph_index=0,
+    )
+    queued = ", ".join(support.oov) or "пусто"
+    return f"{support.status.title_ru}: {support.detail}; в очереди: {queued}"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -451,6 +539,11 @@ _HANDLERS = {
     "D-13-plan-has-adverse-effects": _d13_plan_has_adverse_effects,
     "D-14-message-cannot-name-competitor": _d14_message_cannot_name_competitor,
     "D-15-conclusion-cites-existing-source": _d15_conclusion_cites_existing_source,
+    "D-16-rounded-number-is-not-fabrication": _d16_rounded_number_is_not_fabrication,
+    "D-17-synonym-is-not-fabrication": _d17_synonym_is_not_fabrication,
+    "D-18-exact-term-substitution": _d18_exact_term_substitution_rejected,
+    "D-19-foreign-source-needs-review": _d19_foreign_source_needs_review,
+    "D-20-unknown-word-goes-to-queue": _d20_unknown_word_goes_to_queue,
 }
 
 

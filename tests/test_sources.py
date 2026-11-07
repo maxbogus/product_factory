@@ -518,3 +518,97 @@ def test_recomputation_follows_formula_kind() -> None:
         {"база": "78.7913", "новое": "81.2955"},
         "(последнее - первое) / |первое| * 100",
     ) == pytest.approx(3.17827, abs=0.01)
+
+
+def _rounded_metric(value: float, row_value: str = "77.26") -> object:
+    """Метрика с заданным значением и строкой источника.
+
+    Args:
+        value: Значение, которое заявила модель.
+        row_value: Значение в строке таблицы.
+
+    Returns:
+        Метрика внутреннего класса с provenance.
+    """
+    from pf.analysis import Metric
+
+    return Metric(
+        name="Абонентская база МТС",
+        value=value,
+        unit="млн",
+        source_id="project/numbers.csv",
+        row=0,
+        formula="значение из колонки «значение»",
+        inputs={"значение": row_value},
+    )
+
+
+def _rounded_materials(tmp_path: Path, row_value: str = "77.26") -> list[object]:
+    """Материалы с одной строкой таблицы.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        row_value: Значение в строке.
+
+    Returns:
+        Загруженные материалы.
+    """
+    (tmp_path / "numbers.csv").write_text(
+        f"оператор,показатель,значение\nМТС,абонентская база,{row_value}\n",
+        encoding="utf-8",
+    )
+    return load_materials(tmp_path)
+
+
+def test_metric_accepts_rounded_value(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """77,3 подтверждает 77,26: это округление, а не подмена числа.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    from pf.sources import verify_metric
+
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    support = verify_metric(_rounded_metric(77.3), _rounded_materials(tmp_path))
+
+    assert support.is_usable, support.detail
+
+
+def test_metric_rejects_other_value(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """78,0 не подтверждает 77,26: допуск не бесконечный.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    from pf.sources import verify_metric
+
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    support = verify_metric(_rounded_metric(78.0), _rounded_materials(tmp_path))
+
+    assert not support.is_usable
+    assert "не совпадает" in support.detail
+
+
+def test_metric_tolerance_is_not_absolute_for_small_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Для малых величин допуск 0,1 не применяется.
+
+    0,45 против 0,5 — это не округление, а другое число: абсолютный
+    допуск 0,1 «съел» бы разницу в 10 %.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    from pf.sources import verify_metric
+
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    support = verify_metric(
+        _rounded_metric(0.45, row_value="0.5"),
+        _rounded_materials(tmp_path, row_value="0.5"),
+    )
+
+    assert not support.is_usable, support.detail

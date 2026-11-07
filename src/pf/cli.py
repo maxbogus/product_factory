@@ -640,6 +640,66 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lexicon(args: argparse.Namespace) -> int:
+    """Лексикон: словарь близости и очередь распознания слов.
+
+    Args:
+        args: Аргументы командной строки.
+
+    Returns:
+        Код возврата.
+    """
+    from pf import lexicon
+
+    if args.action == "stats":
+        data = lexicon.stats()
+        _out(
+            f"Записей в словаре: {data['entries']} "
+            f"(подтверждено {data['approved']}, предложено {data['proposed']})"
+        )
+        _out(f"Очередь распознания: {data['oov_total']} слов, ждут {data['oov_pending']}")
+        for item in data["top"]:
+            _out(f"  {item['token']}: {item['count']} раз ({item['status']})")
+        return 0
+
+    if args.action == "oov":
+        records = lexicon.pending_oov(min_count=args.min_count)
+        if not records:
+            _out("Очередь пуста: незнакомых слов нет.")
+            return 0
+        _out(f"Ждут распознания: {len(records)}")
+        for record in records[: args.limit]:
+            _out(f"  {record.token}: {record.count} раз; {record.reason}")
+            for context in record.contexts[:1]:
+                _out(f"      контекст: {context[:120]}")
+        _out("")
+        _out("Разобрать: pf lexicon enrich --dry-run")
+        return 0
+
+    if args.action == "enrich":
+        result = lexicon.enrich(
+            limit=args.limit,
+            min_count=args.min_count,
+            dry_run=not args.apply,
+            auto_approve=args.approve,
+        )
+        for proposal in result.proposals:
+            target = f" → {proposal.canonical}" if proposal.canonical else ""
+            _out(f"  {proposal.token}: {proposal.action}{target}")
+        _out(result.summary)
+        if not args.apply:
+            _out("Это черновик: ничего не записано. Повторите с --apply.")
+        return 0
+
+    if args.token:
+        changed = lexicon.approve(args.token, args.canonical or "")
+        _out("Запись подтверждена." if changed else "Такой записи нет: сначала pf lexicon enrich.")
+        return 0 if changed else 1
+
+    _out("Укажите слово: pf lexicon approve <слово>")
+    return 1
+
+
 # ── main ────────────────────────────────────────────────────────────────────
 
 
@@ -703,6 +763,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     sessions = subparsers.add_parser("sessions", help="список сохранённых сессий")
     sessions.set_defaults(func=cmd_sessions)
+
+    lexicon_parser = subparsers.add_parser(
+        "lexicon", help="словарь близости и очередь распознания слов"
+    )
+    lexicon_parser.add_argument(
+        "action",
+        choices=["stats", "oov", "enrich", "approve"],
+        help="stats — покрытие, oov — очередь, enrich — разобрать, approve — подтвердить",
+    )
+    lexicon_parser.add_argument("token", nargs="?", help="слово для подтверждения")
+    lexicon_parser.add_argument("--canonical", help="каноническая лемма при подтверждении")
+    lexicon_parser.add_argument("--limit", type=int, default=20, help="сколько слов показать")
+    lexicon_parser.add_argument("--min-count", type=int, default=1, help="минимальная частота")
+    lexicon_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="записать предложения в словарь (по умолчанию — черновик)",
+    )
+    lexicon_parser.add_argument(
+        "--approve",
+        action="store_true",
+        help="сразу подтвердить записи (минуя отдельный шаг approve)",
+    )
+    lexicon_parser.set_defaults(func=cmd_lexicon)
 
     eval_parser = subparsers.add_parser("eval", help="выполнить eval-сценарии и проверить правила")
     eval_parser.set_defaults(func=cmd_eval)

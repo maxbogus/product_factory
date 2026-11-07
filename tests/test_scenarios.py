@@ -22,7 +22,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from pytest_bdd import given, scenarios, then, when
+from pytest_bdd import given, parsers, scenarios, then, when
 
 from pf.analysis import Metric as AnalysisMetric
 from pf.corpus import Article
@@ -57,6 +57,9 @@ def _materials_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
     monkeypatch.setattr("pf.config.settings.state_dir", tmp_path / "state")
     monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path / "journal")
+    # Словарь близости тоже изолируется: сценарий не должен менять
+    # настоящий knowledge/lexicon и зависеть от его содержимого.
+    monkeypatch.setattr("pf.config.settings.lexicon_dir", tmp_path / "lexicon")
 
 
 @pytest.fixture(autouse=True)
@@ -658,3 +661,52 @@ def test_scenario_writes_sessions_outside_repository() -> None:
     root = Path(__file__).resolve().parent.parent
     assert Path(settings.journal_dir).resolve() != (root / "journal").resolve()
     assert Path(settings.state_dir).resolve() != (root / "state").resolve()
+
+
+# ── Распознание незнакомых слов ─────────────────────────────────────────────
+
+
+@given('в материале есть абзац "Компания обслуживает абонентов"')
+def _given_short_paragraph() -> None:
+    """Материал с одним коротким абзацем под распознание слов."""
+    _write_text("paragraph.md", "Компания обслуживает абонентов\n")
+
+
+@given(parsers.parse('агент вернул утверждение "{text}" без цитаты'))
+def _given_claim_without_quote(text: str) -> None:
+    """Факт без цитаты: проверяться будет покрытие словами абзаца."""
+    STATE.claim = Claim(
+        kind="факт",
+        text=text,
+        sources=[SourceRef(source_id="project/data/paragraph.md", paragraph=0, quote="")],
+    )
+
+
+@then("статус основания равен нет данных")
+def _then_status_is_no_data() -> None:
+    """Основание не подтвердилось — и это названо."""
+    assert STATE.support is not None
+    assert STATE.support.status is SupportStatus.NO_DATA, STATE.support.detail
+
+
+@then(parsers.parse('нераспознанное слово "{token}" попало в основание'))
+def _then_oov_is_reported(token: str) -> None:
+    """Незнакомое слово не теряется: оно уходит в очередь распознания."""
+    assert STATE.support is not None
+    assert token in STATE.support.oov, STATE.support.oov
+
+
+@when(parsers.parse('слово "{token}" подтверждено как синоним "{canonical}"'))
+def _when_synonym_is_approved(token: str, canonical: str) -> None:
+    """Человек подтверждает слово в словаре близости."""
+    from pf import lexicon
+
+    assert lexicon.approve(token, canonical), "подтверждение должно изменить словарь"
+
+
+@then("основание проверяется заново и статус равен подтверждено")
+def _then_recheck_is_confirmed() -> None:
+    """После пополнения словаря то же утверждение подтверждается."""
+    _when_verified()
+    assert STATE.support is not None
+    assert STATE.support.status is SupportStatus.CONFIRMED, STATE.support.detail

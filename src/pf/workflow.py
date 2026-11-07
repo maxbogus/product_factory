@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from pf import roles
 from pf.config import Settings, settings
+from pf.ground import SupportStatus, verify_quote_as_external
 from pf.journal import Journal, StepRecord, journal_path
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
@@ -44,6 +45,30 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
+class ClaimVerdict:
+    """Вердикт по одному основанию.
+
+    Счётчики говорят «сколько подтверждено», но не «что именно изменилось».
+    Для сравнения двух версий проверки нужно сопоставлять вердикты по
+    утверждению и источнику, иначе «58 против 58» не отвечает на вопрос,
+    какие основания переехали из подтверждённых в отклонённые.
+
+    Attributes:
+        claim: Текст утверждения (факт, обещание, обязательство, вывод).
+        source_id: Ссылка, на которую опирается утверждение.
+        status: Чем кончилась проверка.
+        detail: Пояснение для человека.
+        is_conclusion: Относится ли основание к выводу, а не к факту.
+    """
+
+    claim: str
+    source_id: str
+    status: SupportStatus
+    detail: str = ""
+    is_conclusion: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class GroundingResult:
     """Итог проверки оснований одного шага.
 
@@ -53,12 +78,20 @@ class GroundingResult:
         details: Что и почему отброшено.
         conclusion: Статус оснований вывода либо ``None``, если вывода
             в результате нет (факты, план, варианты — это не вывод).
+        needs_review: Ссылки, которые нельзя подтвердить: внешний источник
+            или другой язык. Это не отказ — это «ждёт человека», и
+            смешивать его с отказом нельзя.
+        needs_review_details: Что именно ждёт проверки и почему.
+        verdicts: Вердикт по каждому основанию — для замера и сверки версий.
     """
 
     citations: list[str] = field(default_factory=list)
     rejected: int = 0
     details: list[str] = field(default_factory=list)
     conclusion: dict[str, Any] | None = None
+    needs_review: list[str] = field(default_factory=list)
+    needs_review_details: list[str] = field(default_factory=list)
+    verdicts: list[ClaimVerdict] = field(default_factory=list)
 
 
 def _named_source(source_id: str) -> str:
@@ -272,6 +305,9 @@ class StepResult:
         data: Валидированный результат роли.
         citations: Подтверждённые ссылки на источники.
         rejected: Сколько цитат отброшено проверкой.
+        rejected_details: Что и почему отброшено.
+        needs_review: Ссылки, ожидающие проверки человеком.
+        lexical: Лексическое покрытие шага (сколько слов распознано).
         cost_units: Стоимость шага.
         tokens: Токены на шаге.
     """
@@ -282,11 +318,21 @@ class StepResult:
     citations: list[str] = field(default_factory=list)
     rejected: int = 0
     rejected_details: list[str] = field(default_factory=list)
+    needs_review: list[str] = field(default_factory=list)
+    needs_review_details: list[str] = field(default_factory=list)
+    lexical: dict[str, Any] | None = None
     cost_units: float = 0.0
     tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
     duration_ms: int = 0
+    #: Окно контекста, в котором считался промпт (``0`` — неизвестно).
+    context_limit: int = 0
+
+    @property
+    def prompt_truncated(self) -> bool:
+        """Упёрся ли промпт шага в окно контекста."""
+        return self.context_limit > 0 and self.prompt_tokens >= self.context_limit
 
 
 #: Тип результата роли — любой валидированный объект схемы.
@@ -299,6 +345,20 @@ BaseModelType = Any
 #: вытеснял сами источники: модель переставала видеть идентификаторы и
 #: цитировала вопросы из блока ДАННЫЕ.
 MAX_METRICS_IN_CONTEXT = 8
+
+#: Сколько символов русского текста приходится примерно на один токен.
+#: Нужно только для подсказки модели: лимит генерации считает токены, а
+#: человек думает словами и символами.
+CHARS_PER_TOKEN = 2.5
+
+#: Явный лимит ответа в тексте задачи: «не более 200 слов», «максимум 5
+#: пунктов», «лимит 1500 токенов». Такой лимит терялся: ограничения
+#: собирались на входе и дальше не читались.
+_LIMIT_PATTERN = re.compile(
+    r"(?:не более|не больше|максимум|лимит[а-яё]*)\s+(\d+)\s*"
+    r"(токен[а-яё]*|слов[а-яё]*|символ[а-яё]*|пункт[а-яё]*|строк[а-яё]*)",
+    re.IGNORECASE,
+)
 
 #: Колонки, которые задают период, а не различие величин. Значения
 #: «2017», «2018», «конец июля» — это точки одного ряда во времени.
@@ -348,6 +408,8 @@ class Workflow:
         role_name: str,
         payload: dict[str, Any],
         context: str = "",
+        *,
+        extras: tuple[str, ...] = (),
     ) -> tuple[BaseModelType, Any]:
         """Вызвать роль и проверить результат.
 
@@ -355,6 +417,8 @@ class Workflow:
             role_name: Идентификатор роли.
             payload: Данные роли (задача, разбор, варианты и т. п.).
             context: Текстовый контекст (источники, предыдущие результаты).
+            extras: Дополнительные блоки запроса: ограничения задачи и
+                бюджет ответа.
 
         Returns:
             Пара ``(валидированный результат, расход)``.
@@ -363,7 +427,7 @@ class Workflow:
             LLMError: Модель не ответила или ответ не прошёл проверку.
         """
         system = roles.load_prompt(role_name)
-        user = self._build_user(payload, context, role_name)
+        user = self._build_user(payload, context, role_name, extras=extras)
 
         last_error = ""
         attempts = 3
@@ -442,11 +506,99 @@ class Workflow:
             "заполни все — пустые строки будут отклонены."
         )
 
+    @classmethod
+    def _turn_limit(cls, state: SessionState) -> str:
+        """Явный лимит ответа из текста задачи.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Формулировка лимита («не более 200 слов») либо пустая строка.
+        """
+        frame = state.results.get(Phase.INTAKE.value, {})
+        parts = [state.question]
+        if isinstance(frame, dict):
+            parts.extend(str(item) for item in frame.get("constraints") or [])
+        match = _LIMIT_PATTERN.search(" ".join(parts))
+        if not match:
+            return ""
+        return f"не более {match.group(1)} {match.group(2).lower()}"
+
+    @staticmethod
+    def _budget_hint(limit_text: str = "") -> str:
+        """Подсказка модели о лимите ответа.
+
+        Лимит уже режет генерацию (``num_predict``/``max_tokens``), но
+        модель об этом не знает: она пишет длинный JSON и получает
+        обрезанный ответ. Дешевле сказать ей предел заранее.
+
+        Args:
+            limit_text: Явный лимит из задачи, если он есть.
+
+        Returns:
+            Строка подсказки либо пустая строка, если подсказка выключена.
+        """
+        if not settings.answer_limit_hint:
+            return ""
+        tokens = settings.effective_max_tokens
+        chars = int(tokens * CHARS_PER_TOKEN)
+        hint = (
+            f"БЮДЖЕТ ОТВЕТА: не более {tokens} токенов (~{chars} символов). "
+            "Пиши компактно: без повторов и без пояснений вокруг JSON."
+        )
+        if limit_text:
+            hint += f" Из задачи: {limit_text}."
+        return hint
+
+    @staticmethod
+    def _constraints_block(state: SessionState) -> str:
+        """Ограничения задачи — их нельзя нарушать.
+
+        Ограничения собираются на входе и раньше дальше не читались: в
+        демо-прогоне ограничение «цену снижать нельзя» потерялось, и
+        выбранным направлением стало «снизить цену». Передача их в запрос
+        не делает проверку полной, но убирает молчаливую потерю.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Блок ограничений либо пустая строка.
+        """
+        frame = state.results.get(Phase.INTAKE.value, {})
+        if not isinstance(frame, dict):
+            return ""
+        items = [str(item).strip() for item in frame.get("constraints") or [] if str(item).strip()]
+        if not items:
+            return ""
+        text = "; ".join(items)
+        if len(text) > settings.max_constraints_chars:
+            # Длинный блок вытесняет схему ответа: модель возвращает
+            # структуру входа вместо своей.
+            text = text[: settings.max_constraints_chars].rstrip() + "…"
+        return "ОГРАНИЧЕНИЯ ЗАДАЧИ (нарушать нельзя):\n" + text
+
+    @classmethod
+    def _prompt_extras(cls, state: SessionState) -> tuple[str, ...]:
+        """Дополнительные блоки запроса, общие для всех ролей.
+
+        Args:
+            state: Состояние сессии.
+
+        Returns:
+            Кортеж непустых блоков: ограничения задачи и бюджет ответа.
+        """
+        blocks = [cls._constraints_block(state), cls._budget_hint(cls._turn_limit(state))]
+        return tuple(block for block in blocks if block)
+
     @staticmethod
     def _build_user(
         payload: dict[str, Any],
         context: str,
         role_name: str = "",
+        *,
+        extras: tuple[str, ...] = (),
     ) -> str:
         """Собрать текст задачи для модели.
 
@@ -460,6 +612,9 @@ class Workflow:
             payload: Данные роли.
             context: Текстовый контекст.
             role_name: Роль, для которой строится запрос.
+            extras: Дополнительные блоки: ограничения задачи и бюджет
+                ответа. Идут после данных и перед схемой, чтобы схема
+                оставалась последним, что видит модель.
 
         Returns:
             Текст запроса.
@@ -473,6 +628,7 @@ class Workflow:
                 "МАТЕРИАЛЫ (источники для цитирования, source_id копируется отсюда):\n" + context
             )
         parts.append("ДАННЫЕ (это вход задачи, цитировать их нельзя):\n" + _as_text(payload))
+        parts.extend(extra for extra in extras if extra)
         if role_name:
             parts.append(Workflow._schema_hint(role_name))
         parts.append("Верни ТОЛЬКО JSON по схеме выше, без пояснений.")
@@ -715,7 +871,12 @@ class Workflow:
         return pairs
 
     @staticmethod
-    def _conclusion_verdict(total: int, confirmed: int, rejected: int) -> dict[str, Any] | None:
+    def _conclusion_verdict(
+        total: int,
+        confirmed: int,
+        rejected: int,
+        needs_review: int = 0,
+    ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
         Три состояния различаются принципиально: «подкреплено» — хотя бы
@@ -727,15 +888,21 @@ class Workflow:
             total: Сколько оснований вывода проверялось.
             confirmed: Сколько подтверждено.
             rejected: Сколько отклонено.
+            needs_review: Сколько ждёт проверки человеком (внешние
+                источники, иностранные страницы). Это не отказ, но и не
+                подтверждение: вывод, у которого все основания такие,
+                нельзя называть ни подкреплённым, ни опровергнутым.
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
         """
         if total <= 0:
             return None
-        if confirmed <= 0:
+        if confirmed <= 0 and needs_review > 0:
+            status = "ждёт проверки"
+        elif confirmed <= 0:
             status = "неподкреплено"
-        elif rejected > 0:
+        elif rejected > 0 or needs_review > 0:
             status = "подкреплено частично"
         else:
             status = "подкреплено"
@@ -743,13 +910,106 @@ class Workflow:
             "checked": total,
             "confirmed": confirmed,
             "rejected": rejected,
+            "needs_review": needs_review,
             "status": status,
         }
+
+    @staticmethod
+    def _external_text(named: str, state: SessionState | None) -> str:
+        """Текст внешнего источника по идентификатору.
+
+        Внешние источники не попадают в ``SourceBundle``: у них другой
+        статус доверия. Но проверить дословность цитаты по ним можно —
+        страница уже скачана и лежит в состоянии сессии.
+
+        Args:
+            named: Идентификатор из ответа модели.
+            state: Состояние сессии либо ``None``.
+
+        Returns:
+            Текст страницы либо пустая строка, если источник не внешний.
+        """
+        if state is None or not named:
+            return ""
+        for page in state.results.get("web_pages") or []:
+            title = str(getattr(page, "title", ""))
+            url = str(getattr(page, "url", ""))
+            candidates = {f"web/{title}", f"web/{url}", f"web/{title or url}", url}
+            if named in candidates:
+                return str(getattr(page, "text", "") or "")
+        for source in state.results.get("web_source_objects") or []:
+            candidates = {
+                str(getattr(source, "source_id", "")),
+                str(getattr(source, "url", "")),
+            }
+            if named in candidates:
+                return str(getattr(source, "text", "") or "")
+        return ""
+
+    @staticmethod
+    def _queue_oov(
+        tokens: set[str],
+        *,
+        context: str = "",
+        role: str = "",
+        session: str = "",
+    ) -> None:
+        """Положить нераспознанные слова в очередь распознания.
+
+        Очередь — след работы, а не часть проверки: она ничего не
+        подтверждает и не отменяет. Выключить можно настройкой
+        ``PF_LEXICON_ENABLED=false`` — это нужно для чистых замеров.
+
+        Args:
+            tokens: Нераспознанные слова.
+            context: Контекст, в котором они встретились.
+            role: Роль шага.
+            session: Идентификатор сессии.
+        """
+        if not tokens or not settings.lexicon_enabled:
+            return
+        from pf import lexicon
+
+        for token in sorted(tokens):
+            lexicon.record_oov(
+                token,
+                reason="слово не распознано при проверке оснований",
+                role=role,
+                session=session,
+                context=context,
+            )
+
+    @staticmethod
+    def _lexical_report(data: Any) -> dict[str, Any] | None:
+        """Посчитать лексическое покрытие утверждений шага.
+
+        Покрытие — измеримый след работы с незнакомыми словами: видно,
+        сколько слов проверка поняла, а сколько ушло в очередь. Это не
+        замена доле подтверждённых оснований, а соседняя метрика.
+
+        Args:
+            data: Результат роли.
+
+        Returns:
+            Словарь покрытия либо ``None``, если считать нечего.
+        """
+        if not settings.lexicon_enabled:
+            return None
+        from pf.lexicon import coverage_report
+
+        texts = list(dict.fromkeys(text for text, _source, _kind in Workflow._sources_of(data)))
+        if not texts:
+            return None
+        return coverage_report(texts).to_dict()
 
     @staticmethod
     def _verify_claims(
         data: Any,
         bundle: SourceBundle | None,
+        *,
+        state: SessionState | None = None,
+        role_name: str = "",
+        session_id: str = "",
     ) -> GroundingResult:
         """Проверить основания в результате роли.
 
@@ -758,13 +1018,20 @@ class Workflow:
         обязательства проверяются одинаково — иначе вывод оказывается
         единственным утверждением без проверки.
 
+        Три исхода различаются: подтверждено, отклонено и «требует
+        проверки». Третий — для внешних источников: подтвердить их нечем,
+        но и отказом это не является.
+
         Args:
             data: Результат роли.
             bundle: Собранные источники.
+            state: Состояние сессии — нужно для доступа к внешним страницам.
+            role_name: Роль шага — попадает в очередь распознания.
+            session_id: Идентификатор сессии — попадает туда же.
 
         Returns:
-            Подтверждённые ссылки, отказы, пояснения и статус оснований
-            вывода, если вывод в результате есть.
+            Подтверждённые ссылки, отказы, пояснения, ожидающие проверки
+            основания и статус оснований вывода, если вывод есть.
         """
         if bundle is None:
             return GroundingResult()
@@ -772,52 +1039,123 @@ class Workflow:
         confirmed: list[str] = []
         rejected = 0
         details: list[str] = []
+        needs_review: list[str] = []
+        needs_review_details: list[str] = []
         conclusion_total = 0
         conclusion_confirmed = 0
         conclusion_rejected = 0
+        conclusion_needs_review = 0
+        oov: set[str] = set()
+        oov_context = ""
+        verdicts: list[ClaimVerdict] = []
 
         for text, source, is_conclusion in Workflow._sources_of(data):
-            named = getattr(source, "source_id", "")
+            named = getattr(source, "source_id", "") or ""
+            quote = getattr(source, "quote", "") or ""
             if is_conclusion:
                 conclusion_total += 1
+
+            external = Workflow._external_text(named, state)
+            if external:
+                external_support = verify_quote_as_external(external, quote, named)
+                verdicts.append(
+                    ClaimVerdict(
+                        claim=text,
+                        source_id=named,
+                        status=external_support.status,
+                        detail=external_support.detail,
+                        is_conclusion=is_conclusion,
+                    )
+                )
+                if external_support.status is SupportStatus.NEEDS_REVIEW:
+                    needs_review.append(external_support.citation)
+                    needs_review_details.append(
+                        f"{_named_source(named)}: {external_support.detail}"
+                    )
+                    if is_conclusion:
+                        conclusion_needs_review += 1
+                else:
+                    rejected += 1
+                    details.append(f"{_named_source(named)}: {external_support.detail}")
+                    if is_conclusion:
+                        conclusion_rejected += 1
+                continue
+
             support = bundle.verify_claim(
                 text,
                 source_id=named,
                 paragraph=getattr(source, "paragraph", None),
-                quote=getattr(source, "quote", ""),
+                quote=quote,
             )
+            if support.oov:
+                oov.update(support.oov)
+                oov_context = oov_context or text
             if not bundle.is_relevant(named):
                 rejected += 1
                 details.append(f"{_named_source(named)}: источник не относится к задаче")
+                verdicts.append(
+                    ClaimVerdict(
+                        claim=text,
+                        source_id=named,
+                        status=SupportStatus.NO_DATA,
+                        detail="источник не относится к задаче",
+                        is_conclusion=is_conclusion,
+                    )
+                )
                 if is_conclusion:
                     conclusion_rejected += 1
                 continue
+            verdicts.append(
+                ClaimVerdict(
+                    claim=text,
+                    source_id=named,
+                    status=support.status,
+                    detail=support.detail,
+                    is_conclusion=is_conclusion,
+                )
+            )
             if support.is_usable:
                 confirmed.append(support.citation)
                 if is_conclusion:
                     conclusion_confirmed += 1
+            elif support.status is SupportStatus.NEEDS_REVIEW:
+                needs_review.append(support.citation)
+                needs_review_details.append(f"{_named_source(named)}: {support.detail}")
+                if is_conclusion:
+                    conclusion_needs_review += 1
             else:
                 rejected += 1
                 details.append(f"{_named_source(named)}: {support.detail}")
                 if is_conclusion:
                     conclusion_rejected += 1
 
-        confirmed_metrics, rejected_metrics, metric_details = Workflow._verify_metrics(data)
+        confirmed_metrics, rejected_metrics, metric_details, metric_verdicts = (
+            Workflow._verify_metrics(data)
+        )
         confirmed.extend(confirmed_metrics)
         rejected += rejected_metrics
         details.extend(metric_details)
+        verdicts.extend(metric_verdicts)
+
+        Workflow._queue_oov(oov, context=oov_context, role=role_name, session=session_id)
 
         return GroundingResult(
             citations=confirmed,
             rejected=rejected,
             details=details,
             conclusion=Workflow._conclusion_verdict(
-                conclusion_total, conclusion_confirmed, conclusion_rejected
+                conclusion_total,
+                conclusion_confirmed,
+                conclusion_rejected,
+                conclusion_needs_review,
             ),
+            needs_review=needs_review,
+            needs_review_details=needs_review_details,
+            verdicts=verdicts,
         )
 
     @staticmethod
-    def _verify_metrics(data: Any) -> tuple[list[str], int, list[str]]:
+    def _verify_metrics(data: Any) -> tuple[list[str], int, list[str], list[ClaimVerdict]]:
         """Проверить расчётные метрики пересчётом по источнику.
 
         Факт подтверждается дословной цитатой. Метрику подтверждает
@@ -829,11 +1167,12 @@ class Workflow:
             data: Результат роли.
 
         Returns:
-            Пара ``(подтверждённые ссылки, число отброшенных, пояснения)``.
+            Четвёрка ``(подтверждённые ссылки, число отброшенных, пояснения,
+            вердикты по метрикам)``.
         """
         metrics = getattr(data, "metrics", None) or []
         if not metrics:
-            return [], 0, []
+            return [], 0, [], []
 
         from pf.materials import load_materials
         from pf.sources import verify_metric
@@ -842,15 +1181,24 @@ class Workflow:
         confirmed: list[str] = []
         rejected = 0
         details: list[str] = []
+        verdicts: list[ClaimVerdict] = []
         for metric in metrics:
             support = verify_metric(metric, materials)
+            name = getattr(metric, "name", "метрика")
+            verdicts.append(
+                ClaimVerdict(
+                    claim=str(name),
+                    source_id=str(getattr(metric, "source_id", "") or ""),
+                    status=support.status,
+                    detail=support.detail,
+                )
+            )
             if support.is_usable:
                 confirmed.append(support.citation)
             else:
                 rejected += 1
-                name = getattr(metric, "name", "метрика")
                 details.append(f"{name}: {support.detail}")
-        return confirmed, rejected, details
+        return confirmed, rejected, details, verdicts
 
     def _run_fact_check(
         self,
@@ -1061,8 +1409,20 @@ class Workflow:
         phase = state.phase
         role_name, payload, context = self._step_inputs(state, bundle)
 
-        data, usage = self._call_role(role_name, payload, context)
-        grounding = self._verify_claims(data, bundle)
+        data, usage = self._call_role(
+            role_name,
+            payload,
+            context,
+            extras=self._prompt_extras(state),
+        )
+        grounding = self._verify_claims(
+            data,
+            bundle,
+            state=state,
+            role_name=role_name,
+            session_id=state.session_id,
+        )
+        lexical = self._lexical_report(data)
         # Критерии успеха проверяются вместе с основаниями: это тоже
         # утверждение о том, что и как будет измерено.
         criteria_notes = self._check_success_criteria(data) if phase is Phase.STRATEGY else []
@@ -1085,11 +1445,15 @@ class Workflow:
             citations=grounding.citations,
             rejected=grounding.rejected + len(criteria_notes),
             rejected_details=[*grounding.details, *criteria_notes],
+            needs_review=grounding.needs_review,
+            needs_review_details=grounding.needs_review_details,
+            lexical=lexical,
             cost_units=usage.cost_units,
             tokens=usage.total_tokens,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             duration_ms=usage.duration_ms,
+            context_limit=usage.context_limit,
         )
 
         state.results[phase.value] = self._serialize(data)
@@ -1156,6 +1520,12 @@ class Workflow:
             return []
 
         state.results["web_sources"] = summarize(sources) + webfetch.summarize(pages)
+        # Объекты страниц нужны проверке оснований: по ним видно, что
+        # цитата из внешнего источника действительно есть на странице.
+        # Без этого ссылка на веб отклонялась как «источник не найден» —
+        # то есть как выдумка, хотя страница честно скачана.
+        state.results["web_pages"] = list(pages)
+        state.results["web_source_objects"] = list(sources)
         # Веб-контекст попадает в модель вместе с локальными абзацами:
         # иначе агент выходит в интернет, но не видит, что там нашёл.
         state.results["web_context"] = as_context(sources) + "\n\n" + webfetch.as_context(pages)
@@ -1602,6 +1972,20 @@ class Workflow:
             conclusion = state.results.pop("conclusion_check", None)
             if isinstance(conclusion, dict):
                 detail["conclusion_check"] = conclusion
+        if result.lexical:
+            # Покрытие — часть шага: по нему видно, что именно расширять
+            # в словаре, и виден эффект от пополнения.
+            detail["lexical"] = result.lexical
+        if result.context_limit:
+            # Окно и признак обрезки — в detail, а не отдельным полем записи:
+            # старые журналы остаются читаемыми, а вопрос «видела ли модель
+            # весь контекст» получает ответ в том же месте, где и остальные
+            # наблюдения шага.
+            detail["context"] = {
+                "limit": result.context_limit,
+                "prompt_tokens": result.prompt_tokens,
+                "truncated": result.prompt_truncated,
+            }
         journal = Journal(journal_path(state.session_id))
         record = StepRecord(
             ordinal=state.steps_done,
@@ -1611,6 +1995,7 @@ class Workflow:
             detail=detail,
             citations=result.citations,
             rejected_details=result.rejected_details,
+            needs_review_details=result.needs_review_details,
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,
             cost_units=result.cost_units,

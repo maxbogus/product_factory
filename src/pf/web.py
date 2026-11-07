@@ -37,7 +37,7 @@ import httpx
 
 from pf.config import settings
 from pf.corpus import DOMAIN_TERMS
-from pf.ground import SupportStatus, verify_quote
+from pf.ground import SupportStatus, mark_external, verify_quote
 
 #: Заголовок запроса к Википедии: без указания контакта — ответ 403.
 USER_AGENT = "product-factory-strategist/0.1 (contact@example.org)"
@@ -888,16 +888,17 @@ def verify_web_quote(source: WebSource, quote: str) -> WebSupport:
         Результат проверки.
     """
     support = verify_quote(source.text, quote, source.source_id)
-    if support.status is SupportStatus.CONFIRMED:
+    limited = mark_external(support)
+    if limited.status is SupportStatus.NEEDS_REVIEW:
         return WebSupport(
-            status=SupportStatus.NEEDS_REVIEW,
+            status=limited.status,
             citation=f"{source.source_id} ({source.url})",
-            detail="внешний источник: цитата найдена дословно, требует проверки",
+            detail=limited.detail,
         )
     return WebSupport(
-        status=support.status,
+        status=limited.status,
         citation=source.source_id,
-        detail=support.detail,
+        detail=limited.detail,
     )
 
 

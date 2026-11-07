@@ -147,3 +147,88 @@ def test_split_source_id_understands_plain_path() -> None:
     path, row = split_source_id("project/data/numbers.csv")
     assert path == "project/data/numbers.csv"
     assert row is None
+
+
+def test_rounded_quote_is_confirmed() -> None:
+    """Округление числа — не выдумка: 77,3 подтверждает 77,26."""
+    support = verify_quote(SOURCE, "обслужила 77,3 миллиона абонентов", "test/источник")
+    assert support.status is SupportStatus.CONFIRMED
+    assert "допуск" in support.detail
+
+
+def test_quote_with_wrong_number_is_rejected() -> None:
+    """Другое число не подтверждается: это уже не округление."""
+    support = verify_quote(SOURCE, "обслужила 99,99 миллиона абонентов", "test/источник")
+    assert support.status is SupportStatus.NO_DATA
+    assert "не совпадает" in support.detail
+
+
+def test_foreign_quote_needs_review() -> None:
+    """Иностранный источник не подтверждается дословно — он ждёт человека."""
+    support = verify_quote(
+        "Megafon served 77.26 million subscribers in June 2024.",
+        "МегаФон обслужил 77,26 миллиона абонентов",
+        "web/Новости",
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW
+    assert "иностранный" in support.detail
+
+
+def test_foreign_quote_with_wrong_number_is_rejected() -> None:
+    """Даже для иностранного источника число обязано сойтись."""
+    support = verify_quote(
+        "Megafon served 77.26 million subscribers in June 2024.",
+        "МегаФон обслужил 99,9 миллиона абонентов",
+        "web/Новости",
+    )
+    assert support.status is SupportStatus.NO_DATA
+
+
+def test_synonym_claim_is_confirmed() -> None:
+    """«Клиенты» в утверждении подтверждаются «абонентами» источника."""
+    source = "Компания обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания обслуживает клиентов связи",
+        "test/источник",
+        paragraph_index=0,
+    )
+    assert support.status is SupportStatus.CONFIRMED
+
+
+def test_exact_term_substitution_is_rejected() -> None:
+    """Подмена точного термина отклоняется с причиной."""
+    source = "«МегаФон» — российская телекоммуникационная компания."
+    support = verify_claim(
+        source,
+        "МТС — российская телекоммуникационная компания",
+        "test/источник",
+        paragraph_index=0,
+    )
+    assert support.status is SupportStatus.NO_DATA
+    assert "МТС" in support.detail
+
+
+def test_added_negation_is_rejected() -> None:
+    """Отрицание, которого нет в источнике, меняет смысл."""
+    source = "Компания обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания не обслуживает абонентов связи",
+        "test/источник",
+        paragraph_index=0,
+    )
+    assert support.status is SupportStatus.NO_DATA
+    assert "отрицание" in support.detail
+
+
+def test_oov_words_are_reported_to_queue() -> None:
+    """Незнакомое слово называется в основании, а не теряется."""
+    source = "Компания обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания обслуживает абонентов криптовалютой",
+        "test/источник",
+        paragraph_index=0,
+    )
+    assert "криптовалютой" in support.oov
