@@ -54,6 +54,45 @@ methods:
     test: tests/test_state_journal.py
     note: Сборщик и аналитик цитируют одни и те же абзацы — это три факта, а не семь.
 
+  - id: conclusion-grounding
+    title: Основания вывода проверяются как основания факта
+    status: implemented
+    module: src/pf/workflow.py
+    test: tests/test_conclusion_grounding.py
+    note: >
+      evidence стратегии, promise_grounding коммуникации и basis
+      обязательств проходят ту же проверку: дословность цитаты и
+      релевантность источника. Статус оснований вывода пишется в журнал.
+
+  - id: conclusion-in-document
+    title: Документ демонстрации показывает вывод и его основания
+    status: implemented
+    module: scripts/build_demo_doc.py
+    test: tests/test_demo_doc_generated.py
+    note: >
+      Раздел «Вывод» собирается из журнала: направление, обязательства и
+      статус оснований. Без него документ отвечал на вопрос «сколько
+      оснований», но не на заданный вопрос.
+
+  - id: metric-name-matches-row
+    title: Имя показателя сверяется с колонкой строки
+    status: implemented
+    module: src/pf/sources.py
+    test: tests/test_metric_semantics.py
+    note: >
+      Если строка сама называет показатель, метрика не может называть его
+      иначе: под словом «удержание» не должно стоять значение абонентской
+      базы.
+
+  - id: fact-contradictions
+    title: Противоречащие факты объявляются пробелом
+    status: implemented
+    module: src/pf/workflow.py
+    test: tests/test_contradictions.py
+    note: >
+      «Удержание падает» и «удержание не изменилось» не могут стоять рядом
+      молча: дословность проверку прошли оба, смысл — нет.
+
   - id: constraint-check
     title: Ограничения задачи проверяются кодом
     status: not_implemented

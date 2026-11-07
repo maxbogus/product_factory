@@ -100,8 +100,7 @@ def check_zones_declared() -> list[str]:
             zone = str(flow.get(side, ""))
             if zone and zone not in zones:
                 problems.append(
-                    f"поток {flow.get('from')} -> {flow.get('to')}: "
-                    f"зона «{zone}» не объявлена"
+                    f"поток {flow.get('from')} -> {flow.get('to')}: зона «{zone}» не объявлена"
                 )
     return problems
 
@@ -155,8 +154,7 @@ def check_write_sources_subset() -> list[str]:
         source = str(flow.get("from", ""))
         if source not in allowed:
             problems.append(
-                f"поток {source} -> {flow.get('to')}: "
-                f"запись разрешена только из {sorted(allowed)}"
+                f"поток {source} -> {flow.get('to')}: запись разрешена только из {sorted(allowed)}"
             )
     return problems
 
@@ -196,9 +194,7 @@ def check_claims_have_verification() -> list[str]:
             if not verified_by:
                 problems.append(f"заявление {identifier}: у цели нет проверки")
             if "цель" not in str(claim.get("note", "")).lower():
-                problems.append(
-                    f"заявление {identifier}: цель обязана быть помечена словом «цель»"
-                )
+                problems.append(f"заявление {identifier}: цель обязана быть помечена словом «цель»")
     return problems
 
 
@@ -236,9 +232,7 @@ def check_implementation_status() -> list[str]:
 
 
 #: Ключевые слова шагов Gherkin: русские и английские.
-_STEP_KEYWORD = re.compile(
-    r"^(Допустим|Если|Когда|Тогда|И|Но|Given|When|Then|And|But)\s+"
-)
+_STEP_KEYWORD = re.compile(r"^(Допустим|Если|Когда|Тогда|И|Но|Given|When|Then|And|But)\s+")
 
 
 def _normalize(text: str) -> str:
@@ -472,6 +466,30 @@ def check_domain_reference_marked() -> list[str]:
     return check_marking_present("domain-reference-is-not-case-fact")
 
 
+def check_conclusion_is_grounded() -> list[str]:
+    """Основания вывода проверяются вместе с фактами.
+
+    Правило статическое: проверка оснований обязана собирать ссылки не
+    только из фактов, но и из стратегии (``evidence``,
+    ``promise_grounding``) и решения (``basis``). Без этого вывод — «что
+    делать» — остаётся единственным утверждением, которое никто не
+    проверял: в демо-прогоне он опирался на файл, которого нет в
+    материалах, и это не проявлялось.
+
+    Returns:
+        Список нарушений.
+    """
+    path = ROOT / "src" / "pf" / "workflow.py"
+    if not path.is_file():
+        return ["модуль src/pf/workflow.py не найден"]
+    text = path.read_text(encoding="utf-8")
+    required = ("evidence", "promise_grounding", "commitments", "basis", "conclusion")
+    missing = [marker for marker in required if marker not in text]
+    if missing:
+        return ["проверка оснований не смотрит в: " + ", ".join(missing)]
+    return []
+
+
 CHECKS = {
     "zones_declared": check_zones_declared,
     "acyclic": check_acyclic,
@@ -481,6 +499,7 @@ CHECKS = {
     "claims_have_verification": check_claims_have_verification,
     "implementation_status_valid": check_implementation_status,
     "scenarios_covered": check_scenarios_covered,
+    "conclusion_is_grounded": check_conclusion_is_grounded,
 }
 
 
