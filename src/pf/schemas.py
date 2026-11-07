@@ -227,9 +227,10 @@ class MetricRef(BaseModel):
     def is_reproducible(self) -> bool:
         """Можно ли пересчитать метрику по её же данным.
 
-        Метрика без источника — это утверждение, а не расчёт.
+        Метрика без источника — это утверждение, а не расчёт. Без
+        формулы пересчитать тоже нельзя: известно только число.
         """
-        return bool(self.source_id)
+        return bool(self.source_id) and bool(self.formula)
 
 
 class Claim(BaseModel):
