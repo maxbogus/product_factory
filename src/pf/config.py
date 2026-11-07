@@ -101,7 +101,7 @@ class Settings(BaseSettings):
 
     # ── Параметры генерации ─────────────────────────────────────────────────
     temperature: float = 0.2
-    max_tokens: int = 2400
+    max_tokens: int = 3200
     timeout_seconds: int = 180
 
     # ── Источники ───────────────────────────────────────────────────────────

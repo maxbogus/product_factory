@@ -206,6 +206,12 @@ BaseModelType = Any
 
 #: Соответствие «роль → фаза». По нему решение роутера превращается в
 #: следующий шаг рабочего процесса.
+#: Сколько расчётных метрик одного материала попадает в контекст.
+#: Без ограничения блок расчётов разрастался до 50 тысяч символов и
+#: вытеснял сами источники: модель переставала видеть идентификаторы и
+#: цитировала вопросы из блока ДАННЫЕ.
+MAX_METRICS_IN_CONTEXT = 8
+
 #: Колонки, которые задают период, а не различие величин. Значения
 #: «2017», «2018», «конец июля» — это точки одного ряда во времени.
 _PERIOD_COLUMNS: frozenset[str] = frozenset(
@@ -935,7 +941,7 @@ class Workflow:
                 continue
             lines = [
                 f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
-                for metric in metrics[:10]
+                for metric in metrics[:MAX_METRICS_IN_CONTEXT]
             ]
             # Изменение считается по рядам: разные операторы и разные
             # годы нельзя складывать в один ряд, иначе получится
@@ -965,9 +971,12 @@ class Workflow:
             )
             lines.extend(
                 f"- {metric.name}: {metric.formatted} [{metric.citation}] ({metric.formula})"
-                for metric in summary
+                for metric in summary[:MAX_METRICS_IN_CONTEXT]
             )
-            blocks.append(f"РАСЧЁТЫ по {material.source_id}:\n" + "\n".join(lines))
+            blocks.append(
+                f"РАСЧЁТЫ по {material.source_id} "
+                "(числа посчитаны кодом, source_id копируется отсюда):\n" + "\n".join(lines)
+            )
         if not blocks:
             return ""
         return "\n\n".join(blocks)
