@@ -111,3 +111,31 @@ def test_verify_claim_rejects_irrelevant_but_real_source() -> None:
     assert bundle.articles
     foreign = "mathematics/Испытание (техника)"
     assert not bundle.is_relevant(foreign)
+
+
+def test_short_source_name_is_resolved() -> None:
+    """Короткое имя файла вместо полного пути должно находиться.
+
+    Модель часто отвечает «telecom_open_metrics» вместо
+    «project/data/telecom_open_metrics.csv». Строгий поиск источник не
+    находил, и все ссылки на собственные материалы отклонялись с
+    сообщением «источник не относится к задаче».
+    """
+    bundle = collect("отток абонентов операторов связи удержание")
+    assert bundle.is_relevant("telecom_open_metrics")
+
+
+def test_short_source_name_resolves_article() -> None:
+    """Цитата из материала по короткому имени подтверждается."""
+    bundle = collect("отток абонентов операторов связи удержание")
+    project = [a for a in bundle.articles if a.source_id.startswith("project/")]
+    assert project, "материал проекта должен быть в срезе"
+    article = project[0]
+    text = article.content.splitlines()[0]
+    support = bundle.verify_claim(
+        text[:60],
+        source_id="telecom_open_metrics",
+        paragraph=None,
+        quote=text[:60],
+    )
+    assert support.is_usable, f"цитата должна подтверждаться: {support.detail}"

@@ -128,7 +128,19 @@ class SourceBundle:
             Источник релевантен задаче.
         """
         clean_id, _ = split_source_id(source_id)
-        return any(a.source_id == clean_id or a.title == clean_id for a in self.articles)
+        if any(a.source_id == clean_id or a.title == clean_id for a in self.articles):
+            return True
+        # Модель часто присылает короткое имя файла вместо полного
+        # пути: «telecom_open_metrics» вместо
+        # «project/data/telecom_open_metrics.csv». Источник тот же, а
+        # строгий поиск его не находил — и все ссылки отклонялись.
+        tail = clean_id.rsplit("/", 1)[-1]
+        stem = tail.rsplit(".", 1)[0]
+        return any(
+            a.source_id.rsplit("/", 1)[-1] == tail
+            or a.source_id.rsplit("/", 1)[-1].rsplit(".", 1)[0] == stem
+            for a in self.articles
+        )
 
     def _resolve(self, clean_id: str) -> list[Article]:
         """Найти статью по идентификатору.
@@ -152,6 +164,21 @@ class SourceBundle:
             if found:
                 return found
             found = [a for a in pool if a.title == clean_id]
+            if found:
+                return found
+
+        # Короткое имя файла вместо полного пути: «telecom_open_metrics»
+        # вместо «project/data/telecom_open_metrics.csv». Модель так
+        # отвечает, и цитата из своего материала иначе не находилась.
+        tail = clean_id.rsplit("/", 1)[-1]
+        stem = tail.rsplit(".", 1)[0]
+        for pool in (self.articles, get_corpus().articles):
+            found = [
+                a
+                for a in pool
+                if a.source_id.rsplit("/", 1)[-1] == tail
+                or a.source_id.rsplit("/", 1)[-1].rsplit(".", 1)[0] == stem
+            ]
             if found:
                 return found
         return []
