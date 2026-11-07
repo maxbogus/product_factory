@@ -74,6 +74,7 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "mcp>=2.3.0",
+    "pytest-bdd>=8.0",
     "types-pyyaml>=6.0.12.20261103",
     "wikipedia>=1.4.0",
 ]
