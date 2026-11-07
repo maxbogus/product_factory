@@ -20,7 +20,6 @@ from typing import Any
 from pf.config import settings
 from pf.corpus import (
     DOMAIN_TERMS,
-    STRONG_DOMAIN_TERMS,
     Article,
     Corpus,
     domain_lemmas,
