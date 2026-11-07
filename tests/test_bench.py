@@ -7,7 +7,14 @@
 
 from __future__ import annotations
 
-from pf.bench import BaselineResult, baseline_metrics, compare, run_baseline
+from pf.bench import (
+    BaselineResult,
+    baseline_metrics,
+    compare,
+    run_baseline,
+    settings_for_model,
+)
+from pf.config import Settings
 from pf.llm import LLMResponse, LLMUsage
 from pf.tracking import RunMetrics
 
@@ -89,3 +96,26 @@ def test_compare_survives_zero_baseline() -> None:
     result = compare(agent, baseline)
     assert result["token_ratio"] == 0.0
     assert result["time_ratio"] == 0.0
+
+
+def test_model_name_goes_to_provider_field() -> None:
+    """Имя из ``--models`` попадает в поле модели выбранного провайдера.
+
+    На облаке прогон шёл не на той модели, что просили: имя писалось в
+    ``ollama_model``, а клиент берёт ``llm_model``. Теперь поле зависит
+    от провайдера.
+    """
+    local = Settings(llm_provider="ollama", ollama_model="qwen3:8b")
+    picked = settings_for_model("qwen2.5:7b", local)
+    assert picked.ollama_model == "qwen2.5:7b"
+    assert picked.effective_model == "qwen2.5:7b"
+
+    cloud = Settings(
+        llm_provider="openai",
+        llm_model="deepseek-flash",
+        llm_base_url="https://api.deepseek.com",
+        llm_api_key="test-key",
+    )
+    picked_cloud = settings_for_model("deepseek-v4-pro", cloud)
+    assert picked_cloud.llm_model == "deepseek-v4-pro"
+    assert picked_cloud.effective_model == "deepseek-v4-pro"

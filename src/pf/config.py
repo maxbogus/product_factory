@@ -14,6 +14,12 @@ from typing import Any
 from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Лимит ответа для облачных (не локальных) моделей. JSON стратегии
+#: длинный: на локальном лимите 2400-3200 токенов облачная модель
+#: обрывает его, и разбор падает на «JSON не закрыт». Локальная модель
+#: остаётся на значении из настроек — ей этого хватает.
+CLOUD_MAX_TOKENS = 8192
+
 
 def read_env_file(path: Path | None = None) -> dict[str, str]:
     """Прочитать переменные из файла ``.env``.
@@ -204,6 +210,19 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         """Работает ли агент на локальной модели (без внешних ключей)."""
         return self.llm_provider == "ollama"
+
+    @property
+    def effective_max_tokens(self) -> int:
+        """Лимит длины ответа для выбранного провайдера.
+
+        У локальной модели — значение из настроек. У облачной — не меньше
+        ``CLOUD_MAX_TOKENS``: там ответ длиннее, и на локальном лимите
+        JSON стратегии приходит обрезанным. Если в настройках задано
+        больше, берётся большее значение.
+        """
+        if self.is_local:
+            return self.max_tokens
+        return max(self.max_tokens, CLOUD_MAX_TOKENS)
 
     def environment(self) -> dict[str, str]:
         """Все переменные, доступные агенту: процесс и файл ``.env``.

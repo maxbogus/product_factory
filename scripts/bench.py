@@ -31,7 +31,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from pf.bench import DEFAULT_TASK, baseline_metrics, run_agent, run_baseline  # noqa: E402
+from pf.bench import (  # noqa: E402
+    DEFAULT_TASK,
+    baseline_metrics,
+    run_agent,
+    run_baseline,
+    settings_for_model,
+)
 from pf.tracking import Accumulator, RunMetrics  # noqa: E402
 
 
@@ -96,7 +102,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from pf.config import Settings, settings
+    from pf.config import settings
 
     models = [m.strip() for m in args.models if m.strip()]
     if not models:
@@ -108,7 +114,7 @@ def main() -> int:
     all_rows: list[RunMetrics] = []
 
     for model in models:
-        config = Settings(ollama_model=model)
+        config = settings_for_model(model)
         print(f"=== модель: {model} ===", flush=True)
         for index in range(1, args.repeats + 1):
             if not args.baseline_only:

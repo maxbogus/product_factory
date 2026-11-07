@@ -171,7 +171,7 @@ class OllamaClient:
             "stream": False,
             "options": {
                 "temperature": self.config.temperature,
-                "num_predict": self.config.max_tokens,
+                "num_predict": self.config.effective_max_tokens,
             },
             "messages": [
                 {"role": "system", "content": system},
@@ -236,7 +236,7 @@ class OpenAICompatibleClient:
         payload = {
             "model": self.config.effective_model,
             "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": self.config.effective_max_tokens,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

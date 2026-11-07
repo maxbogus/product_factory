@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from pf.config import Settings
-from pf.llm import LLMError, OllamaClient, extract_json
+from pf.llm import LLMError, OllamaClient, OpenAICompatibleClient, extract_json
 
 
 def _response(payload: dict[str, object]) -> httpx.Response:
@@ -96,3 +96,50 @@ def test_plain_json_is_parsed() -> None:
 def test_fenced_json_is_parsed() -> None:
     """JSON в блоке кода разбирается."""
     assert extract_json('```json\n{"a": 1}\n```') == {"a": 1}
+
+
+def test_cloud_max_tokens_is_raised() -> None:
+    """Облачному провайдеру лимит ответа поднимается.
+
+    На локальном лимите (``PF_MAX_TOKENS=2400``) JSON стратегии обрывался,
+    и прогон на облаке падал на «JSON не закрыт». Локальная модель
+    остаётся на значении из настроек — ей этого хватает.
+    """
+    local = Settings(llm_provider="ollama", max_tokens=2400)
+    assert local.effective_max_tokens == 2400
+
+    cloud = Settings(
+        llm_provider="openai",
+        max_tokens=2400,
+        llm_model="deepseek-flash",
+        llm_api_key="test-key",
+    )
+    assert cloud.effective_max_tokens >= 8000
+
+
+def test_openai_payload_uses_effective_max_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """В запрос к облаку уходит поднятый лимит, а не локальный."""
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs: object) -> httpx.Response:
+        captured.update(kwargs.get("json", {}) or {})  # type: ignore[arg-type]
+        return _response(
+            {
+                "choices": [{"message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 7},
+            }
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = OpenAICompatibleClient(
+        Settings(
+            llm_provider="openai",
+            max_tokens=2400,
+            llm_model="deepseek-flash",
+            llm_api_key="test-key",
+            llm_base_url="https://api.deepseek.com",
+        )
+    )
+    client.complete("система", "задача")
+
+    assert captured["max_tokens"] >= 8000

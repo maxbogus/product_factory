@@ -195,3 +195,24 @@ methods:
       Гейт разбирает AST и ловит именно ту ошибку, что была в прогоне, —
       шаг без определения.
 
+  - id: bench-model-per-provider
+    title: Замер ставит модель в поле выбранного провайдера
+    status: implemented
+    module: src/pf/bench.py
+    test: tests/test_bench.py
+    note: >
+      Имя из `--models` писалось в `ollama_model`, и облачный прогон шёл не
+      на той модели, что просили: клиент берёт `llm_model`. Теперь поле
+      зависит от провайдера.
+
+  - id: cloud-max-tokens
+    title: Облачному провайдеру лимит ответа поднимается
+    status: implemented
+    module: src/pf/config.py
+    test: tests/test_llm_client.py
+    note: >
+      На локальном лимите 2400 токенов JSON стратегии приходил обрезанным,
+      и прогон на DeepSeek падал на «JSON не закрыт». Для нелокального
+      провайдера лимит не ниже `CLOUD_MAX_TOKENS`.
+
+

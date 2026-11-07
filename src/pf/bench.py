@@ -41,6 +41,27 @@ BASELINE_PROMPT = """Задача руководителя цифрового п
 варианты действий, что и как проверить."""
 
 
+def settings_for_model(model: str, config: Settings | None = None) -> Settings:
+    """Настройки прогона для конкретной модели выбранного провайдера.
+
+    Провайдер берётся из переданных настроек (или из окружения): у
+    локального Ollama имя модели — ``ollama_model``, у облачного API —
+    ``llm_model``. Раньше замер всегда писал имя в ``ollama_model``, и на
+    облаке прогон шёл не на той модели, что просили.
+
+    Args:
+        model: Имя модели из аргумента ``--models``.
+        config: Настройки, из которых берётся провайдер. По умолчанию —
+            глобальные настройки.
+
+    Returns:
+        Копия настроек с подставленным именем модели.
+    """
+    used = config or settings
+    field = "ollama_model" if used.llm_provider == "ollama" else "llm_model"
+    return used.model_copy(update={field: model})
+
+
 @dataclass(slots=True)
 class BaselineResult:
     """Результат baseline-прогона.
