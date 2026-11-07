@@ -299,7 +299,9 @@ def _read_document(path: Path) -> str:
         try:
             import pdfplumber
         except ImportError as exc:
-            raise MaterialError("для чтения PDF нужен pdfplumber: uv add pdfplumber") from exc
+            raise MaterialError(
+                "для чтения PDF нужны библиотеки документов: uv sync --extra documents"
+            ) from exc
         pages: list[str] = []
         with pdfplumber.open(path) as document:
             for page in document.pages:
@@ -310,7 +312,9 @@ def _read_document(path: Path) -> str:
         try:
             from docx import Document
         except ImportError as exc:
-            raise MaterialError("для чтения DOCX нужен python-docx: uv add python-docx") from exc
+            raise MaterialError(
+                "для чтения DOCX нужны библиотеки документов: uv sync --extra documents"
+            ) from exc
         document = Document(str(path))
         return "\n\n".join(paragraph.text for paragraph in document.paragraphs)
 
@@ -318,7 +322,9 @@ def _read_document(path: Path) -> str:
         try:
             from openpyxl import load_workbook
         except ImportError as exc:
-            raise MaterialError("для чтения XLSX нужен openpyxl: uv add openpyxl") from exc
+            raise MaterialError(
+                "для чтения XLSX нужны библиотеки документов: uv sync --extra documents"
+            ) from exc
         workbook = load_workbook(path, read_only=True, data_only=True)
         blocks: list[str] = []
         for sheet in workbook.worksheets:

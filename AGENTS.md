@@ -118,6 +118,10 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
   `docs/sessions/`.
 - `docs/canon.py` — единственный источник чисел, которые называют
   `README.md` и `docs/DESCRIPTION.md`. Гейт `make docs-check`.
+- `tests/test_documents_consistency.py` — заявления документов против кода:
+  умолчания `.env.example` против `Settings.model_fields`, единая
+  инструкция для `--extra documents`, `demo/BRIEF.md` про веб, README про
+  цикл пересмотра, команды из README. Гейт `make ci`.
 - `docs/decisions.md` — почему всё так.
 - `docs/DESCRIPTION.md` — описание работы для сдачи (обновлять вместе с кодом).
 - `docs/VIDEO_SCRIPT.md` — сценарий видеозаписи.
