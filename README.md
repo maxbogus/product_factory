@@ -205,8 +205,8 @@ uv sync --extra documents
 Этот цикл работает — его исполняет `pf review`:
 
 ```bash
-pf review --session demo-v10         # какие выводы затронуты новыми данными
-pf review --session demo-v10 --json  # то же машинно
+pf review --session demo-v12         # какие выводы затронуты новыми данными
+pf review --session demo-v12 --json  # то же машинно
 ```
 
 Пересмотр ничего не переписывает: он сравнивает записанный хеш с текущим
@@ -349,8 +349,8 @@ uv run python scripts/replay_verification.py --json /tmp/new.json --compare /tmp
 который легко перевести в деньги по тарифу модели. `pf cost` показывает
 сумму и разбивку по ролям.
 
-Полный прогон демонстрационной задачи на `qwen3:8b` (сессия `demo-v10`) —
-**53 335 токенов** (0.0533 единицы) и **~8 минут** на CPU. На `qwen2.5:7b` —
+Полный прогон демонстрационной задачи на `qwen3:8b` (сессия `demo-v12`) —
+**54 851 токен** (0.0549 единицы) и **~6 минут** на CPU. На `qwen2.5:7b` —
 около **20 000 токенов** и **~100 секунд**. Разбивка по ролям —
 в `pf cost`, пошаговый отчёт — в `demo/RESULT.md`.
 
@@ -381,7 +381,7 @@ uv run python scripts/replay_verification.py --json /tmp/new.json --compare /tmp
 ## Разработка
 
 ```bash
-make test        # 569 теста, без обращения к модели
+make test        # 582 теста, без обращения к модели
 make test-slow   # живые тесты с моделью
 make eval        # eval-сценарии: правила поведения агента
 make bench       # замеры: агент против обычного чата

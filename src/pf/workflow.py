@@ -2168,6 +2168,67 @@ class Workflow:
             )
         return "\n\n".join(parts)
 
+    @classmethod
+    def human_question_to_stop(cls, state: SessionState, result: StepResult) -> str:
+        """Вопрос, из-за которого работа останавливается.
+
+        Человек подключается там, где без его решения работа потеряла бы
+        смысл. Но повтор уже заданного вопроса работой не двигает: в
+        прогоне `demo-v11` роутер спросил одно и то же дважды — человек
+        ответил, `pf resume` повторил маршрутизацию, модель повторила
+        вопрос, и сессия встала навсегда: ни шага вперёд, ни нового
+        вопроса, хотя ответ у агента уже был.
+
+        Args:
+            state: Состояние сессии.
+            result: Результат шага.
+
+        Returns:
+            Текст вопроса, если работа останавливается, иначе пустая строка.
+            Повтор снимается **только** тогда, когда ответ уже записан:
+            вопрос, которого человек не видел, пропускать нельзя.
+        """
+        if not isinstance(result.data, NextStep) or not result.data.need_human:
+            return ""
+        question = (result.data.question or "Нужно ваше решение, чтобы продолжить.").strip()
+        if question and cls._question_is_answered(state, question):
+            state.results["routing_note"] = (
+                "роутер повторил уже заданный вопрос: ответ записан в сессии, "
+                "работа продолжена по порядку фаз"
+            )
+            return ""
+        return question
+
+    @classmethod
+    def _question_is_answered(cls, state: SessionState, question: str) -> bool:
+        """Вопрос уже задан и на него ответили.
+
+        Args:
+            state: Состояние сессии.
+            question: Вопрос роутера.
+
+        Returns:
+            ``True``, если такой вопрос задавали и человек дал ответ.
+        """
+        if not state.results.get("human_answers"):
+            return False
+        asked = {
+            cls._normalize_question(item) for item in state.results.get("human_questions") or []
+        }
+        return cls._normalize_question(question) in asked
+
+    @staticmethod
+    def _normalize_question(text: str) -> str:
+        """Вопрос без различий в регистре и пробелах.
+
+        Args:
+            text: Текст вопроса.
+
+        Returns:
+            Приведённый текст для сравнения.
+        """
+        return " ".join(str(text).lower().split())
+
     @staticmethod
     def _human_context(state: SessionState) -> str:
         """Собрать ответы человека для роли.
@@ -2286,7 +2347,10 @@ class Workflow:
         frame = state.results.get(Phase.INTAKE.value, {})
         questions = plan.get("questions", [])[:5]
         query = " ".join([state.question, str(frame.get("goal", "")), *questions])
-        return collect(query)
+        # Расчёты агента передаются вместе с источниками: агрегат (среднее,
+        # изменение) в основании вывода подтверждается пересчётом по ним, а
+        # не поиском величины в тексте материала, где её нет и быть не может.
+        return collect(query, metrics=tuple(Workflow._computed_metric_records()))
 
     def bundle_for(self, state: SessionState) -> SourceBundle | None:
         """Источники, нужные текущей фазе.
@@ -2353,9 +2417,10 @@ def run_full_workflow(
 
         # Человек подключается там, где без его решения работа потеряла
         # бы смысл. Это требование брифа: агент сам ведёт работу, но
-        # подключает человека при существенном выборе.
-        if isinstance(result.data, NextStep) and result.data.need_human:
-            question = result.data.question or "Нужно ваше решение, чтобы продолжить."
+        # подключает человека при существенном выборе. Повтор уже
+        # заданного вопроса работой не двигает — ответ у агента есть.
+        question = workflow.human_question_to_stop(state, result)
+        if question:
             state.pending_question = question
             state.results.setdefault("human_questions", []).append(question)
             save(state)

@@ -137,3 +137,88 @@ def test_human_answer_reaches_strategy_phase() -> None:
     workflow = Workflow(client=_StubClient({}))
     _role, _payload, context = workflow._step_inputs(state, None)
     assert "Цену снижать нельзя" in context, "ответ человека должен доходить до стратега"
+
+
+#: Вопрос роутера из прогона `demo-v11` — он повторился слово в слово.
+_REPEATED_QUESTION = (
+    "Какие метрики удержания анализируются и как они изменились за последние три месяца?"
+)
+
+
+def _routing_step(question: str):
+    """Результат шага роутера, который просит человека.
+
+    Args:
+        question: Вопрос, который задаёт роутер.
+
+    Returns:
+        Результат шага с ``need_human``.
+    """
+    from pf.schemas import NextStep
+    from pf.workflow import StepResult
+
+    return StepResult(
+        role="router",
+        phase=Phase.ROUTING,
+        data=NextStep(
+            role="collector",
+            reason="нужно уточнение",
+            need_human=True,
+            question=question,
+        ),
+    )
+
+
+def test_repeated_question_does_not_stop_work() -> None:
+    """Повтор уже заданного вопроса не останавливает работу.
+
+    Прогон `demo-v11` встал навсегда: роутер спросил человека на
+    маршрутизации, ответ записан в сессию, `pf resume` снова выполнил
+    маршрутизацию — и модель повторила тот же вопрос слово в слово. Работа
+    не двинулась ни на шаг, а ответ у агента уже был. Спрашивать второй раз
+    нечего: вопрос задан, ответ дан, дальше — работа.
+    """
+    state = SessionState(session_id="repeat-question", phase=Phase.ROUTING)
+    state.results["human_questions"] = [_REPEATED_QUESTION]
+    state.results["human_answers"] = ["Метрики бери из материалов проекта"]
+    save(state)
+
+    workflow = Workflow(client=_StubClient({}))
+    stop = workflow.human_question_to_stop(state, _routing_step(_REPEATED_QUESTION))
+
+    assert stop == "", "на вопрос, на который ответили, второй раз не останавливаются"
+    assert state.results.get("routing_note"), "повтор вопроса должен быть назван в журнале"
+
+
+def test_repeated_question_without_answer_still_stops() -> None:
+    """Пока ответа нет, повтор вопроса останавливает работу.
+
+    Пропускать можно только тот вопрос, на который человек ответил. Иначе
+    агент молча прошёл бы мимо вопроса, которого никто не видел.
+    """
+    state = SessionState(session_id="repeat-question-unanswered", phase=Phase.ROUTING)
+    state.results["human_questions"] = [_REPEATED_QUESTION]
+    save(state)
+
+    workflow = Workflow(client=_StubClient({}))
+    stop = workflow.human_question_to_stop(state, _routing_step(_REPEATED_QUESTION))
+
+    assert stop == _REPEATED_QUESTION
+
+
+def test_repeated_question_check_keeps_new_questions() -> None:
+    """Новый вопрос останавливает работу, даже если на прошлый ответили.
+
+    Правило про повтор узкое: оно снимает только буквальный повтор. Другой
+    вопрос — это другое уточнение, и человек должен его увидеть.
+    """
+    state = SessionState(session_id="repeat-question-new", phase=Phase.ROUTING)
+    state.results["human_questions"] = [_REPEATED_QUESTION]
+    state.results["human_answers"] = ["Метрики бери из материалов проекта"]
+    save(state)
+
+    workflow = Workflow(client=_StubClient({}))
+    other = "Какой бюджет доступен на удержание?"
+    stop = workflow.human_question_to_stop(state, _routing_step(other))
+
+    assert stop == other

@@ -210,7 +210,6 @@ def _print_strategy(state: SessionState) -> None:
 
 def cmd_resume(args: argparse.Namespace) -> int:
     """Продолжить сохранённую сессию."""
-    from pf.schemas import NextStep
     from pf.workflow import Workflow
 
     session_id = _session_id(args.session)
@@ -246,9 +245,10 @@ def cmd_resume(args: argparse.Namespace) -> int:
     _out(f"{CHECK} {result.phase.title_ru}: {_describe(result.data)}")
 
     # Роутер может снова попросить человека: вопрос показывается, работа
-    # не продолжается вслепую.
-    if isinstance(result.data, NextStep) and result.data.need_human:
-        question = result.data.question or "Нужно ваше решение, чтобы продолжить."
+    # не продолжается вслепую. Повтор уже заданного вопроса не
+    # останавливает: человек на него ответил, и второй раз спрашивать нечего.
+    question = workflow.human_question_to_stop(state, result)
+    if question:
         state.pending_question = question
         state.results.setdefault("human_questions", []).append(question)
         save(state)

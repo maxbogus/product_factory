@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -178,11 +179,16 @@ class SourceBundle:
         passages: Абзацы, отобранные под запрос.
         articles: Статьи, из которых взяты абзацы.
         query: Исходный запрос.
+        metrics: Расчёты агента по этим материалам. Нужны, потому что
+            агрегат (среднее, медиана, изменение) не лежит ни в одной
+            строке таблицы: подтвердить его можно только сверкой с
+            расчётом по имени и пересчётом по его входам.
     """
 
     passages: list[Passage]
     articles: list[Article]
     query: str
+    metrics: tuple[Any, ...] = ()
 
     #: Сколько абзацев одного источника попадает в окно при ограничении.
     #: Одна таблица даёт по абзацу на строку, и без предела строки вытесняют
@@ -477,6 +483,11 @@ class SourceBundle:
                     # «изменение за период: 0 %» в таблице не лежит. Это
                     # не выдумка, но и не цитата — называем причину, чтобы
                     # модель переложила величину в metrics.
+                    # Агрегат мог быть посчитан агентом: тогда он
+                    # подтверждается расчётом, а не строкой.
+                    aggregate = _aggregate_by_name(self.metrics, claim_text, quote)
+                    if aggregate is not None:
+                        return aggregate
                     if _looks_computed(quote):
                         return Support(
                             quote=quote,
@@ -496,6 +507,14 @@ class SourceBundle:
                     )
         else:
             candidates = list(self.articles)
+
+        # Ссылки без якоря строки — самый частый вид основания вывода: модель
+        # называет файл и цитирует сводку из блока РАСЧЁТЫ. Такой цитаты в
+        # тексте материала нет и быть не может, поэтому агрегат проверяется
+        # до поиска по статьям (иначе основание отклоняется всегда).
+        aggregate = _aggregate_by_name(self.metrics, claim_text, quote)
+        if aggregate is not None:
+            return aggregate
 
         if not candidates:
             return Support(
@@ -722,6 +741,83 @@ def _split_numbers(value: str) -> list[str]:
     if len(parts) >= 2 and all(parse_number(part) is not None for part in parts):
         return parts
     return [text]
+
+
+def _aggregate_by_name(
+    metrics: tuple[Any, ...] | list[Any],
+    claim_text: str,
+    quote: str,
+) -> Support | None:
+    """Подтвердить агрегат в основании по расчёту агента.
+
+    Среднее, медиана, размах и изменение не лежат ни в одной строке
+    таблицы: их значение получается пересчётом по наблюдениям. В
+    `demo-v10` модель цитировала средние из блока РАСЧЁТЫ как дословные
+    строки источника, проверка искала фразу в тексте материала, не
+    находила — и оба основания вывода отклонялись при верных данных.
+
+    Агрегат ищется **по имени**, а не по совпадению числа: имя расчёта
+    состоит из показателя и вида сводки («Абонентская база МТС: среднее»),
+    и оба куска должны быть названы в основании. Затем значение сверяется
+    со значением расчёта и пересчитывается по его входам.
+
+    Args:
+        metrics: Расчёты агента по материалам.
+        claim_text: Текст утверждения.
+        quote: Цитата из ответа модели.
+
+    Returns:
+        Подтверждённое основание либо ``None``, если среди расчётов нет
+        подходящего. ``None`` — не отказ, а «это правило не подошло»:
+        проверка продолжается обычным путём.
+    """
+    if not metrics:
+        return None
+    text = f"{claim_text} {quote}".strip()
+    numbers = _numbers_in(quote) or _numbers_in(claim_text)
+    if not numbers:
+        return None
+    absolute = settings.metric_abs_tolerance
+    relative = settings.metric_rel_tolerance
+    # Последнее число идёт первым: в сводке «ARPU ... : среднее: 322.2»
+    # величина стоит в конце, а числа показателя — в начале.
+    for number in reversed(numbers):
+        for metric in metrics:
+            if not getattr(metric, "is_aggregate", False):
+                continue
+            name = str(getattr(metric, "name", ""))
+            base, _, summary = name.rpartition(":")
+            if not base.strip() or not summary.strip():
+                continue
+            if not (_name_matches_row(base, text) and _name_matches_row(summary, text)):
+                continue
+            value = float(getattr(metric, "value", 0.0))
+            allowed = max(
+                _display_tolerance(value),
+                number_tolerance(value, abs_tolerance=absolute, rel_tolerance=relative),
+            )
+            if not _matches_any(number, [value], allowed):
+                continue
+            inputs = dict(getattr(metric, "inputs", {}) or {})
+            formula = str(getattr(metric, "formula", ""))
+            if _is_identity_calculation(inputs, formula):
+                continue
+            recomputed = _aggregate_from_inputs(value, inputs, formula)
+            if recomputed is None or not _matches_any(value, [recomputed], allowed):
+                continue
+            support = Support(
+                quote=quote or claim_text[:400],
+                source_id=str(getattr(metric, "citation", "")),
+                status=SupportStatus.CONFIRMED,
+                detail=(
+                    "агрегат совпал с расчётом агента: значение пересчитано "
+                    f"по входам метрики «{name}»"
+                ),
+            )
+            # Статус задаёт происхождение расчёта, а не форма ссылки в
+            # ответе: среднее по сырой выгрузке подтверждено быть не может.
+            return _limit_knowledge_source(support, support.source_id)
+    return None
 
 
 #: Колонки таблицы, которые называют показатель: что строка измеряет.
@@ -1264,6 +1360,25 @@ def _looks_computed(quote: str) -> bool:
     return bool(_COMPUTED_MARKERS.search(quote))
 
 
+def _numbers_in(text: str) -> list[float]:
+    """Все числа текста в порядке появления.
+
+    Args:
+        text: Текст.
+
+    Returns:
+        Числа, разобранные с учётом десятичной запятой.
+    """
+    from pf.analysis import parse_number
+
+    found: list[float] = []
+    for token in re.findall(r"-?\d+(?:[.,]\d+)?", text):
+        value = parse_number(token)
+        if value is not None:
+            found.append(value)
+    return found
+
+
 def _first_number(text: str) -> float | None:
     """Первое число в тексте.
 
@@ -1273,13 +1388,8 @@ def _first_number(text: str) -> float | None:
     Returns:
         Число либо ``None``.
     """
-    from pf.analysis import parse_number
-
-    for token in re.findall(r"-?\d+(?:[.,]\d+)?", text):
-        value = parse_number(token)
-        if value is not None:
-            return value
-    return None
+    numbers = _numbers_in(text)
+    return numbers[0] if numbers else None
 
 
 def _row_has_number(row_text: str, number: float) -> bool:
@@ -1398,6 +1508,7 @@ def collect(
     max_paragraphs: int | None = None,
     materials: list[Material] | None = None,
     include_materials: bool = True,
+    metrics: Sequence[Any] | None = None,
 ) -> SourceBundle:
     """Собрать источники под запрос.
 
@@ -1413,6 +1524,8 @@ def collect(
         max_paragraphs: Сколько абзацев из каждой статьи.
         materials: Материалы проекта. По умолчанию — из каталога ``project/``.
         include_materials: Включать ли материалы проекта.
+        metrics: Расчёты агента по материалам — ими подтверждаются агрегаты
+            в основаниях вывода.
 
     Returns:
         Набор источников с абзацами, пригодными для цитирования.
@@ -1421,6 +1534,7 @@ def collect(
     top_k = top_k or settings.source_top_k
     max_paragraphs = max_paragraphs or settings.source_max_paragraphs
     query_terms = set(tokenize(query))
+    computed: tuple[Any, ...] = tuple(metrics or ())
 
     articles: list[Article] = []
     passages: list[Passage] = []
@@ -1435,7 +1549,7 @@ def collect(
     passages.sort(key=lambda passage: passage.relevance, reverse=True)
 
     if not include_materials:
-        return SourceBundle(passages=passages, articles=articles, query=query)
+        return SourceBundle(passages=passages, articles=articles, query=query, metrics=computed)
 
     if materials is None:
         from pf.materials import load_materials
@@ -1444,7 +1558,7 @@ def collect(
 
     project_passages, project_articles = _material_passages(materials, query_terms, max_paragraphs)
     if not project_passages:
-        return SourceBundle(passages=passages, articles=articles, query=query)
+        return SourceBundle(passages=passages, articles=articles, query=query, metrics=computed)
 
     # Материалы проекта идут перед корпусом: они относятся к задаче
     # непосредственно, а корпус даёт рыночный контекст.
@@ -1452,6 +1566,7 @@ def collect(
         passages=project_passages + passages,
         articles=project_articles + articles,
         query=query,
+        metrics=computed,
     )
 
 

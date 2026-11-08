@@ -743,3 +743,194 @@ def test_metric_tolerance_is_not_absolute_for_small_values(
     )
 
     assert not support.is_usable, support.detail
+
+
+# ── Агрегат в выводе: сверка по имени метрики ───────────────────────────────
+#
+# Среднее, медиана, изменение и размах не лежат ни в одной строке таблицы:
+# их значение получается пересчётом. В `demo-v10` модель цитировала средние
+# из блока РАСЧЁТЫ как дословные строки источника — «ARPU ...: среднее:
+# 322.2» со ссылкой на файл без якоря строки. Проверка искала эту фразу в
+# тексте материала, не находила, и оба основания вывода отклонялись: вывод
+# оставался «не подкреплён» при верных данных и верных расчётах.
+#
+# Правило: агрегат подтверждается **расчётом агента**, а не строкой. Метрика
+# ищется по имени (показатель и вид сводки), значение сверяется с её
+# значением, а затем пересчитывается по её же входам. Выдуманное среднее не
+# подтверждается: его нет среди расчётов.
+
+
+def _mean_metric(value: float = 84.5, *, citation: str = "") -> object:
+    """Сводная метрика «среднее» по двум наблюдениям.
+
+    Args:
+        value: Заявленное значение среднего.
+        citation: Ссылка метрики. По умолчанию — материал проекта.
+
+    Returns:
+        Метрика с формулой и входами, как её отдаёт блок РАСЧЁТЫ.
+    """
+    from pf.analysis import Metric
+
+    return Metric(
+        name="Абонентская база МТС: среднее",
+        value=value,
+        unit="млн",
+        source_id=citation or "project/numbers.csv",
+        row=0,
+        formula="сумма / количество",
+        inputs={"наблюдения": ["87", "82"]},
+    )
+
+
+@pytest.fixture
+def _mean_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Набор источников с материалом проекта и переданными расчётами.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+
+    Returns:
+        Функция сборки набора по перечню расчётов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text(
+        "оператор,показатель,значение,период\nМТС,абонентская база,87,2024\n"
+        "МТС,абонентская база,82,2025\n",
+        encoding="utf-8",
+    )
+
+    def build(*metrics: object):
+        return collect("абоненты оператора связи тарифы удержание", metrics=tuple(metrics))
+
+    return build
+
+
+def test_aggregate_by_name_confirms_from_inputs(_mean_bundle) -> None:
+    """Среднее в выводе подтверждается расчётом, а не строкой источника.
+
+    Модель цитирует «Абонентская база МТС: среднее: 84.5» и ссылается на
+    файл без якоря строки. В тексте материала такой фразы нет — и это
+    правильно, среднее посчитано. Основание подтверждается, если величина
+    совпадает с расчётом агента и пересчитывается по его входам.
+    """
+    bundle = _mean_bundle(_mean_metric())
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv",
+        paragraph=0,
+        quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert support.is_usable, f"агрегат должен подтверждаться расчётом: {support.detail}"
+    # Ссылка основания — якорь расчёта, а не строка из ответа: среднее посчитано
+    # по строке 0, и основание указывает именно туда.
+    assert support.source_id == "project/numbers.csv#row0", support.source_id
+
+
+def test_aggregate_by_name_confirms_with_anchor(_mean_bundle) -> None:
+    """Тот же агрегат подтверждается и со ссылкой на строку таблицы.
+
+    Модель может приписать расчёту якорь `#row0` — в строке такой величины
+    нет, но расчёт тот же. Отказ здесь зависел бы от формы ссылки, а не от
+    того, верна ли величина.
+    """
+    bundle = _mean_bundle(_mean_metric())
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv#row0",
+        paragraph=None,
+        quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert support.is_usable, f"агрегат с якорем строки отклонён: {support.detail}"
+
+
+def test_aggregate_by_name_needs_inputs(_mean_bundle) -> None:
+    """Агрегат без входов не подтверждается: пересчитать нечем.
+
+    Правило не ослабляет проверку. Если у расчёта нет входов, величину
+    нельзя ни пересчитать, ни отличить от выдумки — основание отклоняется,
+    как и раньше.
+    """
+    from pf.analysis import Metric
+
+    bare = Metric(
+        name="Абонентская база МТС: среднее",
+        value=84.5,
+        unit="млн",
+        source_id="project/numbers.csv",
+        row=0,
+        formula="сумма / количество",
+        inputs={},
+    )
+    bundle = _mean_bundle(bare)
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv",
+        paragraph=0,
+        quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert not support.is_usable, "агрегат без входов подтверждён быть не может"
+
+
+def test_aggregate_by_name_rejects_other_number(_mean_bundle) -> None:
+    """Число, которого нет среди расчётов, не подтверждается.
+
+    Имя метрики совпало, но заявленная величина другая: 99 против 84,5.
+    Расчёт подтверждает своё значение, а не любое рядом со своим названием.
+    """
+    bundle = _mean_bundle(_mean_metric())
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv",
+        paragraph=0,
+        quote="Абонентская база МТС: среднее: 99",
+    )
+    assert not support.is_usable
+
+
+def test_aggregate_by_name_rejects_other_indicator(_mean_bundle) -> None:
+    """Агрегат ищется по имени, а не по совпадению числа.
+
+    Метрика считает ключевую ставку, а цитата говорит об абонентской базе.
+    Число совпало (84,5), но это разные показатели: подтверждать чужой
+    расчёт своим нельзя.
+    """
+    from pf.analysis import Metric
+
+    other = Metric(
+        name="Ключевая ставка Банка России: среднее",
+        value=84.5,
+        unit="%",
+        source_id="project/numbers.csv",
+        row=0,
+        formula="сумма / количество",
+        inputs={"наблюдения": ["87", "82"]},
+    )
+    bundle = _mean_bundle(other)
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv",
+        paragraph=0,
+        quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert not support.is_usable, f"чужой показатель подтверждён: {support.detail}"
+
+
+def test_aggregate_by_name_does_not_raise_status_for_raw_dump(_mean_bundle) -> None:
+    """Агрегат из сырой выгрузки остаётся «требует проверки».
+
+    Дословность у выгрузки проверяема, происхождение — нет. Поэтому
+    «подтверждено» не поднимается выше «требует проверки», даже если модель
+    сослалась на материал проекта: статус задаёт расчёт, а не форма ссылки.
+    """
+    bundle = _mean_bundle(_mean_metric(citation="knowledge/raw/2026-11-08/numbers.csv#row0"))
+    support = bundle.verify_claim(
+        "Оптимизация тарифа с ограничениями",
+        source_id="project/numbers.csv",
+        paragraph=0,
+        quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW, (
+        f"выгрузка не может подтвердить основание: {support.status} — {support.detail}"
+    )
