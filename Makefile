@@ -10,6 +10,7 @@ PYTHON ?= python3
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
         lexicon lexicon-oov contracts-check scenarios-check demo-doc replay \
+        translate \
         canon tasks-check docs-check next-task
 
 help: ## Показать список доступных команд
@@ -157,6 +158,10 @@ replay: ## A/B проверки оснований по сохранённым �
 
 mcp: ## Инструменты MCP-сервера (make mcp SERVER=static-parser)
 	@$(UV) run pf mcp $(or $(SERVER),static-parser)
+
+translate: ## Перевести английский материал (make translate FILE=путь или TEXT="...")
+	@test -n "$(FILE)$(TEXT)" || (echo "Укажите источник: make translate FILE=путь | TEXT=\"...\"" && exit 1)
+	@$(UV) run pf translate $(if $(FILE),$(FILE),--text "$(TEXT)")
 
 web: ## Поиск в интернете и разбор страниц (make web QUERY="отток абонентов")
 	@test -n "$(QUERY)" || (echo "Укажите запрос: make web QUERY=\"...\"" && exit 1)

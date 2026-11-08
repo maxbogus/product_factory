@@ -11,7 +11,8 @@
 - ``pf sources "запрос"`` — показать, какие источники агент найдёт;
 - ``pf sessions`` — список сохранённых сессий;
 - ``pf eval`` — выполнить eval-сценарии и проверить правила поведения;
-- ``pf web "запрос"`` — найти внешние источники (требуют проверки).
+- ``pf web "запрос"`` — найти внешние источники (требуют проверки);
+- ``pf translate <файл>`` — перевести английский материал на русский.
 
 Интерфейс командный, а не графический, сознательно: руководителю продукта
 нужно видеть продвижение работы и останавливать её, а не изучать устройство
@@ -700,6 +701,63 @@ def cmd_lexicon(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_translate(args: argparse.Namespace) -> int:
+    """Перевести английский текст на русский и показать, что сохранено.
+
+    Перевод — не основание: он существует, чтобы английский источник можно
+    было проверить словами, а не только числами. Поэтому команда печатает и
+    перевод, и замечания о потерянных числах.
+
+    Args:
+        args: Аргументы командной строки.
+
+    Returns:
+        Код возврата: 1, если перевода нет.
+    """
+    from pathlib import Path
+
+    from pf.translate import translate
+
+    source = Path(args.file).read_text(encoding="utf-8") if args.file else args.text or ""
+    if not source.strip():
+        _out("Нечего переводить: укажите файл или --text.")
+        return 1
+
+    result = translate(source, refresh=args.refresh)
+    if args.json:
+        _out(
+            json.dumps(
+                {
+                    "engine": result.engine,
+                    "model": result.model,
+                    "ok": result.ok,
+                    "notes": list(result.notes),
+                    "usage_tokens": result.usage_tokens,
+                    "text": result.text,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0 if result.is_usable else 1
+
+    if not result.is_usable:
+        _out("Перевода нет.")
+        for note in result.notes:
+            _out(f"  {note}")
+        return 1
+
+    _rule(f"Перевод ({result.engine}, {result.model or 'модель неизвестна'})")
+    _out(result.text)
+    if result.notes:
+        _out("")
+        for note in result.notes:
+            _out(f"  {note}")
+    _out("")
+    _out("Перевод машинный и основанием не является: цитируется оригинал.")
+    return 0
+
+
 # ── main ────────────────────────────────────────────────────────────────────
 
 
@@ -800,6 +858,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="искать в интернете и разбирать найденные страницы",
     )
     web_parser.set_defaults(func=cmd_web)
+
+    translate_parser = subparsers.add_parser(
+        "translate", help="перевести английский материал на русский"
+    )
+    translate_parser.add_argument("file", nargs="?", help="файл с текстом")
+    translate_parser.add_argument("--text", default="", help="текст вместо файла")
+    translate_parser.add_argument(
+        "--refresh", action="store_true", help="пересчитать перевод, не веря кэшу"
+    )
+    translate_parser.add_argument("--json", action="store_true", help="вывести JSON")
+    translate_parser.set_defaults(func=cmd_translate)
 
     mcp_parser = subparsers.add_parser("mcp", help="инструменты MCP-сервера")
     mcp_parser.add_argument("server", help="имя сервера из mcp/servers.json")

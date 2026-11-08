@@ -617,13 +617,25 @@ class Workflow:
     def _prompt_extras(cls, state: SessionState) -> tuple[str, ...]:
         """Дополнительные блоки запроса, общие для всех ролей.
 
+        Язык ответа задаётся здесь, а не в каждом промпте роли: ролей девять, и
+        требование, продублированное девять раз, расходится быстрее, чем одно.
+        Пока контекст был русским, отсутствие требования было незаметно; на
+        английском материале модель отвечала по-английски, и JSON приходил с
+        русскими ключами и английскими значениями.
+
         Args:
             state: Состояние сессии.
 
         Returns:
-            Кортеж непустых блоков: ограничения задачи и бюджет ответа.
+            Кортеж непустых блоков: ограничения задачи, бюджет ответа и язык.
         """
-        blocks = [cls._constraints_block(state), cls._budget_hint(cls._turn_limit(state))]
+        from pf.translate import LANGUAGE_BLOCK
+
+        blocks = [
+            cls._constraints_block(state),
+            cls._budget_hint(cls._turn_limit(state)),
+            LANGUAGE_BLOCK,
+        ]
         return tuple(block for block in blocks if block)
 
     @staticmethod
