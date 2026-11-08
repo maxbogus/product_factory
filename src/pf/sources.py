@@ -287,6 +287,24 @@ class SourceBundle:
                     # Число из расчёта: проверяем, что оно есть в строке.
                     number = _first_number(quote)
                     if number is not None and _row_has_number(row_text, number):
+                        # Строка объявляет свой показатель, и это утверждение
+                        # сильнее цитаты. Без сверки «удержание 87 %»
+                        # подтверждалось строкой «абонентская база: 87»:
+                        # число в строке есть, а показатель другой — и
+                        # основание выглядело подтверждённым.
+                        indicator = _row_indicator_at(article, row)
+                        if indicator and not _name_matches_row(claim_text, indicator):
+                            return Support(
+                                quote=quote,
+                                source_id=source_id,
+                                status=SupportStatus.NO_DATA,
+                                paragraph_index=row,
+                                detail=(
+                                    f"в строке показатель «{indicator}», а утверждение "
+                                    "говорит о другом: число в строке есть, но "
+                                    "подтверждает оно другой показатель"
+                                ),
+                            )
                         return Support(
                             quote=quote,
                             source_id=source_id,
@@ -552,11 +570,36 @@ def _row_indicator(row: dict[str, Any]) -> str:
     return ""
 
 
+def _stems(text: str) -> set[str]:
+    """Основы слов: показатель сравнивается без словоформ.
+
+    «абонентская» и «абонентов» — одно понятие, но леммы у них разные
+    («абонентский» и «абонент»), поэтому сравнение по леммам давало бы
+    ложный отказ. Шесть букв — та же мера, что в проверке критериев
+    успеха: разные показатели («удержание» и «база») остаются разными.
+
+    Скобки отбрасываются так же, как в ``_significant_words``: «удержание
+    клиентов (МТС, абонентская база)» — это метрика про удержание, а база
+    в скобках лишь говорит, откуда взято число.
+
+    Args:
+        text: Текст утверждения или строка таблицы.
+
+    Returns:
+        Множество основ значимых слов.
+    """
+    return {word[:6] for word in _significant_words(text) if len(word) >= 5}
+
+
 def _name_matches_row(name: str, row_text: str) -> bool:
     """Имя показателя относится к тому, что стоит в строке.
 
+    Сначала сравниваются слова как есть, затем — основы: «число
+    абонентов» и показатель «абонентская база» говорят об одном, хотя
+    словоформы разные.
+
     Args:
-        name: Название метрики.
+        name: Название метрики или утверждение.
         row_text: Текст строки таблицы.
 
     Returns:
@@ -565,7 +608,9 @@ def _name_matches_row(name: str, row_text: str) -> bool:
     words = _significant_words(name)
     if not words:
         return True
-    return bool(words & _significant_words(row_text))
+    if words & _significant_words(row_text):
+        return True
+    return bool(_stems(name) & _stems(row_text))
 
 
 def _is_identity_calculation(inputs: dict[str, Any], formula: str) -> bool:
@@ -809,6 +854,35 @@ def _article_rows(article: Article) -> list[str]:
                 " ".join(f"{key}: {value}" for key, value in row.items()) for row in material.rows
             ]
     return []
+
+
+def _row_indicator_at(article: Article, row: int) -> str:
+    """Показатель строки таблицы по её номеру.
+
+    ``_article_rows`` отдаёт строки уже текстом, поэтому колонку-показатель
+    из них не достать. А проверке числа в строке она нужна: строка сама
+    объявляет, что за показатель в ней, и утверждение о другом показателе
+    подтверждать нельзя — иначе 87 млн абонентов подтверждают «87 %
+    удержания».
+
+    Args:
+        article: Материал проекта.
+        row: Номер строки (нумерация с нуля).
+
+    Returns:
+        Показатель строки либо пустая строка, если колонки нет.
+    """
+    if article.section != "project":
+        return ""
+    from pf.materials import load_materials
+
+    for material in load_materials():
+        if material.source_id != article.source_id:
+            continue
+        if 0 <= row < len(material.rows):
+            return _row_indicator(material.rows[row])
+        return ""
+    return ""
 
 
 def _find_material(clean_id: str, materials: list[Material]) -> Material | None:

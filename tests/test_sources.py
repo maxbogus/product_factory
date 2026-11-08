@@ -220,6 +220,131 @@ def test_computed_value_quote_requires_review(
     assert "метрик" in support.detail
 
 
+def test_claim_about_other_indicator_in_row_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Число из строки не подтверждает утверждение о другом показателе.
+
+    В прогоне `demo-v9` утверждение «Удержание клиентов составляет 87 %»
+    подтверждалось строкой «МТС, абонентская база, 87»: цитата дословно не
+    находилась, и срабатывал запасной путь «число из цитаты есть в строке».
+    Показатель при этом не сверялся, поэтому 87 млн абонентов выглядели как
+    87 % удержания. Строка сама объявляет, что за показатель в ней, — и это
+    утверждение сильнее цитаты.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "metrics.csv").write_text(
+        "оператор,показатель,значение,период\nМТС,абонентская база,87,2024\n",
+        encoding="utf-8",
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+
+    support = bundle.verify_claim(
+        "Удержание клиентов составляет 87 %",
+        source_id="project/metrics.csv#row0",
+        paragraph=None,
+        quote="Открытые метрики: МТС: 87",
+    )
+
+    assert not support.is_usable, f"чужой показатель подтверждён: {support.detail}"
+    assert support.status is SupportStatus.NO_DATA
+    assert "абонентская" in support.detail.lower()
+
+
+def test_direction_is_not_grounded_by_row_about_other_indicator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Направление стратегии не подкрепляется строкой о другом показателе.
+
+    В `demo-v9` вывод «Внедрить гибкий тариф с возможностью персонализации»
+    опирался на строку «МТС: 87» — абонентскую базу. Цитата настоящая, но о
+    персонализации она не говорит ничего, и статус «подкреплено» был ложным.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "metrics.csv").write_text(
+        "оператор,показатель,значение,период\nМТС,абонентская база,87,2024\n",
+        encoding="utf-8",
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+
+    support = bundle.verify_claim(
+        "Внедрить гибкий тариф с возможностью персонализации",
+        source_id="project/metrics.csv#row0",
+        paragraph=None,
+        quote="Открытые метрики абонентской базы операторов связи, МТС: 87",
+    )
+
+    assert not support.is_usable, f"вывод подкреплён чужим показателем: {support.detail}"
+
+
+def test_claim_about_the_row_indicator_is_confirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Утверждение о том же показателе, что в строке, подтверждается.
+
+    Проверка показателя не должна стать запретом на таблицы: строка
+    объявляет абонентскую базу, утверждение — про абонентскую базу, значит
+    основание есть.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "metrics.csv").write_text(
+        "оператор,показатель,значение,период\nМТС,абонентская база,87,2024\n",
+        encoding="utf-8",
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+
+    support = bundle.verify_claim(
+        "Абонентская база МТС составляет 87 млн",
+        source_id="project/metrics.csv#row0",
+        paragraph=None,
+        quote="Открытые метрики: МТС: 87",
+    )
+
+    assert support.is_usable, f"своё основание отклонено: {support.detail}"
+
+
+def test_claim_about_same_indicator_in_other_word_form_is_confirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Словоформы не мешают: «абонентов» и «абонентская» — одно понятие.
+
+    Леммы у них разные («абонент» и «абонентский»), и сравнение по леммам
+    отвергало бы верное основание. Проверка идёт по основам слов, а разные
+    показатели («удержание» и «база») остаются разными.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена каталога материалов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "metrics.csv").write_text(
+        "оператор,показатель,значение,период\nМТС,абонентская база,87,2024\n",
+        encoding="utf-8",
+    )
+    bundle = collect("абоненты оператора связи тарифы удержание")
+
+    support = bundle.verify_claim(
+        "Число абонентов МТС — 87 млн",
+        source_id="project/metrics.csv#row0",
+        paragraph=None,
+        quote="Открытые метрики: МТС: 87",
+    )
+
+    assert support.is_usable, f"верное основание отклонено из-за словоформы: {support.detail}"
+
+
 def test_verify_metric_resolves_short_source_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
