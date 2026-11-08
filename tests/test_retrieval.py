@@ -183,6 +183,55 @@ def test_foreign_topic_still_ranked_by_tfidf() -> None:
     assert "telecom/Мегафон (компания)" not in source_ids
 
 
+def test_context_is_not_eaten_by_one_table() -> None:
+    """Одна таблица не занимает всё окно контекста.
+
+    В прогоне `demo-v9` первые пять абзацев контекста были строками одной
+    таблицы (Tele2, Беларусь-2026, 2007 год, доля спутникового ТВ), и ни
+    одного абзаца корпуса про отток модель не видела. Вопрос был «почему
+    падает удержание», а материала по теме в промпте не оказалось: модель
+    отвечала тем, что видела, — абонентской базой.
+    """
+    from pf.sources import collect
+
+    bundle = collect("Почему падает удержание у мобильного тарифа и что с этим делать?")
+    text = bundle.context(limit=5)
+
+    sources = {block.split("]")[0].lstrip("[") for block in text.split("\n\n")}
+    ids = {source.split("#")[0] for source in sources}
+
+    assert len(ids) >= 3, f"окно занято {len(ids)} источником(ами): {sorted(ids)}"
+    assert any(not source.startswith("project/") for source in ids), (
+        f"в окне нет ни одного абзаца корпуса: {sorted(ids)}"
+    )
+
+
+def test_context_fills_window_when_source_is_single() -> None:
+    """Если материал один, окно заполняется его абзацами.
+
+    Ограничение на повторы не должно обрезать контекст: когда источник
+    один, брать абзацы больше неоткуда, и окно остаётся заполненным.
+    """
+    from pf.sources import Passage, SourceBundle
+
+    passages = [
+        Passage(
+            source_id="project/numbers.csv",
+            title="numbers",
+            section="project",
+            paragraph_index=index,
+            text=f"строка {index}",
+            relevance=1.0 - index / 100,
+        )
+        for index in range(5)
+    ]
+    bundle = SourceBundle(passages=passages, articles=[], query="запрос")
+
+    text = bundle.context(limit=5)
+
+    assert text.count("\n\n") == 4, f"окно обрезано: {text!r}"
+
+
 def test_empty_query_returns_nothing() -> None:
     """Пустой запрос не выбирает источники."""
     corpus = _corpus(_article("telecom/A", "A", "Абзац " * 20))

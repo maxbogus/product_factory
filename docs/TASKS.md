@@ -66,9 +66,10 @@
 | T-13 | 4 | Шаг интервью и модельных респондентов с маркировкой синтетики | 5 | 1.4 | ⬜ | T-07 | `uv run pytest tests/test_interviews.py -q` |
 | T-14 | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой | 3 | 2.7 | ⬜ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation -q` |
 | T-15 | 1 | Строка таблицы подтверждает только свой показатель: сверка показателя и словоформ, а не одного числа | 2 | 8.1 | ✅ | — | `uv run pytest tests/test_sources.py -k indicator -q` |
-| T-16 | 2 | Контекст модели не вытесняется таблицей: квота на абзацы корпуса, строки одного файла — одна группа | 2 | 6.4 | ⬜ | — | `uv run pytest tests/test_retrieval.py -k diversity -q` |
+| T-16 | 2 | Контекст модели не вытесняется таблицей: не больше двух абзацев от источника, остальное — корпус | 2 | 6.4 | ✅ | — | `uv run pytest tests/test_retrieval.py -k context -q` |
 | T-17 | 2 | Числа плана и обязательств сверяются с расчётами, а не только по основе слова | 2 | 4.9 | ⬜ | T-15 | `uv run pytest tests/test_success_criteria.py -k numbers -q` |
 | T-18 | 1 | Статус вывода учитывает вердикт метрики на том же якоре | 1 | 12.6 | ⬜ | — | `uv run pytest tests/test_conclusion_grounding.py -k metric_conflict -q` |
+| T-25 | 2 | Строка таблицы отбирается по показателю, а не по совпадению слов | 2 | 5.6 | ⬜ | T-16 | `uv run pytest tests/test_retrieval.py -k row_filter -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

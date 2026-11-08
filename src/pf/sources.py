@@ -103,6 +103,12 @@ class SourceBundle:
     articles: list[Article]
     query: str
 
+    #: Сколько абзацев одного источника попадает в окно при ограничении.
+    #: Одна таблица даёт по абзацу на строку, и без предела строки вытесняют
+    #: весь корпус: в прогоне `demo-v9` окно целиком состояло из строк
+    #: таблицы, а абзацев по теме вопроса модель не видела.
+    MAX_PASSAGES_PER_SOURCE = 2
+
     @property
     def source_ids(self) -> list[str]:
         """Идентификаторы задействованных источников."""
@@ -112,20 +118,62 @@ class SourceBundle:
                 seen.append(passage.source_id)
         return seen
 
-    def context(self, limit: int | None = None) -> str:
+    def context(
+        self,
+        limit: int | None = None,
+        *,
+        max_per_source: int = MAX_PASSAGES_PER_SOURCE,
+    ) -> str:
         """Собрать контекст для модели.
+
+        При ограничении окна абзацы берутся с разнообразием: не больше
+        ``max_per_source`` от одного источника, остаток — по релевантности.
+        Набор документов из одной темы не должен занимать всё окно: модель
+        отвечает тем, что видит, а не тем, что есть в корпусе.
+
+        Если источников мало, окно всё равно заполняется — добором из того,
+        что осталось. Иначе ограничение превратилось бы в обрезание.
 
         Args:
             limit: Сколько абзацев включить. По умолчанию — все.
+            max_per_source: Предел абзацев от одного источника.
 
         Returns:
             Текст с абзацами, перед каждым — его идентификатор для цитирования.
         """
-        selected = self.passages[:limit] if limit else self.passages
+        selected = self._window(limit, max_per_source) if limit else self.passages
         blocks = []
         for passage in selected:
             blocks.append(f"[{passage.citation}] {passage.text}")
         return "\n\n".join(blocks)
+
+    def _window(self, limit: int, max_per_source: int) -> list[Passage]:
+        """Выбрать абзацы окна: сначала с разнообразием, затем добор.
+
+        Args:
+            limit: Сколько абзацев нужно.
+            max_per_source: Предел абзацев от одного источника.
+
+        Returns:
+            Абзацы в порядке релевантности.
+        """
+        chosen: list[Passage] = []
+        taken: dict[str, int] = {}
+        for passage in self.passages:
+            if len(chosen) >= limit:
+                return chosen
+            count = taken.get(passage.source_id, 0)
+            if count >= max_per_source:
+                continue
+            chosen.append(passage)
+            taken[passage.source_id] = count + 1
+        if len(chosen) < limit:
+            for passage in self.passages:
+                if len(chosen) >= limit:
+                    break
+                if passage not in chosen:
+                    chosen.append(passage)
+        return chosen
 
     def is_relevant(self, source_id: str) -> bool:
         """Относится ли источник к текущей задаче.
