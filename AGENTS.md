@@ -281,6 +281,17 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
   `test_window_reserves_slot_for_corpus` и
   `test_context_is_not_eaten_by_one_table`.
 - **Журнал append-only.** Не переписывайте `journal/*.jsonl` — это след.
+  Второй шаг с тем же номером журнал не принимает (`DuplicateOrdinalError`,
+  T-32): дубль `ordinal` означает два запуска в один файл, и молча его
+  записывать нельзя — отчёт посчитал бы основания дважды. Новый запуск
+  берёт свободный id (`pf.cli._new_session_id`); проверка —
+  `tests/test_state_journal.py -k duplicate_ordinal`.
+- **Строка расчёта копируется из блока РАСЧЁТЫ вместе с разметкой.**
+  `sources._calc_line_anchor` читает `[путь#rowN]` и `(формула)` из самой
+  цитаты, якорь берётся оттуда, а разметка блока текстом источника не
+  считается; показанное `%.4g` значение сверяется со строкой с допуском
+  (D-36). Расхождение якоря в ссылке и в цитате — отказ. Проверка —
+  `tests/test_sources.py -k calc_line_quote`.
 - **`state/` и `journal/` в `.gitignore`.** Результаты работы — артефакт
   прогона, а не часть поставки.
 - **Thinking-режим выключен явно** (`PF_OLLAMA_THINK=false`). У `qwen3` и

@@ -64,6 +64,17 @@ class StepRecord:
         return self.prompt_tokens + self.completion_tokens
 
 
+class DuplicateOrdinalError(ValueError):
+    """Шаг с таким номером уже записан в журнал.
+
+    Номера шагов — не оформление: по ним считаются отчёт, пересмотр и
+    продолжение работы. Второй шаг с тем же номером означает, что в один
+    журнал писали два запуска (или журнал обогнал состояние сессии), и
+    продолжать молча нельзя: `pf log` показал бы два разных шага под одним
+    номером, а доля подтверждённых оснований посчиталась бы дважды.
+    """
+
+
 class Journal:
     """Append-only журнал шагов сессии.
 
@@ -80,7 +91,16 @@ class Journal:
 
         Args:
             record: Запись о шаге.
+
+        Raises:
+            DuplicateOrdinalError: Если шаг с таким номером уже записан.
         """
+        if any(existing.ordinal == record.ordinal for existing in self.read()):
+            raise DuplicateOrdinalError(
+                f"шаг {record.ordinal} уже записан в журнал {self.path.name}: "
+                "в один журнал писали два запуска — начните новую сессию "
+                "(pf run) или продолжайте сохранённую (pf resume)"
+            )
         line = json.dumps(asdict(record), ensure_ascii=False)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")

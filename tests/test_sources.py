@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from pf.config import settings
 from pf.corpus import Article
 from pf.ground import SupportStatus
 from pf.materials import load_materials
@@ -930,6 +931,200 @@ def test_aggregate_by_name_does_not_raise_status_for_raw_dump(_mean_bundle) -> N
         source_id="project/numbers.csv",
         paragraph=0,
         quote="Абонентская база МТС: среднее: 84.5",
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW, (
+        f"выгрузка не может подтвердить основание: {support.status} — {support.detail}"
+    )
+
+
+# ── Строка расчёта, скопированная из блока РАСЧЁТЫ ─────────────────────────
+#
+# Блок печатает `- {имя}: {значение} [{путь}#rowN] ({формула})`. Модель
+# копирует такую строку в основание целиком — в прогоне `demo-v12` так были
+# скопированы ARPU (302) и ключевая ставка (78.79). Дословная сверка искала в
+# тексте материала разметку `[...]` и `(формула)`, не находила её и отклоняла
+# верное основание: вывод оставался «ждёт проверки» при верных данных.
+#
+# Правило: путь и номер строки берутся из самой цитаты (модель не обязана
+# дублировать якорь в ссылке), разметка блока текстом источника не считается,
+# а показанное в формате `%.4g` значение сверяется со строкой с допуском
+# показанной точности. Ослабления нет: чужое число, чужой показатель и
+# выгрузка отклоняются или уходят на проверку человеком, как и раньше.
+
+#: Запрос, при котором оба материала попадают в срез: строки отбираются по
+#: показателю, а он должен быть назван в запросе.
+_CALC_QUERY = "абоненты оператора связи тарифы удержание ключевая ставка банка россии"
+
+
+@pytest.fixture
+def _calc_line_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Набор источников с материалами, из которых печатается блок РАСЧЁТЫ.
+
+    Args:
+        tmp_path: Временный каталог материалов проекта.
+        monkeypatch: Подмена каталога материалов.
+
+    Returns:
+        Функция сборки набора по перечню расчётов.
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "numbers.csv").write_text(
+        "оператор,показатель,значение,период\n"
+        "МТС,абонентская база,87,2024\n"
+        "МТС,абонентская база,82,2025\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "rates.csv").write_text(
+        "показатель,значение\nКлючевая ставка Банка России,78.7913\n",
+        encoding="utf-8",
+    )
+    raw = settings.knowledge_dir / "raw" / "2026-11-08"
+    raw.mkdir(parents=True, exist_ok=True)
+    (raw / "rates.csv").write_text(
+        "показатель,значение\nКлючевая ставка Банка России,78.7913\n",
+        encoding="utf-8",
+    )
+
+    def build(*metrics: object):
+        return collect(_CALC_QUERY, metrics=tuple(metrics))
+
+    return build
+
+
+def test_calc_line_quote_confirms_by_anchor_inside_quote(_calc_line_bundle) -> None:
+    """Якорь строки берётся из цитаты, даже если в ссылке его нет.
+
+    Модель называет файл без якоря и копирует строку расчёта целиком: путь и
+    номер строки есть только внутри `[...]`. Пока они не читались, проверка
+    шла по тексту материала и не могла найти там разметку блока.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Абонентская база МТС в 2024 году составила 87 млн",
+        source_id="project/numbers.csv",
+        paragraph=None,
+        quote=(
+            "Абонентская база МТС: 87 [project/numbers.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
+    )
+    assert support.is_usable, f"строка расчёта должна подтверждаться: {support.detail}"
+    assert support.source_id == "project/numbers.csv#row0", support.source_id
+
+
+def test_calc_line_quote_markup_is_not_source_text(_calc_line_bundle) -> None:
+    """Формула из разметки не ищется в материале.
+
+    Слов формулы в строке таблицы нет и быть не может: это подпись блока, а
+    не текст источника. Подтверждение не должно зависеть от её содержимого.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Абонентская база МТС в 2024 году составила 87 млн",
+        source_id="project/numbers.csv",
+        paragraph=None,
+        quote=(
+            "Абонентская база МТС: 87 [project/numbers.csv#row0] "
+            "(среднее по шести кварталам, входы скрыты)"
+        ),
+    )
+    assert support.is_usable, support.detail
+    assert "[" not in support.quote and "(" not in support.quote, support.quote
+
+
+def test_calc_line_quote_rounding_matches_row(_calc_line_bundle) -> None:
+    """Показанное `%.4g` значение сверяется со строкой с допуском точности.
+
+    Блок печатает 78,79 вместо 78,7913 из таблицы. Точное сравнение чисел
+    отклоняло бы честно скопированную строку — так же, как когда-то
+    отклоняло округление в обычных цитатах.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Ключевая ставка Банка России составляла 78,79 %",
+        source_id="project/rates.csv",
+        paragraph=None,
+        quote=(
+            "Ключевая ставка Банка России: 78.79 [project/rates.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
+    )
+    assert support.is_usable, f"округление не должно мешать: {support.detail}"
+
+
+def test_calc_line_quote_rejects_other_number(_calc_line_bundle) -> None:
+    """Числа, которого нет в указанной строке, разметка не оправдывает."""
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Абонентская база МТС в 2024 году составила 99 млн",
+        source_id="project/numbers.csv",
+        paragraph=None,
+        quote=(
+            "Абонентская база МТС: 99 [project/numbers.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
+    )
+    assert not support.is_usable, support.detail
+
+
+def test_calc_line_quote_rejects_other_indicator(_calc_line_bundle) -> None:
+    """Строка объявляет свой показатель — и он сильнее разметки.
+
+    87 из строки «абонентская база» не подтверждает «удержание 87 %», даже
+    если цитата скопирована из блока расчётов слово в слово.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Удержание клиентов МТС составило 87 %",
+        source_id="project/numbers.csv",
+        paragraph=None,
+        quote=(
+            "Удержание клиентов МТС: 87 [project/numbers.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
+    )
+    assert not support.is_usable, support.detail
+    assert "показатель" in support.detail, support.detail
+
+
+def test_calc_line_quote_rejects_conflicting_anchor(_calc_line_bundle) -> None:
+    """Ссылка и якорь из цитаты указывают в разные места — отказ, не выбор.
+
+    Модель называет один файл, а копирует строку расчёта из другого. Молча
+    взять якорь из цитаты значило бы подтвердить основание не по той ссылке,
+    которую увидит человек.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Ключевая ставка Банка России составляла 78,79 %",
+        source_id="project/numbers.csv",
+        paragraph=None,
+        quote=(
+            "Ключевая ставка Банка России: 78.79 [project/rates.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
+    )
+    assert not support.is_usable, support.detail
+    assert "расходятся" in support.detail, support.detail
+
+
+def test_calc_line_quote_raw_dump_needs_review(_calc_line_bundle) -> None:
+    """Строка расчёта по выгрузке остаётся «требует проверки».
+
+    Происхождение выгрузки не проверяемо, поэтому подтверждение по ней не
+    поднимается выше проверки человеком — правило `D-29` не ослабляется
+    удобной разметкой.
+    """
+    bundle = _calc_line_bundle()
+    support = bundle.verify_claim(
+        "Ключевая ставка Банка России составляла 78,79 %",
+        source_id="knowledge/raw/2026-11-08/rates.csv",
+        paragraph=None,
+        quote=(
+            "Ключевая ставка Банка России: 78.79 "
+            "[knowledge/raw/2026-11-08/rates.csv#row0] "
+            "(значение из колонки «значение», строка 1)"
+        ),
     )
     assert support.status is SupportStatus.NEEDS_REVIEW, (
         f"выгрузка не может подтвердить основание: {support.status} — {support.detail}"

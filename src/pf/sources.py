@@ -67,6 +67,16 @@ _COMPUTED_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
+#: Строка блока РАСЧЁТЫ: ``имя: значение [путь#rowN] (формула)``.
+#: Разметка приходит из ``Workflow._metric_line``, а модель копирует её в
+#: основание как есть — поэтому она распознаётся, но текстом источника не
+#: считается.
+_CALC_LINE_RE = re.compile(
+    r"^(?P<body>.+?)\s*\[\s*(?P<source>[^\[\]\n]+?)#row(?P<row>\d+)\s*\]"
+    r"\s*(?:\((?P<markup>.+)\))?\s*$",
+    re.DOTALL,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Passage:
@@ -427,6 +437,36 @@ class SourceBundle:
         Returns:
             Основание со статусом подтверждения.
         """
+        # Строка расчёта, скопированная из блока РАСЧЁТЫ, несёт собственный
+        # якорь: `имя: значение [путь#rowN] (формула)`. Путь и номер строки
+        # берутся из цитаты — модель не обязана повторять их в ссылке, — а
+        # разметка блока текстом источника не считается. Без этого верное
+        # основание отклонялось всегда: разметку искали в материале, где её
+        # нет и быть не может (`demo-v12`, T-34).
+        calc_line = _calc_line_anchor(quote)
+        if calc_line is not None:
+            quote, quoted_id, quoted_row = calc_line
+            if source_id:
+                given_id, given_row = split_source_id(source_id)
+                if not _same_file(given_id, quoted_id) or (
+                    "#row" in source_id and given_row != quoted_row
+                ):
+                    # Ссылка и разметка указывают в разные места. Выбирать
+                    # молча нельзя: подтверждение привязалось бы не к тому
+                    # основанию, которое назвал человек.
+                    return Support(
+                        quote=quote,
+                        source_id=source_id,
+                        status=SupportStatus.NO_DATA,
+                        detail=(
+                            "ссылка и строка расчёта расходятся: в ссылке "
+                            f"«{given_id}#row{given_row}», в цитате "
+                            f"«{quoted_id}#row{quoted_row}»"
+                        ),
+                    )
+            source_id = f"{quoted_id}#row{quoted_row}"
+            paragraph = quoted_row
+
         if source_id:
             clean_id, parsed_paragraph = split_source_id(source_id)
             if paragraph is None:
@@ -453,7 +493,17 @@ class SourceBundle:
                         )
                     # Число из расчёта: проверяем, что оно есть в строке.
                     number = _first_number(quote)
-                    if number is not None and _row_has_number(row_text, number):
+                    # Строку расчёта блок печатает в `%.4g`: 78,7913 в таблице
+                    # показано как 78,79. Для неё сверка идёт с допуском
+                    # показанной точности, для обычной цитаты — точно.
+                    tolerance = (
+                        _display_tolerance(number)
+                        if calc_line is not None and number is not None
+                        else None
+                    )
+                    if number is not None and _row_has_number(
+                        row_text, number, tolerance=tolerance
+                    ):
                         # Строка объявляет свой показатель, и это утверждение
                         # сильнее цитаты. Без сверки «удержание 87 %»
                         # подтверждалось строкой «абонентская база: 87»:
@@ -1348,6 +1398,59 @@ def _find_material(clean_id: str, materials: list[Material]) -> Material | None:
     )
 
 
+def _calc_line_anchor(quote: str) -> tuple[str, str, int] | None:
+    """Разобрать строку расчёта, скопированную из блока РАСЧЁТЫ.
+
+    Блок печатает расчёт как ``- {имя}: {значение} [{путь}#rowN] ({формула})``
+    (``Workflow._metric_line``). Модель копирует эту строку в основание
+    целиком, и до этой правки проверка искала разметку блока в тексте
+    материала: ``[...]`` и ``(формула)`` там, разумеется, не встречаются, и
+    верное основание отклонялось. В прогоне `demo-v12` так были потеряны
+    скопированный ARPU (302) и ключевая ставка (78.79).
+
+    Разметка — подпись блока, а не текст источника: якорь берётся из неё, а
+    сравнивается с материалом только ``body``.
+
+    Args:
+        quote: Цитата из ответа модели.
+
+    Returns:
+        Тройка ``(body, путь, номер строки)`` либо ``None``, если цитата не
+        размечена как строка расчёта.
+    """
+    match = _CALC_LINE_RE.match(quote.strip())
+    if match is None:
+        return None
+    body = match.group("body").strip()
+    source = match.group("source").strip()
+    if not body or not source:
+        return None
+    return body, source, int(match.group("row"))
+
+
+def _same_file(left: str, right: str) -> bool:
+    """Указывают ли два идентификатора на один материал.
+
+    Модель называет файл то полным путём, то коротким именем
+    («telecom_arpu.csv» вместо «project/data/telecom_arpu.csv»). Для сверки
+    ссылки с якорем цитаты достаточно совпадения имени файла без расширения.
+
+    Args:
+        left: Первый идентификатор.
+        right: Второй идентификатор.
+
+    Returns:
+        Один и тот же материал.
+    """
+    left = left.strip().lower()
+    right = right.strip().lower()
+    if not left or not right:
+        return False
+    left_tail = left.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    right_tail = right.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return left_tail == right_tail
+
+
 def _looks_computed(quote: str) -> bool:
     """Похожа ли цитата на посчитанную величину, а не на текст источника.
 
@@ -1392,12 +1495,21 @@ def _first_number(text: str) -> float | None:
     return numbers[0] if numbers else None
 
 
-def _row_has_number(row_text: str, number: float) -> bool:
+def _row_has_number(
+    row_text: str,
+    number: float,
+    *,
+    tolerance: float | None = None,
+) -> bool:
     """Есть ли число в строке таблицы.
 
     Args:
         row_text: Текст строки.
         number: Искомое число.
+        tolerance: Допуск расхождения. ``None`` — точное сравнение:
+            обычная цитата обязана называть то же число. Допуск передаётся
+            для строки расчёта, где значение показано в ``%.4g`` и поэтому
+            заведомо округлено.
 
     Returns:
         Есть ли число.
@@ -1406,7 +1518,10 @@ def _row_has_number(row_text: str, number: float) -> bool:
 
     for token in re.findall(r"-?\d+(?:[.,]\d+)?", row_text):
         value = parse_number(token)
-        if value is not None and abs(value - number) < 1e-9:
+        if value is None:
+            continue
+        limit = 1e-9 if tolerance is None else max(tolerance, 1e-9)
+        if abs(value - number) <= limit:
             return True
     return False
 

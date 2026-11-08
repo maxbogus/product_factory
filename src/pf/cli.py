@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from typing import TYPE_CHECKING
 
 from pf import __version__
@@ -72,11 +73,44 @@ def _session_id(explicit: str | None = None) -> str:
 # ── run ──────────────────────────────────────────────────────────────────────
 
 
+def _session_taken(session_id: str) -> bool:
+    """Занят ли идентификатор сессии.
+
+    Args:
+        session_id: Проверяемый идентификатор.
+
+    Returns:
+        Есть ли состояние или журнал с таким идентификатором.
+    """
+    return load(session_id) is not None or journal_path(session_id).exists()
+
+
+def _new_session_id() -> str:
+    """Свободный идентификатор сессии.
+
+    Идентификатор собирался как ``s{int(time.time())}`` — с разрешением в
+    секунду, поэтому два запуска подряд попадали в один журнал и писали шаги
+    с одинаковыми номерами: дубли `ordinal` были замечены глазами и не
+    ловились кодом (T-32). Занятый идентификатор теперь пропускается.
+
+    Returns:
+        Идентификатор, которого нет ни в состоянии, ни в журнале.
+    """
+    base = f"s{int(time.time())}"
+    if not _session_taken(base):
+        return base
+    for index in range(2, 100):
+        candidate = f"{base}-{index}"
+        if not _session_taken(candidate):
+            return candidate
+    return f"{base}-{time.time_ns()}"
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Поставить задачу и провести работу до стратегии."""
     from pf.workflow import run_full_workflow
 
-    session_id = args.session or f"s{int(__import__('time').time())}"
+    session_id = args.session or _new_session_id()
     _rule("Работа агента")
     _out(f"Сессия: {session_id}")
     _out(f"Вопрос: {args.question}")

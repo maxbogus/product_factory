@@ -568,3 +568,74 @@ def test_report_shows_lexical_coverage() -> None:
     assert report.lexical["oov"] == 2
     assert "Лексическое покрытие" in text
     assert "криптовалюта" in text
+
+
+# ── Дубль номера шага: второй запуск виден, а не тонет ──────────────────────
+#
+# Два запуска в одну сессию (например, повтор сразу после сбоя) писали шаги с
+# одинаковым `ordinal`. В `demo-v9` такие дубли были замечены глазами: отчёт,
+# пересмотр и `pf log` считают шаги по журналу, и дубль — тихая ошибка данных,
+# а не мелочь оформления. Журнал обязан отказать, а не дописать вторую запись
+# с тем же номером.
+#
+# Причина у дубля одна: идентификатор сессии собирался как
+# `s{int(time.time())}` — с разрешением в секунду, и два запуска подряд
+# попадали в один файл. Поэтому проверяются обе половины: журнал отказывает,
+# а новый запуск получает свободный идентификатор.
+
+
+def test_duplicate_ordinal_is_rejected() -> None:
+    """Второй шаг с тем же номером не дописывается."""
+    from pf.journal import DuplicateOrdinalError
+
+    journal = Journal(settings.journal_dir / "s.jsonl")
+    journal.append(_record(1))
+
+    with pytest.raises(DuplicateOrdinalError):
+        journal.append(_record(1))
+
+    assert [r.ordinal for r in journal.read()] == [1]
+
+
+def test_duplicate_ordinal_names_the_reason() -> None:
+    """Отказ объясняет, что произошло: номер и файл журнала."""
+    from pf.journal import DuplicateOrdinalError
+
+    journal = Journal(settings.journal_dir / "s.jsonl")
+    journal.append(_record(2))
+
+    with pytest.raises(DuplicateOrdinalError) as caught:
+        journal.append(_record(2))
+
+    text = str(caught.value)
+    assert "2" in text, text
+    assert "s.jsonl" in text, text
+
+
+def test_duplicate_ordinal_in_other_journal_is_allowed() -> None:
+    """Разные сессии нумеруют шаги независимо: дубль — это про файл."""
+    first = Journal(settings.journal_dir / "a.jsonl")
+    second = Journal(settings.journal_dir / "b.jsonl")
+    first.append(_record(1))
+    second.append(_record(1))
+
+    assert [r.ordinal for r in first.read()] == [1]
+    assert [r.ordinal for r in second.read()] == [1]
+
+
+def test_duplicate_ordinal_two_runs_do_not_share_journal() -> None:
+    """Второй запуск в ту же секунду получает свой журнал.
+
+    Идентификатор сессии собирался как `s{int(time.time())}`: два запуска
+    подряд попадали в один файл и писали шаги с одинаковыми номерами. Теперь
+    занятый идентификатор пропускается.
+    """
+    from pf.cli import _new_session_id
+
+    first = _new_session_id()
+    Journal(journal_path(first)).append(_record(1))
+    second = _new_session_id()
+
+    assert second != first, f"второй запуск писал бы в журнал «{first}»"
+    Journal(journal_path(second)).append(_record(1))
+    assert [r.ordinal for r in Journal(journal_path(second)).read()] == [1]
