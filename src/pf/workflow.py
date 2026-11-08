@@ -1161,6 +1161,28 @@ class Workflow:
         details.extend(metric_details)
         verdicts.extend(metric_verdicts)
 
+        # Якорь, на котором расчёт отклонён, не подкрепляет вывод. В прогоне
+        # demo-v9 обе метрики были отклонены («пересчёт по входам даёт 0, а
+        # заявлено 87 тыс.»), а вывод назывался «подкреплено»: он опирался
+        # на те же две строки таблицы. Один якорь не может быть одновременно
+        # непригодным для расчёта и достаточным для решения.
+        failed_keys = {
+            citation_key(verdict.source_id)
+            for verdict in metric_verdicts
+            if verdict.status is not SupportStatus.CONFIRMED and verdict.source_id
+        }
+        if state is not None:
+            if metric_verdicts:
+                # Решение «этому якорю верить нельзя» переезжает в следующую
+                # фазу: вывод проверяется уже после разбора.
+                state.results["rejected_metric_keys"] = sorted(failed_keys)
+            failed_keys |= set(state.results.get("rejected_metric_keys") or [])
+        if failed_keys and conclusion_verdicts:
+            conclusion_verdicts = [
+                (key, SupportStatus.NO_DATA if key in failed_keys else status)
+                for key, status in conclusion_verdicts
+            ]
+
         Workflow._queue_oov(oov, context=oov_context, role=role_name, session=session_id)
 
         return GroundingResult(

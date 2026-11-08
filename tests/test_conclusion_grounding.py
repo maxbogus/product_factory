@@ -22,15 +22,18 @@ import pytest
 
 from pf.ground import SupportStatus
 from pf.schemas import (
+    Analysis,
     Commitment,
     CommunicationStrategy,
     DecisionRecord,
+    MetricRef,
     ProductStrategy,
     SourceRef,
     Strategy,
     VerificationPlan,
 )
 from pf.sources import SourceBundle, collect
+from pf.state import Phase, SessionState
 from pf.workflow import Workflow
 
 #: Цитата, которая дословно есть в строке таблицы материалов теста.
@@ -163,6 +166,89 @@ def test_conclusion_on_phantom_source_is_not_confirmed(
     assert grounding.conclusion["status"] == "неподкреплено"
     assert grounding.conclusion["confirmed"] == 0
     assert grounding.conclusion["checked"] == 1
+
+
+def test_rejected_metric_on_same_anchor_weakens_conclusion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Якорь, на котором расчёт отклонён, не подкрепляет вывод.
+
+    В прогоне `demo-v9` обе метрики были отклонены («пересчёт по входам
+    даёт 0, а заявлено 87 тыс.»), а вывод при этом назывался
+    «подкреплено»: он опирался на те же две строки таблицы. Один якорь не
+    может быть одновременно непригодным для расчёта и достаточным для
+    решения.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = SessionState(session_id="metric-conflict", phase=Phase.STRATEGY)
+    state.results["rejected_metric_keys"] = ["project/numbers.csv#row0"]
+    strategy = _strategy([SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE)])
+
+    grounding = Workflow._verify_claims(strategy, bundle, state=state)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "неподкреплено"
+    assert grounding.conclusion["confirmed"] == 0
+
+
+def test_rejected_metric_on_other_anchor_keeps_conclusion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Отказ на другом якоре вывод не гасит.
+
+    Проверка сравнивает якоря, а не «есть ли в прогоне хоть один отказ»:
+    иначе одна неудачная строка обнуляла бы весь вывод.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = SessionState(session_id="metric-other", phase=Phase.STRATEGY)
+    state.results["rejected_metric_keys"] = ["project/numbers.csv#row9"]
+    strategy = _strategy([SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE)])
+
+    grounding = Workflow._verify_claims(strategy, bundle, state=state)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "подкреплено"
+
+
+def test_rejected_metric_anchor_is_remembered_in_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Отклонённый расчёт запоминается по якорю — для следующей фазы.
+
+    Вывод проверяется позже разбора, поэтому решение «этому якорю верить
+    нельзя» должно переехать между шагами, а не остаться в шаге разбора.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = SessionState(session_id="metric-memory", phase=Phase.ANALYZING)
+    analysis = Analysis(
+        metrics=[
+            MetricRef(
+                name="Абонентская база",
+                value=50.0,
+                unit="млн",
+                source_id="project/numbers.csv#row0",
+                formula="(87 + 111) / 2",
+                inputs={"first": "87", "second": "111"},
+            )
+        ]
+    )
+
+    grounding = Workflow._verify_claims(analysis, bundle, state=state)
+
+    assert grounding.rejected == 1
+    assert state.results["rejected_metric_keys"] == ["project/numbers.csv#row0"]
 
 
 def test_confirmed_conclusion_evidence_counts_as_grounds(
