@@ -595,6 +595,65 @@ def _d22_hypothesis_verdict() -> str:
     return f"{refuted.verdict.title_ru}: {refuted.basis}; {unknown.verdict.title_ru}"
 
 
+def _d31_review_on_changed_data() -> str:
+    """Пересмотр находит выводы, затронутые изменившимися данными.
+
+    Собирается настоящий мини-журнал с одной ссылкой на материал, у
+    которого хеш в метаданных не совпадает с файлом. Текст вердикта
+    берётся из названия состояния (``DataStatus.title_ru``), а не
+    пишется здесь: иначе кейс не смог бы покраснеть и проверял бы сам
+    себя.
+
+    Returns:
+        Текст результата: состояние данных и сколько шагов затронуто.
+    """
+    import tempfile
+
+    from pf.journal import Journal, StepRecord
+    from pf.review import DataStatus, review_session
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        data = root / "project" / "data"
+        data.mkdir(parents=True)
+        path = data / "metrics.csv"
+        path.write_text("оператор,значение\nМТС,87\n", encoding="utf-8")
+        path.with_name(path.name + ".meta.json").write_text(
+            json.dumps(
+                {
+                    "url": "https://example.org/data",
+                    "retrieved": "2026-11-08",
+                    "sha256": "0" * 64,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        journals = root / "journal"
+        Journal(journals / "session-eval.jsonl").append(
+            StepRecord(
+                ordinal=1,
+                role="collector",
+                phase="collecting",
+                summary="шаг",
+                citations=["project/data/metrics.csv#row0"],
+            )
+        )
+
+        result = review_session(
+            "eval",
+            journal_dir=journals,
+            project_dir=root / "project",
+            knowledge_dir=root / "knowledge",
+        )
+
+    state = ", ".join(source.status.title_ru for source in result.checked)
+    # Вердикт берётся из посчитанного состояния, а не из ожидания
+    # обработчика: иначе кейс зеленел бы при выключенной проверке хеша.
+    verdict = result.changed[0].status.title_ru if result.changed else DataStatus.OK.title_ru
+    return f"{verdict}: {state}; шагов затронуто: {len(result.affected_steps)}"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -617,6 +676,7 @@ _HANDLERS = {
     "D-19-foreign-source-needs-review": _d19_foreign_source_needs_review,
     "D-20-unknown-word-goes-to-queue": _d20_unknown_word_goes_to_queue,
     "D-22-hypothesis-verdict": _d22_hypothesis_verdict,
+    "D-31-review-on-changed-data": _d31_review_on_changed_data,
 }
 
 

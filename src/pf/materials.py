@@ -333,8 +333,8 @@ def _read_document(path: Path) -> str:
                 "для чтения PDF нужны библиотеки документов: uv sync --extra documents"
             ) from exc
         pages: list[str] = []
-        with pdfplumber.open(path) as document:
-            for page in document.pages:
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
                 pages.append(page.extract_text() or "")
         return "\n\n".join(pages)
 
@@ -345,8 +345,8 @@ def _read_document(path: Path) -> str:
             raise MaterialError(
                 "для чтения DOCX нужны библиотеки документов: uv sync --extra documents"
             ) from exc
-        document = Document(str(path))
-        return "\n\n".join(paragraph.text for paragraph in document.paragraphs)
+        word = Document(str(path))
+        return "\n\n".join(paragraph.text for paragraph in word.paragraphs)
 
     if suffix == ".xlsx":
         try:

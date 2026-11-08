@@ -10,6 +10,7 @@
 - ``pf cost`` — показать расход;
 - ``pf sources "запрос"`` — показать, какие источники агент найдёт;
 - ``pf sessions`` — список сохранённых сессий;
+- ``pf review`` — пересмотр выводов: какие из них затронуты новыми данными;
 - ``pf eval`` — выполнить eval-сценарии и проверить правила поведения;
 - ``pf web "запрос"`` — найти внешние источники (требуют проверки);
 - ``pf translate <файл>`` — перевести английский материал на русский.
@@ -649,6 +650,59 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    """Пересмотреть выводы сессии по изменившимся данным.
+
+    Аргументы::
+
+        args.session — идентификатор сессии;
+        args.json — вывести результат машинно.
+
+    Команда ничего не переписывает: журнал читается, пересмотр — отдельный
+    результат. Так же, как у остальных команд, код возврата 0 означает
+    «пересмотр выполнен», а не «всё в порядке»: изменившиеся данные —
+    это новость, а не сбой.
+
+    Returns:
+        Код возврата.
+    """
+    from pf.review import review_markdown, review_session
+
+    session_id = _session_id(args.session)
+    if not session_id:
+        _out("Нет сохранённых сессий: пересматривать нечего.")
+        return 1
+
+    result = review_session(session_id)
+    if args.json:
+        payload = {
+            "session": result.session_id,
+            "steps": result.steps_total,
+            "checked": [
+                {
+                    "source_id": source.source_id,
+                    "status": str(source.status),
+                    "recorded": source.recorded,
+                    "current": source.current,
+                    "url": source.url,
+                    "retrieved": source.retrieved,
+                }
+                for source in result.checked
+            ],
+            "affected_steps": [step.ordinal for step in result.affected_steps],
+            "affected_commitments": [
+                commitment.statement for commitment in result.affected_commitments
+            ],
+            "outside": result.outside,
+        }
+        _out(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    _rule("Пересмотр выводов")
+    _out(review_markdown(result))
+    return 0
+
+
 def cmd_sessions(args: argparse.Namespace) -> int:
     """Показать список сохранённых сессий."""
     sessions = list_sessions()
@@ -849,6 +903,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sessions = subparsers.add_parser("sessions", help="список сохранённых сессий")
     sessions.set_defaults(func=cmd_sessions)
+
+    review_parser = subparsers.add_parser(
+        "review", help="пересмотреть выводы по изменившимся данным"
+    )
+    review_parser.add_argument("--session", help="идентификатор сессии")
+    review_parser.add_argument("--json", action="store_true", help="вывести результат машинно")
+    review_parser.set_defaults(func=cmd_review)
 
     lexicon_parser = subparsers.add_parser(
         "lexicon", help="словарь близости и очередь распознания слов"

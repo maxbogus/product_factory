@@ -122,6 +122,54 @@ def _limit_knowledge_source(support: Support, source_id: str) -> Support:
     return mark_external(support, reason=_KNOWLEDGE_REVIEW_REASON)
 
 
+#: Префиксы идентификаторов своих материалов: документы проекта и сырые
+#: выгрузки. Всё остальное — корпус статей.
+LOCAL_SOURCE_PREFIXES = ("project/", KNOWLEDGE_SOURCE_PREFIX)
+
+
+def _is_local_source(source_id: str) -> bool:
+    """Свой материал это или статья корпуса.
+
+    Различие нужно окну контекста: свои материалы относятся к задаче
+    непосредственно и идут первыми, а корпус даёт рыночный контекст. Если
+    не различать их, строки таблиц вытесняют статьи — и агент отвечает на
+    вопрос про отток данными про размер базы.
+
+    Args:
+        source_id: Идентификатор источника.
+
+    Returns:
+        ``True``, если источник — материал проекта или выгрузка.
+    """
+    return source_id.startswith(LOCAL_SOURCE_PREFIXES)
+
+
+def _take(
+    passages: list[Passage],
+    chosen: list[Passage],
+    taken: dict[str, int],
+    limit: int,
+    max_per_source: int,
+) -> None:
+    """Добрать абзацы из группы до предела окна.
+
+    Args:
+        passages: Абзацы группы в порядке релевантности.
+        chosen: Уже выбранные абзацы — пополняется на месте.
+        taken: Сколько абзацев взято от каждого источника — пополняется на месте.
+        limit: Общий предел окна.
+        max_per_source: Предел абзацев от одного источника.
+    """
+    for passage in passages:
+        if len(chosen) >= limit:
+            return
+        count = taken.get(passage.source_id, 0)
+        if count >= max_per_source:
+            continue
+        chosen.append(passage)
+        taken[passage.source_id] = count + 1
+
+
 @dataclass(frozen=True, slots=True)
 class SourceBundle:
     """Набор источников, собранный под одну задачу.
@@ -183,6 +231,12 @@ class SourceBundle:
     def _window(self, limit: int, max_per_source: int) -> list[Passage]:
         """Выбрать абзацы окна: сначала с разнообразием, затем добор.
 
+        Свои материалы идут первыми, но всё окно не забирают. Когда файлов
+        данных становится больше, чем слотов в окне, строки таблиц вытесняют
+        корпус целиком — и модель, отвечая на вопрос про отток, не видит ни
+        одной статьи про отток. Поэтому один слот остаётся корпусу, если в
+        сборе есть его абзацы.
+
         Args:
             limit: Сколько абзацев нужно.
             max_per_source: Предел абзацев от одного источника.
@@ -190,16 +244,16 @@ class SourceBundle:
         Returns:
             Абзацы в порядке релевантности.
         """
+        local = [passage for passage in self.passages if _is_local_source(passage.source_id)]
+        external = [passage for passage in self.passages if not _is_local_source(passage.source_id)]
+
         chosen: list[Passage] = []
         taken: dict[str, int] = {}
-        for passage in self.passages:
-            if len(chosen) >= limit:
-                return chosen
-            count = taken.get(passage.source_id, 0)
-            if count >= max_per_source:
-                continue
-            chosen.append(passage)
-            taken[passage.source_id] = count + 1
+        # Резерв — ровно один слот: корпус не должен вытесняться, но и
+        # главенство своих материалов (они относятся к задаче) не теряется.
+        limit_local = max(limit - (1 if external else 0), 1)
+        _take(local, chosen, taken, limit_local, max_per_source)
+        _take(external, chosen, taken, limit, max_per_source)
         if len(chosen) < limit:
             for passage in self.passages:
                 if len(chosen) >= limit:
@@ -622,22 +676,52 @@ def _named_input(inputs: dict[str, Any], names: tuple[str, ...]) -> float | None
 def _input_numbers(inputs: dict[str, Any]) -> list[Any]:
     """Числовые значения из входов метрики.
 
-    Входы бывают разными: скаляр («база»: «80») или списком
-    («значения»: [87, 82]). И то и другое надо увидеть числами.
+    Входы бывают разными: скаляр («база»: «80»), список
+    («значения»: [87, 82]) или строка со списком. Последнее — не
+    редкость: блок РАСЧЁТЫ печатает наблюдения через запятую, модель
+    копирует строку как есть, и без разбора весь ряд выглядел одним
+    нечисловым значением. В `demo-v10` из-за этого отбрасывались все
+    сводные метрики, и вывод оставался «не подкреплён» при верных данных.
 
     Args:
         inputs: Входные значения метрики.
 
     Returns:
-        Список значений — числа развёрнуты из списков.
+        Список значений — числа развёрнуты из списков и строк.
     """
     result: list[Any] = []
     for value in inputs.values():
         if isinstance(value, (list, tuple)):
             result.extend(value)
+        elif isinstance(value, str):
+            result.extend(_split_numbers(value))
         else:
             result.append(value)
     return result
+
+
+def _split_numbers(value: str) -> list[str]:
+    """Разделить строку со списком чисел на отдельные значения.
+
+    Разделители — только вместе с пробелом («, » и «; »): запятая без
+    пробела в русских данных означает десятичный разделитель, и резать
+    по ней нельзя — «78,5» иначе стало бы двумя числами.
+
+    Args:
+        value: Строка со значением или их списком.
+
+    Returns:
+        Части строки, если каждая из них — число; иначе исходная строка.
+    """
+    from pf.analysis import parse_number
+
+    text = value.strip()
+    if not text:
+        return []
+    parts = [part.strip() for part in re.split(r";\s*|,\s+", text) if part.strip()]
+    if len(parts) >= 2 and all(parse_number(part) is not None for part in parts):
+        return parts
+    return [text]
 
 
 #: Колонки таблицы, которые называют показатель: что строка измеряет.

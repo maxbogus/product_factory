@@ -211,3 +211,28 @@ def test_case_d22_goes_red_without_verdict_rule(monkeypatch: pytest.MonkeyPatch)
     results = {result.case_id: result for result in run_all()}
 
     assert not results["D-22-hypothesis-verdict"].passed
+
+
+def test_case_d31_goes_red_without_hash_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Если проверка хеша исчезнет, кейс D-31 обязан покраснеть.
+
+    Кейс ищет слова «требует пересмотра» и «шагов затронуто». Текст
+    собирается из состояния, которое посчитал код, поэтому при
+    выключенной проверке хеша состояние становится «не изменилось» — и
+    кейс падает. Иначе он зеленел бы на пустом месте: так уже вышло с
+    D-05, D-06 и D-09.
+
+    Args:
+        monkeypatch: Подмена проверки хеша на «всегда совпадает».
+    """
+    import pf.review as review
+    from pf.evalrun import run_all
+
+    def _always_ok(path: str, project_root: Path, knowledge_root: Path) -> review.CheckedSource:
+        """Состояние «не изменилось» независимо от файла."""
+        return review.CheckedSource(source_id=path, status=review.DataStatus.OK, current="x")
+
+    monkeypatch.setattr(review, "_check_source", _always_ok)
+    results = {result.case_id: result for result in run_all()}
+
+    assert not results["D-31-review-on-changed-data"].passed

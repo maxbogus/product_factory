@@ -208,6 +208,41 @@ def test_context_is_not_eaten_by_one_table() -> None:
     )
 
 
+def test_window_reserves_slot_for_corpus() -> None:
+    """Окно не отдаётся целиком своим материалам.
+
+    Проверка детерминированная: абзацы заданы вручную, настоящие данные и
+    корпус не нужны. Смысл правила — модель должна видеть и строки своих
+    таблиц, и статьи по теме вопроса; иначе на вопрос про отток она
+    отвечает тем, что нашлось в данных: размером базы.
+    """
+    from pf.sources import Passage, SourceBundle
+
+    local = [
+        Passage(
+            source_id=f"project/data/table{index}.csv",
+            title=f"Таблица {index}",
+            section="project",
+            paragraph_index=0,
+            text=f"оператор: МТС, значение: {80 + index}",
+            relevance=1.0 - index * 0.01,
+        )
+        for index in range(4)
+    ]
+    corpus = Passage(
+        source_id="telecom/Отток клиентов",
+        title="Отток клиентов",
+        section="telecom",
+        paragraph_index=0,
+        text="Отток клиентов — потеря клиентов или покупателей.",
+        relevance=0.9,
+    )
+    bundle = SourceBundle(passages=[*local, corpus], articles=[], query="отток")
+
+    text = bundle.context(limit=5)
+    assert "telecom/Отток клиентов#p0" in text, f"корпус вытеснен из окна: {text}"
+
+
 def test_context_fills_window_when_source_is_single() -> None:
     """Если материал один, окно заполняется его абзацами.
 
@@ -286,7 +321,18 @@ def test_row_filter_drops_row_about_other_indicator() -> None:
 
     window = bundle.context(limit=5)
     assert "МТС Беларусь" not in window, f"в окне чужая строка: {window!r}"
-    assert "абонентская база" in window, "в окне нет ни одной строки про показатель"
+    # Состав окна из пяти слотов не фиксируется: он зависит от того, какие
+    # файлы данных есть в проекте. Проверяется свойство, а не состав:
+    # строки окна — про показатели задачи, а не про соседнюю отрасль.
+    project_rows = [
+        block
+        for block in window.split("\n\n")
+        if block.startswith("[project/") and ".csv" in block.split("]")[0]
+    ]
+    assert project_rows, f"в окне нет ни одной строки данных: {window!r}"
+    assert any("абонентск" in block.lower() or "arpu" in block.lower() for block in project_rows), (
+        f"в окне нет ни одной строки про показатель: {window!r}"
+    )
 
 
 def test_row_filter_ignores_provenance_length(_project: Path) -> None:

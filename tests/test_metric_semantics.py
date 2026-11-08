@@ -121,3 +121,52 @@ def test_real_aggregate_still_confirms(materials: list[object]) -> None:
     support = verify_metric(metric, materials)
 
     assert support.is_usable, f"агрегат должен подтверждаться: {support.detail}"
+
+
+def test_aggregate_copied_as_text_still_confirms(materials: list[object]) -> None:
+    """Агрегат подтверждается, даже если наблюдения пришли одной строкой.
+
+    Блок РАСЧЁТЫ печатает наблюдения через запятую, и модель копирует
+    строку как есть: `наблюдения: 78.7913, 78.8527, ...`. Пока строка не
+    разбиралась, весь ряд выглядел одним нечисловым значением, пересчёт
+    не запускался, и в `demo-v10` отбрасывались **все** сводные метрики —
+    вывод оставался «не подкреплён» при верных данных.
+
+    Args:
+        materials: Материалы теста.
+    """
+    metric = Metric(
+        name="Абонентская база МТС",
+        value=43.5,
+        unit="млн",
+        source_id="project/data/base.csv#row0",
+        formula="сумма / количество",
+        inputs={"наблюдения": "87, 0"},
+    )
+
+    support = verify_metric(metric, materials)
+
+    assert support.is_usable, f"агрегат из строки должен подтверждаться: {support.detail}"
+
+
+def test_decimal_comma_is_not_split(materials: list[object]) -> None:
+    """Запятая без пробела — десятичный разделитель, а не список чисел.
+
+    Разбор строки на числа не должен превращать «78,5» в два значения:
+    тогда среднее считалось бы по 78 и 5.
+
+    Args:
+        materials: Материалы теста.
+    """
+    metric = Metric(
+        name="Абонентская база МТС",
+        value=87.0,
+        unit="млн",
+        source_id="project/data/base.csv#row0",
+        formula="Среднее значение",
+        inputs={"наблюдения": "87"},
+    )
+
+    support = verify_metric(metric, materials)
+
+    assert support.is_usable, f"одно число — это одно наблюдение: {support.detail}"

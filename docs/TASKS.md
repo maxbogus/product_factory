@@ -61,8 +61,8 @@
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам | 2 | 4.2 | ⬜ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
 | T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
 | T-10 | 2 | Покрытие сценариев: `workflow`, `sources`, `strategy`, `data` feature-файлы и новые eval-кейсы | 3 | 4.0 | ⬜ | T-02 | `uv run pytest tests/test_scenario_coverage.py -q` |
-| T-11 | 3 | Данные: отток, ARPU, тарифы конкурентов, переносы номеров, один PDF | 3 | 4.8 | ⬜ | T-09 | `uv run pytest tests/test_demo_data.py -q` |
-| T-12 | 4 | `pf review`: пересмотр выводов по изменившимся хешам данных | 3 | 4.8 | ⬜ | T-09 | `uv run pytest tests/test_review.py -q` |
+| T-11 | 3 | Данные: отток, ARPU, тарифы конкурентов, переносы номеров, один PDF | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_demo_data.py -q` |
+| T-12 | 4 | `pf review`: пересмотр выводов по изменившимся хешам данных | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_review.py -q` |
 | T-13 | 4 | Шаг интервью и модельных респондентов с маркировкой синтетики | 5 | 1.4 | ⬜ | T-07 | `uv run pytest tests/test_interviews.py -q` |
 | T-14 | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой | 3 | 2.7 | ⬜ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation -q` |
 | T-15 | 1 | Строка таблицы подтверждает только свой показатель: сверка показателя и словоформ, а не одного числа | 2 | 8.1 | ✅ | — | `uv run pytest tests/test_sources.py -k indicator -q` |
@@ -74,6 +74,7 @@
 | T-27 | 2 | Перевод en→ru как слой: кэш переводов, сохранность чисел, `pf translate` | 3 | 2.0 | ✅ | — | `uv run pytest tests/test_translate.py -k numbers_preserved -q` |
 | T-28 | 2 | Перевод в поиске и отборе: запрос RU→EN для английских каналов, `text_ru` для релевантности | 3 | 1.2 | ⬜ | T-26, T-27 | `uv run pytest tests/test_retrieval.py -k translated_relevant -q` |
 | T-29 | 2 | Перевод в проверке и анализе: ветка «другой язык» усилена, числа сверяются с оригиналом | 3 | 3.0 | ⬜ | T-27, T-28 | `uv run pytest tests/test_ground.py -k translated_quote -q` |
+| T-30 | 2 | Агрегат в выводе сверяется по имени метрики, а не со строкой источника | 2 | 2.1 | ⬜ | — | `uv run pytest tests/test_sources.py -k aggregate_by_name -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена
@@ -87,7 +88,7 @@
 |---|---|---|
 | **0** | Инфраструктура работы: чтобы задачи и контекст не терялись | T-00 |
 | **1** | Долг честности: проверки, которые врут или падают не по делу | T-01…T-05, T-14, T-15, T-18 |
-| **2** | Содержание, которое читает жюри: ограничения, гипотезы, источники, сценарии, перевод | T-06…T-10, T-16, T-17, T-26…T-29 |
+| **2** | Содержание, которое читает жюри: ограничения, гипотезы, источники, сценарии, перевод | T-06…T-10, T-16, T-17, T-26…T-30 |
 | **3** | Данные и демонстрация | T-11 |
 | **4** | Дополнительный уровень брифа | T-12, T-13 |
 

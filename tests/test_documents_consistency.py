@@ -44,10 +44,6 @@ NOT_IN_EXAMPLE = {
     "user_agent": "технический заголовок запроса к сайтам, менять его незачем",
 }
 
-#: Формулировки, обещающие цикл пересмотра. Пока подкоманды `pf review` нет,
-#: их в README быть не может: документ обещал бы работу, которой не существует.
-REVIEW_CLAIMS = ("проверяется при пересмотре", "проверить при пересмотре")
-
 ENV_LINE = re.compile(r"^\s*(PF_[A-Z0-9_]+)=(.*)$", re.MULTILINE)
 MAKE_TARGET = re.compile(r"^([a-z][a-z0-9-]*):", re.MULTILINE)
 MAKE_MENTION = re.compile(r"(?:^|\s|`)make ([a-z][a-z0-9-]*)", re.MULTILINE)
@@ -195,24 +191,20 @@ def test_brief_does_not_call_web_unconnected() -> None:
     assert "PF_ENABLE_WEB" in text, "документ обязан сказать, как веб включается"
 
 
-def test_readme_does_not_promise_review_cycle() -> None:
-    """README не обещает цикл пересмотра, которого нет в CLI.
+def test_readme_review_cycle_is_backed_by_command() -> None:
+    """README про цикл пересмотра называет команду, которая его исполняет.
 
-    Хеш версии данных — инфраструктура: по нему видно, что данные изменились.
-    Сам пересмотр выводов — отдельная работа, и пока подкоманды `pf review`
-    нет, документ не имеет права говорить, что что-то «проверяется при
-    пересмотре».
+    Обратная сторона прежней проверки. Пока подкоманды `pf review` не
+    было, документ не имел права обещать пересмотр — и не обещал. Теперь
+    команда есть, и README обязан её назвать: иначе цикл «обязательства →
+    новые данные» остаётся картинкой, а обещание — словами.
     """
     readme = README.read_text(encoding="utf-8")
-    lowered = readme.lower()
-    if "review" in _subcommands():
-        return
-    promised = [phrase for phrase in REVIEW_CLAIMS if phrase in lowered]
-    assert not promised, (
-        "README говорит, что при пересмотре что-то проверяется, но подкоманды "
-        "`pf review` нет: " + ", ".join(promised)
+    assert "review" in _subcommands(), "подкоманда `pf review` должна быть объявлена в CLI"
+    assert "pf review" in readme, (
+        "README говорит о цикле пересмотра, но не называет команду `pf review`, "
+        "которая этот цикл исполняет"
     )
-    assert "`pf review`" not in readme, "README называет подкоманду `pf review`, которой нет"
 
 
 def test_commands_named_in_readme_exist() -> None:

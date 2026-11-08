@@ -132,15 +132,21 @@ def test_short_source_name_is_resolved() -> None:
 
 
 def test_short_source_name_resolves_article() -> None:
-    """Цитата из материала по короткому имени подтверждается."""
+    """Цитата из материала по короткому имени подтверждается.
+
+    Короткое имя берётся из идентификатора того же материала, а не
+    задаётся строкой: файлов данных в проекте несколько, и жёстко
+    названный файл перестал бы быть первым в срезе.
+    """
     bundle = collect("отток абонентов операторов связи удержание")
     project = [a for a in bundle.articles if a.source_id.startswith("project/")]
     assert project, "материал проекта должен быть в срезе"
     article = project[0]
     text = article.content.splitlines()[0]
+    short = article.source_id.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     support = bundle.verify_claim(
         text[:60],
-        source_id="telecom_open_metrics",
+        source_id=short,
         paragraph=None,
         quote=text[:60],
     )
