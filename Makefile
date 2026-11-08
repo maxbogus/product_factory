@@ -10,7 +10,7 @@ PYTHON ?= python3
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
         lexicon lexicon-oov contracts-check scenarios-check demo-doc replay \
-        semantic-bench \
+        semantic-bench tune-threshold \
         translate \
         canon tasks-check docs-check next-task
 
@@ -157,8 +157,11 @@ bench: ## Замеры: агент против обычного чата (make 
 replay: ## A/B проверки оснований по сохранённым журналам (make replay SESSIONS="demo-v7 demo-v9")
 	@$(UV) run python scripts/replay_verification.py $(if $(SESSIONS),--sessions $(SESSIONS),)
 
-semantic-bench: ## Замер семантики: TF-IDF без моделей (make semantic-bench METHODS="tfidf rubert sbert")
+semantic-bench: ## Замер семантики: TF-IDF без моделей (make semantic-bench METHODS="tfidf fields")
 	@$(UV) run python scripts/semantic_bench.py $(foreach m,$(or $(METHODS),tfidf),--method $(m))
+
+tune-threshold: ## Подобрать порог степени поддержки на повторных фолдах (make tune-threshold)
+	@$(UV) run python scripts/tune_threshold.py
 
 mcp: ## Инструменты MCP-сервера (make mcp SERVER=static-parser)
 	@$(UV) run pf mcp $(or $(SERVER),static-parser)

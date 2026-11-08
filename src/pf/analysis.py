@@ -19,9 +19,10 @@ baseline — не план, а мечта. Чтобы план был прове
 from __future__ import annotations
 
 import math
-import re
 from dataclasses import dataclass, field
 from typing import Any
+
+from pf.periods import key_of_row
 
 __all__ = [
     "Metric",
@@ -449,54 +450,9 @@ def summarize_groups(
     return summaries
 
 
-#: Римские номера кварталов: источники пишут и так («IV квартал 2017»).
-_ROMAN_QUARTERS: dict[str, int] = {"i": 1, "ii": 2, "iii": 3, "iv": 4}
-
-#: Словесные номера кварталов: «первый квартал 2017».
-_WORD_QUARTERS: dict[str, int] = {"перв": 1, "втор": 2, "трет": 3, "четверт": 4}
-
-#: Слово «квартал» в записях: «кв.», «кв», «квартал».
-_QUARTER_WORD = r"(?:кв\.|кв\b|квартал)"
-
-#: Цифра квартала перед словом: «1 кв. 2017», «3-й квартал 2024».
-_QUARTER_DIGIT = re.compile(rf"\b([1-4])\s*(?:-?\s*й)?\s*{_QUARTER_WORD}")
-
-#: Латинская запись: «Q1 2017», «2017-Q1».
-_QUARTER_LATIN = re.compile(r"\bq\s*([1-4])\b")
-
-#: Римская запись: «I квартал 2017», «IV кв.».
-_QUARTER_ROMAN = re.compile(rf"\b(iv|iii|ii|i)\s*{_QUARTER_WORD}")
-
-#: Словесная запись: «первый квартал 2017», «четвёртый квартал 2017».
-_QUARTER_WORDED = re.compile(rf"\b(четверт|четвёрт|трет|втор|перв)\w*\s*{_QUARTER_WORD}")
-
-#: Год внутри записи периода.
-_YEAR = re.compile(r"\b(1[89]\d{2}|20\d{2})\b")
-
-
-def _quarter_of(text: str) -> int:
-    """Номер квартала из записи периода.
-
-    Квартал — не украшение записи, а часть времени: без него ряд
-    «1 кв. 2017 … 4 кв. 2017» упорядочивается по склеенным цифрам.
-
-    Args:
-        text: Запись периода в нижнем регистре.
-
-    Returns:
-        Номер квартала 1–4 либо 0, если квартал не назван.
-    """
-    for pattern in (_QUARTER_LATIN, _QUARTER_DIGIT):
-        match = pattern.search(text)
-        if match:
-            return int(match.group(1))
-    match = _QUARTER_ROMAN.search(text)
-    if match:
-        return _ROMAN_QUARTERS[match.group(1)]
-    match = _QUARTER_WORDED.search(text)
-    if match:
-        return _WORD_QUARTERS[match.group(1).replace("ё", "е")]
-    return 0
+#: Разбор периода (год, квартал, дата, интервал) живёт в `pf.periods`:
+#: то же правило нужно проверке оснований, а вторая его копия уже приводила к
+#: тому, что «1 кв. 2017» и «2017-Q1» считались разными периодами (`D-34`).
 
 
 def _period_key(row: dict[str, str]) -> tuple[int, float, str]:
@@ -512,42 +468,16 @@ def _period_key(row: dict[str, str]) -> tuple[int, float, str]:
     следующего года, а ничьи между годом и первым кварталом не возникает
     (``docs/decisions.md``, D-34).
 
+    Разбор делегируется `pf.periods`: то же правило нужно проверке
+    оснований, и второй копии быть не должно.
+
     Args:
         row: Строка таблицы.
 
     Returns:
         Кортеж для сортировки.
     """
-    for column in ("период", "дата", "period", "date"):
-        raw = str(row.get(column, "")).strip()
-        if not raw:
-            continue
-        # ISO-дата: 2026-01-13
-        if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
-            return (0, float(raw[:10].replace("-", "")), raw)
-        # Год: 2018
-        if raw[:4].isdigit() and len(raw) == 4:
-            return (1, float(raw), raw)
-        # Русская дата: 13.01.2026
-        numbers = raw.replace("г.", "").split()
-        parts = [p for p in numbers[0].split(".") if p.isdigit()]
-        if len(parts) == 3:
-            day, month, year = parts
-            return (0, float(f"{year}{month:0>2}{day:0>2}"), raw)
-        # Квартал: «2017-Q1», «Q1 2017», «1 кв. 2017», «I квартал 2017».
-        # Разбор по цифрам склеил бы «1 кв. 2017» в 12017 и поставил бы
-        # первый квартал 2018 года раньше четвёртого квартала 2017-го.
-        lowered = raw.lower()
-        quarter = _quarter_of(lowered)
-        if quarter:
-            year_match = _YEAR.search(lowered)
-            if year_match:
-                return (1, float(year_match.group(1)) + quarter / 5, raw)
-        # Число в начале: конец июля, иное текстовое обозначение периода
-        digits = "".join(ch for ch in raw if ch.isdigit())
-        if digits:
-            return (2, float(digits), raw)
-    return (3, 0.0, "")
+    return key_of_row(row)
 
 
 def summarize_series(

@@ -586,6 +586,52 @@ def budget_check(
     )
 
 
+def roc_auc(scores: Mapping[str, float], pairs: Sequence[Pair]) -> float:
+    """Площадь под ROC: как часто честная пара выше подмены по оценке.
+
+    0,5 — оценка не различает классы; 1,0 — все честные выше всех подмен.
+    Считается рангами без зависимостей: на шестидесяти парах это 900
+    сравнений, библиотека не нужна (`D-09`).
+
+    Args:
+        scores: Оценки по парам. Для флага «не по месту» — близость, для
+            степени поддержки — она сама.
+        pairs: Набор пар.
+
+    Returns:
+        Площадь от 0 до 1.
+    """
+    honest = [scores[pair.pair_id] for pair in pairs if pair.label is Label.IN_PLACE]
+    alien = [scores[pair.pair_id] for pair in pairs if pair.label is Label.OUT_OF_PLACE]
+    if not honest or not alien:
+        return 0.5
+    wins = sum(
+        1.0 if left > right else 0.5 if left == right else 0.0 for left in honest for right in alien
+    )
+    return wins / (len(honest) * len(alien))
+
+
+def brier(scores: Mapping[str, float], pairs: Sequence[Pair]) -> float:
+    """Средняя квадратичная ошибка оценки как вероятности.
+
+    Оценка трактуется как вероятность того, что пара честная. Базовая ставка —
+    0,5 (половина на половину), её Brier 0,25: если оценка не лучше, называть
+    её вероятностью нельзя, и в отчёте она называется степенью.
+
+    Args:
+        scores: Оценки по парам.
+        pairs: Набор пар.
+
+    Returns:
+        Ошибка от 0 до 1.
+    """
+    total = 0.0
+    for pair in pairs:
+        outcome = 1.0 if pair.label is Label.IN_PLACE else 0.0
+        total += (scores[pair.pair_id] - outcome) ** 2
+    return total / len(pairs) if pairs else 0.0
+
+
 def evaluate_method(scores: Mapping[str, float], pairs: Sequence[Pair]) -> dict[str, Any]:
     """Оценить один метод: порог на train, метрики на train и test.
 
@@ -601,6 +647,8 @@ def evaluate_method(scores: Mapping[str, float], pairs: Sequence[Pair]) -> dict[
     test = flag_precision_recall(scores, pairs, threshold, split="test")
     return {
         "threshold": round(threshold, 6),
+        "auc": round(roc_auc(scores, pairs), 6),
+        "brier": round(brier(scores, pairs), 6),
         "train": train.as_dict(),
         "test": test.as_dict(),
     }

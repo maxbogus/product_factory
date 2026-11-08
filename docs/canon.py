@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # ── Числа ────────────────────────────────────────────────────────────────────
 #: Детерминированные тесты: ``pytest -m "not slow"``.
-TESTS_DETERMINISTIC = 618
+TESTS_DETERMINISTIC = 637
 
 #: Тесты с живой моделью: ``pytest -m slow``.
 TESTS_LIVE = 4

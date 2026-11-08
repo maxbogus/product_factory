@@ -22,6 +22,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pf.config import settings
 from pf.lexical import (
@@ -34,6 +35,9 @@ from pf.lexical import (
 from pf.lexical import (
     overlap as lexical_overlap,
 )
+
+if TYPE_CHECKING:
+    from pf.canonical import SupportScore
 
 #: Нормализация текста перед сравнением: приводим к NFC, схлопываем пробелы
 #: и убираем мягкие переносы. Регистр НЕ меняем — регистр может быть частью
@@ -517,6 +521,24 @@ def _overlap_reason(result: Overlap, min_overlap: float) -> str:
     )
 
 
+def _field_reason(result: SupportScore) -> str:
+    """Назвать поле, по которому утверждение не подтвердилось.
+
+    «Не совпало» не говорит ничего: причина может быть в периоде, субъекте,
+    единице или в том, что одна строка не подтверждает динамику. Решение
+    принимает степень поддержки, а причина называется полем и числом.
+
+    Args:
+        result: Степень поддержки по абзацу.
+
+    Returns:
+        Текст причины для журнала и отчёта.
+    """
+    if result.reason:
+        return f"{result.reason} ({result.explain()})"
+    return f"степень поддержки ниже порога: {result.explain()}"
+
+
 def verify_claim(
     source_text: str,
     claim_text: str,
@@ -524,7 +546,7 @@ def verify_claim(
     paragraph_index: int | None = None,
     quote: str = "",
     *,
-    min_overlap: float | None = None,
+    support_threshold: float | None = None,
     abs_tolerance: float | None = None,
     rel_tolerance: float | None = None,
 ) -> Support:
@@ -534,9 +556,11 @@ def verify_claim(
 
     1. **Цитата.** Если модель прислала цитату, она проверяется дословно,
        а при расхождении — с допуском на округление чисел.
-    2. **Покрытие абзацем.** Если цитаты нет, проверяется, что утверждение
-       собрано из слов указанного абзаца: по леммам и синонимам, но с
-       обязательным совпадением точных терминов, чисел и отрицания.
+    2. **Поля.** Если цитаты нет, считается **степень поддержки** полями
+       (`pf.canonical.score`): понятие показателя, субъект, регион, период,
+       величины, термины, отрицание и опора утверждения. Порог, при котором
+       степень становится подтверждением, — настройка
+       (`claim_support_threshold`), а не константа: он подбирается на замере.
 
     Args:
         source_text: Полный текст источника.
@@ -544,7 +568,7 @@ def verify_claim(
         source_id: Идентификатор источника.
         paragraph_index: Номер абзаца, если указан.
         quote: Дословная цитата, если прислана.
-        min_overlap: Порог покрытия. По умолчанию — из настроек.
+        support_threshold: Порог степени поддержки. По умолчанию — из настроек.
         abs_tolerance: Абсолютный допуск чисел. По умолчанию — из настроек.
         rel_tolerance: Относительный допуск чисел.
 
@@ -560,45 +584,48 @@ def verify_claim(
             rel_tolerance=rel_tolerance,
         )
 
-    threshold = settings.claim_min_overlap if min_overlap is None else min_overlap
+    # Импорт ленивый: `pf.canonical` читает словарь и чистку, а `pf.ground`
+    # должен импортироваться быстро и без побочных эффектов.
+    from pf.canonical import score as canonical_score
+
+    threshold = settings.claim_support_threshold if support_threshold is None else support_threshold
     absolute, relative = _tolerances(abs_tolerance, rel_tolerance)
     groups = _groups()
     paragraphs = source_text.split("\n")
 
-    def compare(paragraph: str) -> Overlap:
-        """Сравнить утверждение с одним абзацем."""
-        return lexical_overlap(
+    def compare(paragraph: str) -> SupportScore:
+        """Сравнить утверждение с одним абзацем по полям."""
+        return canonical_score(
             claim_text,
             paragraph,
             groups=groups,
             abs_tolerance=absolute,
             rel_tolerance=relative,
-            min_overlap=threshold,
         )
 
     if paragraph_index is not None and 0 <= paragraph_index < len(paragraphs):
         paragraph = paragraphs[paragraph_index].strip()
         result = compare(paragraph)
-        if result.matched:
+        if result.supported(threshold):
             return Support(
                 quote=paragraph[:400],
                 source_id=source_id,
                 status=SupportStatus.CONFIRMED,
                 paragraph_index=paragraph_index,
-                detail=f"утверждение покрыто абзацем на {result.coverage:.0%}",
+                detail=f"утверждение подтверждено: {result.explain()}",
                 oov=tuple(result.oov_tokens),
             )
         return Support(
             quote=claim_text.strip()[:400],
             source_id=source_id,
             status=SupportStatus.NO_DATA,
-            detail=_overlap_reason(result, threshold),
+            detail=_field_reason(result),
             oov=tuple(result.oov_tokens),
         )
 
     # Абзац не указан — ищем, в каком абзаце утверждение подтверждается.
     claim_numbers = numbers_in(claim_text)
-    best: Overlap | None = None
+    best: SupportScore | None = None
     best_paragraph = ""
     for index, paragraph in enumerate(paragraphs):
         if len(paragraph.strip()) < 40:
@@ -615,15 +642,15 @@ def verify_claim(
         if not paragraph_numbers_ok and not shares_words(claim_text, paragraph):
             continue
         result = compare(paragraph)
-        if best is None or result.coverage > best.coverage:
+        if best is None or result.support > best.support:
             best, best_paragraph = result, paragraph
-        if result.matched:
+        if result.supported(threshold):
             return Support(
                 quote=paragraph.strip()[:400],
                 source_id=source_id,
                 status=SupportStatus.CONFIRMED,
                 paragraph_index=index,
-                detail=f"утверждение подтверждено абзацем на {result.coverage:.0%}",
+                detail=f"утверждение подтверждено: {result.explain()}",
                 oov=tuple(result.oov_tokens),
             )
 
@@ -642,7 +669,7 @@ def verify_claim(
         quote=best_paragraph.strip()[:400],
         source_id=source_id,
         status=SupportStatus.NO_DATA,
-        detail=_overlap_reason(best, threshold),
+        detail=_field_reason(best),
         oov=tuple(best.oov_tokens),
     )
 

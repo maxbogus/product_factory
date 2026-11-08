@@ -352,6 +352,24 @@ def _compatible(claim: Quantity, source: Quantity) -> bool:
     ) and not (source.unit in _DIMENSIONLESS and (claim.unit == "шт" or claim.scale > 1.0))
 
 
+def compatible(claim: Quantity, source: Quantity) -> bool:
+    """Совместимы ли единицы двух величин.
+
+    Публичная обёртка правила `_compatible`: каноническое сравнение
+    (`pf.canonical`) различает «не та единица» и «не то число», и это
+    правило должно быть одно, а не переписанное второй раз.
+
+    Args:
+        claim: Величина утверждения.
+        source: Величина источника.
+
+    Returns:
+        Единицы совместимы (или одна из сторон единицу не назвала и масштаб
+        не противоречит).
+    """
+    return _compatible(claim, source)
+
+
 def _values(claim: Quantity, source: Quantity) -> tuple[float, float]:
     """Привести величины к одной шкале.
 
