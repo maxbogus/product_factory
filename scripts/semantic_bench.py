@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from pf.journal import Journal, journal_path
+from pf.sanitize import for_comparison
 from pf.semantic_bench import (
     Pair,
     evaluate_method,
@@ -133,7 +134,11 @@ def _cosine_scores(
     Returns:
         Отображение «идентификатор пары → близость».
     """
-    texts = [pair.claim for pair in pairs] + [pair.quote for pair in pairs]
+    # Чистка одна на все методы (`T-42`): иначе лексика сравнивает текст без
+    # url и имён колонок, а эмбеддинги — с ними, и замеры несравнимы.
+    texts = [for_comparison(pair.claim) for pair in pairs] + [
+        for_comparison(pair.quote) for pair in pairs
+    ]
     vectors = encode(texts)
     size = len(pairs)
     scores: dict[str, float] = {}

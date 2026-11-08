@@ -1,5 +1,5 @@
 {
-  "measured_at": "2026-11-08",
+  "measured_at": "2026-11-09",
   "pairs_sha256": "d81647dbc5f512767744b0730df1fd6d5edafd6d98bfd5b4b9c91186684ca19d",
   "pairs_count": 60,
   "baseline": {
@@ -14,10 +14,10 @@
   },
   "methods": {
     "tfidf": {
-      "threshold": 0.039544,
+      "threshold": 0.042063,
       "train": {
         "split": "train",
-        "threshold": 0.039544,
+        "threshold": 0.042063,
         "true_positives": 4,
         "false_positives": 0,
         "false_negatives": 11,
@@ -29,38 +29,7 @@
       },
       "test": {
         "split": "test",
-        "threshold": 0.039544,
-        "true_positives": 0,
-        "false_positives": 1,
-        "false_negatives": 15,
-        "true_negatives": 14,
-        "positives": 15,
-        "precision": 0.0,
-        "recall": 0.0,
-        "confirmations_lost": 1
-      },
-      "method": "tfidf",
-      "engine": "леммы + TF-IDF (в `.venv`)",
-      "rss_delta_mb": 19.8,
-      "encode_sec": 0.115
-    },
-    "rubert": {
-      "threshold": 0.338181,
-      "train": {
-        "split": "train",
-        "threshold": 0.338181,
-        "true_positives": 0,
-        "false_positives": 0,
-        "false_negatives": 15,
-        "true_negatives": 15,
-        "positives": 15,
-        "precision": 0.0,
-        "recall": 0.0,
-        "confirmations_lost": 0
-      },
-      "test": {
-        "split": "test",
-        "threshold": 0.338181,
+        "threshold": 0.042063,
         "true_positives": 1,
         "false_positives": 0,
         "false_negatives": 14,
@@ -70,41 +39,72 @@
         "recall": 0.0667,
         "confirmations_lost": 0
       },
-      "method": "rubert",
-      "engine": "DeepPavlov/rubert-base-cased",
-      "rss_delta_mb": 1186.4,
-      "encode_sec": 12.078
+      "method": "tfidf",
+      "engine": "леммы + TF-IDF (в `.venv`)",
+      "rss_delta_mb": 20.5,
+      "encode_sec": 0.086
     },
-    "sbert": {
-      "threshold": 0.617541,
+    "rubert": {
+      "threshold": 0.49451,
       "train": {
         "split": "train",
-        "threshold": 0.617541,
-        "true_positives": 4,
+        "threshold": 0.49451,
+        "true_positives": 3,
         "false_positives": 0,
-        "false_negatives": 11,
+        "false_negatives": 12,
         "true_negatives": 15,
         "positives": 15,
         "precision": 1.0,
-        "recall": 0.2667,
+        "recall": 0.2,
         "confirmations_lost": 0
       },
       "test": {
         "split": "test",
-        "threshold": 0.617541,
-        "true_positives": 0,
+        "threshold": 0.49451,
+        "true_positives": 2,
         "false_positives": 1,
-        "false_negatives": 15,
+        "false_negatives": 13,
         "true_negatives": 14,
         "positives": 15,
-        "precision": 0.0,
-        "recall": 0.0,
+        "precision": 0.6667,
+        "recall": 0.1333,
         "confirmations_lost": 1
+      },
+      "method": "rubert",
+      "engine": "DeepPavlov/rubert-base-cased",
+      "rss_delta_mb": 1150.6,
+      "encode_sec": 7.206
+    },
+    "sbert": {
+      "threshold": 0.652542,
+      "train": {
+        "split": "train",
+        "threshold": 0.652542,
+        "true_positives": 6,
+        "false_positives": 0,
+        "false_negatives": 9,
+        "true_negatives": 15,
+        "positives": 15,
+        "precision": 1.0,
+        "recall": 0.4,
+        "confirmations_lost": 0
+      },
+      "test": {
+        "split": "test",
+        "threshold": 0.652542,
+        "true_positives": 2,
+        "false_positives": 2,
+        "false_negatives": 13,
+        "true_negatives": 13,
+        "positives": 15,
+        "precision": 0.5,
+        "recall": 0.1333,
+        "confirmations_lost": 2
       },
       "method": "sbert",
       "engine": "ai-forever/sbert_large_nlu_ru",
-      "rss_delta_mb": 933.2,
-      "encode_sec": 12.865
+      "rss_delta_mb": 944.5,
+      "encode_sec": 8.903
     }
   },
   "verdict": {

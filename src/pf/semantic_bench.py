@@ -38,7 +38,8 @@ from pathlib import Path
 from typing import Any
 
 from pf.ground import find_quote
-from pf.lexical import exact_terms_in, numbers_in, stems
+from pf.lexical import exact_terms_in, stems
+from pf.sanitize import for_comparison
 
 #: Корень репозитория: файл лежит в ``src/pf/``.
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -271,46 +272,28 @@ def quote_is_verbatim(pair: Pair) -> bool:
     return found
 
 
-def _without_provenance(text: str) -> str:
-    """Убрать из текста строки провенанс — адрес источника.
-
-    В таблицах проекта есть колонка «источник» со ссылкой на Википедию. В
-    оценке близости она лишняя: адрес длиной в девять слов разбавляет
-    сходство и делает его зависимым от длины URL. То же правило уже
-    действует в отборе строк (`sources._row_score`: провенанс из оценки
-    исключён), и здесь оно повторяется не своим решением, а тем же.
-
-    Args:
-        text: Текст строки или утверждения.
-
-    Returns:
-        Текст без хвоста «источник: …».
-    """
-    marker = "источник:"
-    head, separator, _tail = text.partition(marker)
-    return head if separator else text
-
-
 def _tokens(text: str) -> list[str]:
     """Значимые единицы текста для TF-IDF.
 
     Правило берётся из `pf.lexical`, а не пишется заново: основы слов
     (`stems`) склеивают «абонентская» и «абонентов», точные термины
-    (`exact_terms_in`) не дают потерять «МТС», числа входят отдельными
-    единицами. Своя третья токенизация в этом репозитории уже приводила к
-    тому, что честная пара считалась несовпадающей.
+    (`exact_terms_in`) не дают потерять «МТС». Своя третья токенизация в этом
+    репозитории уже приводила к тому, что честная пара считалась
+    несовпадающей.
+
+    Числа в мешок слов **не** входят: они сравниваются как величины
+    (`pf.quantities`), а совпадение числа — не смысловое сходство. Именно
+    добавленные в мешок числа давали ложное совпадение чужой строки
+    (утечка `p-032`: «27,4 млн» у 2016 года и у накопленного итога 2019-го).
 
     Args:
         text: Исходный текст.
 
     Returns:
-        Список единиц: основы слов, числа и точные термины.
+        Список единиц: основы слов и точные термины.
     """
-    clean = _without_provenance(text)
+    clean = for_comparison(text)
     tokens = [token for token in stems(clean) if token not in STOP_WORDS]
-    tokens.extend(
-        f"#{int(value)}" if value.is_integer() else f"#{value}" for value in numbers_in(clean)
-    )
     tokens.extend(term.lower() for term in exact_terms_in(clean) if len(term) <= 4)
     return tokens
 
