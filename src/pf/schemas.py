@@ -20,6 +20,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pf.hypotheses import Verdict
+
 
 def as_text_list(value: object) -> list[str]:
     """Привести значение к списку строк.
@@ -244,11 +246,34 @@ class Claim(BaseModel):
         kind: Тип утверждения — факт, гипотеза или прогноз.
         text: Само утверждение.
         sources: Основания. У факта должен быть хотя бы один.
+        verdict: Вердикт гипотезы. Ставит код после проверки оснований.
+        verdict_basis: На чём держится вердикт.
     """
 
     kind: FactKind
     text: str = Field(min_length=1)
     sources: list[SourceRef] = Field(default_factory=list)
+    #: Вердикт ставит код (`pf.hypotheses.verdict_of`), а не модель: значение
+    #: из ответа отбрасывается. Маркер — утверждение модели о своей работе, и
+    #: в сохранённых прогонах он уже расходился с набором (D-23).
+    verdict: Verdict = Verdict.UNKNOWN
+    verdict_basis: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_model_verdict(cls, data: object) -> object:
+        """Не принимать вердикт от модели.
+
+        Модель формулирует гипотезу; проверять её — дело кода. Иначе
+        «подтверждено» появлялось бы без подтверждённого основания, и отчёт
+        называл бы проверкой то, чего не было.
+        """
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for key in ("verdict", "verdict_basis"):
+            data.pop(key, None)
+        return data
 
     @model_validator(mode="before")
     @classmethod

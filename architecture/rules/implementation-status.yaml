@@ -139,11 +139,14 @@ methods:
 
   - id: hypothesis-verification
     title: Гипотезы получают вердикт после целевого сбора
-    status: not_implemented
+    status: partial
+    module: src/pf/hypotheses.py
+    test: tests/test_hypotheses.py
     reason: >
-      Гипотезы формулируются, но не проверяются: нет фазы с вердиктом
-      supported/refuted/unknown и нет целевого добирающего сбора по пробелам
-      аналитика.
+      Вердикт есть: supported / refuted / unknown ставит код по подтверждённым
+      основаниям (pf.hypotheses.verdict_of), счёт вердиктов называет отчёт,
+      правило держит eval-кейс D-22. Не реализовано целевое добирание
+      оснований по гипотезам с вердиктом unknown — это T-08.
 
   - id: domain-reference
     title: Тематический справочник со своим статусом

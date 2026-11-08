@@ -190,3 +190,24 @@ def test_cases_d05_d06_go_red_without_pole_check(monkeypatch: pytest.MonkeyPatch
 
     assert not results["D-05-keep-current-required"].passed
     assert not results["D-06-close-direction-required"].passed
+
+
+def test_case_d22_goes_red_without_verdict_rule(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Если вердикт гипотез перестанет считаться, кейс D-22 обязан покраснеть.
+
+    Кейс ищет слова «опровергнуто» и «требует проверки». Текст берётся из
+    названия вердикта, поэтому при выключенном правиле остаётся только
+    «требует проверки» — и кейс падает, а не зеленеет на пустом месте.
+
+    Args:
+        monkeypatch: Подмена правила вердикта на «всегда неизвестно».
+    """
+    import pf.hypotheses as hypotheses
+    from pf.evalrun import run_all
+
+    monkeypatch.setattr(
+        hypotheses, "verdict_of", lambda *args, **kwargs: hypotheses.HypothesisVerdict()
+    )
+    results = {result.case_id: result for result in run_all()}
+
+    assert not results["D-22-hypothesis-verdict"].passed

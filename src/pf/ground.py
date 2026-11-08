@@ -108,7 +108,7 @@ class Support:
         return f"{self.source_id}#p{self.paragraph_index}"
 
 
-def mark_external(support: Support) -> Support:
+def mark_external(support: Support, *, reason: str = "") -> Support:
     """Ограничить статус основания внешним источником.
 
     Внешний источник нельзя подтвердить: неизвестно, что за страницу
@@ -117,6 +117,9 @@ def mark_external(support: Support) -> Support:
 
     Args:
         support: Результат обычной проверки цитаты.
+        reason: Пояснение для человека. По умолчанию — про внешний источник.
+            Сырая выгрузка из хранилища знаний ограничена тем же правилом,
+            но причина у неё своя.
 
     Returns:
         То же основание со статусом не выше ``needs_review``.
@@ -126,7 +129,7 @@ def mark_external(support: Support) -> Support:
     return replace(
         support,
         status=SupportStatus.NEEDS_REVIEW,
-        detail="внешний источник: цитата найдена дословно, требует проверки",
+        detail=reason or "внешний источник: цитата найдена дословно, требует проверки",
     )
 
 

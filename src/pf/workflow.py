@@ -34,8 +34,11 @@ from pf.ground import (
     tally_grounds,
     verify_quote_as_external,
 )
+from pf.hypotheses import verdict_of
 from pf.journal import Journal, StepRecord, journal_path
 from pf.lexical import numbers_match, stems
+from pf.lexical import polarity as lexical_polarity
+from pf.lexical import topic_words as lexical_topic_words
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
     CLOSE_DIRECTION_TITLES,
@@ -713,49 +716,8 @@ class Workflow:
         return "\n".join(lines)
 
     # ── Противоречия ────────────────────────────────────────────────────────
-
-    #: Слова о падении показателя.
-    DECLINE_MARKERS: tuple[str, ...] = (
-        "падает",
-        "снижается",
-        "уменьшается",
-        "сокращается",
-        "упало",
-        "снизилось",
-        "снизился",
-    )
-    #: Слова о неизменности показателя.
-    STABLE_MARKERS: tuple[str, ...] = (
-        "не изменилось",
-        "не изменился",
-        "не меняется",
-        "без изменений",
-        "осталось прежним",
-    )
-    #: Слова о росте показателя.
-    GROWTH_MARKERS: tuple[str, ...] = (
-        "растет",
-        "выросло",
-        "вырос",
-        "увеличилось",
-        "увеличился",
-    )
-    #: Слова, которые встречаются почти в любом утверждении: показатель они
-    #: не определяют и общим предметом факты не делают.
-    GENERIC_WORDS: frozenset[str] = frozenset(
-        {
-            "клиент",
-            "клиентов",
-            "клиенты",
-            "квартал",
-            "квартала",
-            "последний",
-            "данные",
-            "данных",
-            "может",
-            "могут",
-        }
-    )
+    # Списки слов о направлении живут в `pf.lexical`: то же правило нужно
+    # вердикту гипотез (`pf.hypotheses`), и две копии уже расходились.
 
     @classmethod
     def _polarity(cls, text: str) -> str | None:
@@ -768,14 +730,7 @@ class Workflow:
             ``decline``, ``stable``, ``growth`` либо ``None``, если
             направление не названо.
         """
-        normalized = text.lower().replace("ё", "е")
-        if any(marker in normalized for marker in cls.STABLE_MARKERS):
-            return "stable"
-        if any(marker in normalized for marker in cls.DECLINE_MARKERS):
-            return "decline"
-        if any(marker in normalized for marker in cls.GROWTH_MARKERS):
-            return "growth"
-        return None
+        return lexical_polarity(text)
 
     @classmethod
     def _topic_words(cls, text: str) -> set[str]:
@@ -787,8 +742,7 @@ class Workflow:
         Returns:
             Множество значимых слов без служебных.
         """
-        normalized = text.lower().replace("ё", "е")
-        return set(re.findall(r"[а-я]{5,}", normalized)) - cls.GENERIC_WORDS
+        return lexical_topic_words(text)
 
     @classmethod
     def _find_contradictions(cls, facts: list[Any]) -> list[str]:
@@ -826,6 +780,51 @@ class Workflow:
                     "одном показателе — какой из фактов верен, из данных не следует"
                 )
         return gaps
+
+    # ── Вердикт гипотез ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _confirmed_grounds(grounding: GroundingResult) -> list[str]:
+        """Тексты подтверждённых утверждений шага.
+
+        Только ``CONFIRMED``: основание, ожидающее проверки, вердикта не даёт —
+        иначе гипотеза выглядела бы проверенной по источнику, который никто
+        не подтвердил.
+
+        Args:
+            grounding: Результат проверки оснований.
+
+        Returns:
+            Тексты подтверждённых утверждений в порядке проверки.
+        """
+        return [
+            verdict.claim
+            for verdict in grounding.verdicts
+            if verdict.status is SupportStatus.CONFIRMED and verdict.claim.strip()
+        ]
+
+    @classmethod
+    def _apply_hypothesis_verdicts(cls, data: Any, grounding: GroundingResult) -> None:
+        """Поставить вердикт каждой гипотезе разбора.
+
+        Вердикт ставит код: гипотеза — это утверждение модели, а «подтверждено»
+        — вывод из проверенных оснований. Гипотеза без подтверждённого
+        основания остаётся ``unknown`` и называется в отчёте: неизвестность —
+        тоже результат.
+
+        Args:
+            data: Результат роли аналитика.
+            grounding: Результат проверки оснований этого же шага.
+        """
+        hypotheses = list(getattr(data, "hypotheses", None) or [])
+        if not hypotheses:
+            return
+        grounds = cls._confirmed_grounds(grounding)
+        for hypothesis in hypotheses:
+            text = str(getattr(hypothesis, "text", "")).strip()
+            result = verdict_of(text, grounds)
+            hypothesis.verdict = result.verdict
+            hypothesis.verdict_basis = result.basis
 
     # ── Проверка оснований ──────────────────────────────────────────────────
 
@@ -1652,6 +1651,11 @@ class Workflow:
             role_name=role_name,
             session_id=state.session_id,
         )
+        if phase is Phase.ANALYZING:
+            # Вердикт гипотезам ставится здесь, до сериализации шага: иначе
+            # «гипотеза» останется утверждением без исхода, и отчёт не сможет
+            # сказать, проверяли её или забыли.
+            self._apply_hypothesis_verdicts(data, grounding)
         lexical = self._lexical_report(data)
         # Критерии успеха проверяются вместе с основаниями: это тоже
         # утверждение о том, что и как будет измерено.

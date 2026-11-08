@@ -575,6 +575,26 @@ def _d20_unknown_word_goes_to_queue() -> str:
     return f"{support.status.title_ru}: {support.detail}; в очереди: {queued}"
 
 
+def _d22_hypothesis_verdict() -> str:
+    """Гипотеза получает вердикт из подтверждённых оснований.
+
+    «Удержание падает» против подтверждённого «удержание выросло» —
+    опровергнуто. Гипотеза, о которой в основаниях ничего нет, остаётся
+    «требует проверки»: неизвестность — тоже результат.
+
+    Текст берётся из названия вердикта, а не пишется в обработчике: иначе
+    кейс не смог бы покраснеть и проверял бы сам себя.
+
+    Returns:
+        Текст результата: вердикты и основания.
+    """
+    from pf.hypotheses import verdict_of
+
+    refuted = verdict_of("Удержание абонентов падает", ["Удержание абонентов выросло до 87 %"])
+    unknown = verdict_of("Цены на тарифы вырастут", ["Удержание абонентов выросло до 87 %"])
+    return f"{refuted.verdict.title_ru}: {refuted.basis}; {unknown.verdict.title_ru}"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -596,6 +616,7 @@ _HANDLERS = {
     "D-18-exact-term-substitution": _d18_exact_term_substitution_rejected,
     "D-19-foreign-source-needs-review": _d19_foreign_source_needs_review,
     "D-20-unknown-word-goes-to-queue": _d20_unknown_word_goes_to_queue,
+    "D-22-hypothesis-verdict": _d22_hypothesis_verdict,
 }
 
 

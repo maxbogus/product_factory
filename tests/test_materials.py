@@ -372,3 +372,192 @@ def test_material_outside_topic_stays_out(_project: Path) -> None:
     bundle = collect("отток абонентов операторов связи удержание")
     project_ids = {a.source_id for a in bundle.articles if a.section == "project"}
     assert not project_ids, "материал не по теме не должен попадать в срез"
+
+
+# ── Сырые выгрузки: знание есть, но оно не подтверждено ─────────────────────
+# T-09. Выгрузка в `knowledge/raw/<дата>/` — это открытые данные, скачанные
+# когда-то и кем-то. Она полезнее, чем ничего, но статус у неё как у внешнего
+# источника: дословность проверяема, а происхождение — нет.
+
+#: Тарифный снимок: две строки, чтобы отбор строк было на чём проверить.
+TARIFFS_CSV = (
+    "оператор,тариф,цена_руб,абонентов_млн\nМегаФон,Всё за 800,800,32.4\nМТС,Тариф Смарт,950,31.2\n"
+)
+
+
+@pytest.fixture
+def _knowledge_raw(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Каталог сырых выгрузок за дату: ``knowledge/raw/2026-11-07``."""
+    directory = tmp_path / "knowledge" / "raw" / "2026-11-07"
+    directory.mkdir(parents=True)
+    monkeypatch.setattr("pf.config.settings.knowledge_dir", tmp_path / "knowledge")
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path / "project")
+    return directory
+
+
+def test_knowledge_store_raw_file_enters_context(_knowledge_raw: Path) -> None:
+    """Выгрузка из `knowledge/raw` должна попадать в материалы агента.
+
+    Тарифный снимок уже лежит в репозитории, но агент его не видит: читается
+    только `project/`. Знание есть — и не доходит до ответа.
+    """
+    from pf.materials import KNOWLEDGE_SOURCE_PREFIX, load_materials
+
+    (_knowledge_raw / "megafon_tariffs_2026.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+    materials = load_materials()
+    source_ids = [material.source_id for material in materials]
+    expected = f"{KNOWLEDGE_SOURCE_PREFIX}2026-11-07/megafon_tariffs_2026.csv"
+    assert expected in source_ids, f"выгрузка не попала в материалы: {source_ids}"
+
+
+def test_knowledge_store_manifest_gives_provenance(_knowledge_raw: Path) -> None:
+    """Манифест выгрузки даёт адрес, дату и хеш — иначе пересматривать нечем."""
+    from pf.knowledge_store import write_manifest
+    from pf.materials import load_materials
+
+    (_knowledge_raw / "megafon_tariffs_2026.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+    write_manifest(
+        _knowledge_raw,
+        [
+            {
+                "name": "megafon_tariffs_2026.csv",
+                "url": "https://example.org/tariffs",
+                "retrieved": "2026-11-07",
+                "kind": "tariffs",
+                "note": "снимок тарифов",
+            }
+        ],
+    )
+
+    material = next(
+        item for item in load_materials() if item.source_id.endswith("megafon_tariffs_2026.csv")
+    )
+    assert material.url == "https://example.org/tariffs"
+    assert material.retrieved == "2026-11-07"
+    assert len(material.sha256) == 64
+
+
+def test_knowledge_store_quote_needs_review(_knowledge_raw: Path) -> None:
+    """Цитата из выгрузки не бывает подтверждённой: происхождение не проверено.
+
+    Дословность при этом проверяется по-настоящему: выдуманная цитата
+    остаётся отказом, а найденная получает статус «требует проверки» — как у
+    внешнего источника.
+    """
+    from pf.ground import SupportStatus
+    from pf.sources import collect
+
+    (_knowledge_raw / "megafon_tariffs_2026.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+    source_id = "knowledge/raw/2026-11-07/megafon_tariffs_2026.csv"
+    bundle = collect("тарифы мобильных операторов МегаФон абоненты")
+    assert any(article.source_id == source_id for article in bundle.articles), (
+        "выгрузка должна попасть в срез источников"
+    )
+
+    quote = "оператор: МегаФон, тариф: Всё за 800, цена_руб: 800"
+    support = bundle.verify_claim(
+        "МегаФон держит тариф 800 рублей",
+        source_id=source_id,
+        paragraph=0,
+        quote=quote,
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW, support.detail
+
+    invented = bundle.verify_claim(
+        "МегаФон держит тариф 400 рублей",
+        source_id=source_id,
+        paragraph=0,
+        quote="оператор: МегаФон, тариф: Всё за 400, цена_руб: 400",
+    )
+    assert invented.status is SupportStatus.NO_DATA, "выдуманная цитата — отказ, а не сомнение"
+
+
+def _no_document_libraries(path: Path) -> str:
+    """Изобразить окружение без библиотек документов."""
+    from pf.materials import MaterialError
+
+    raise MaterialError(
+        f"для чтения {path.suffix} нужны библиотеки документов: uv sync --extra documents"
+    )
+
+
+def test_knowledge_store_pdf_skip_is_reported(
+    _project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Пропуск PDF/DOCX должен быть виден, а не молчалив.
+
+    Молчаливый пропуск — это «агент не увидел документ и не сказал об этом».
+    Человек узнаёт об этом только по отсутствию фактов в ответе.
+    """
+    from pf.materials import scan_materials
+
+    (_project / "annual_report.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr("pf.materials._read_document", _no_document_libraries)
+
+    scan = scan_materials()
+    reasons = {Path(item.path).name: item.reason for item in scan.skipped}
+    assert "annual_report.pdf" in reasons, f"пропуск не назван: {reasons}"
+    assert "uv sync --extra documents" in reasons["annual_report.pdf"]
+
+
+def test_knowledge_store_materials_command_names_both(
+    _knowledge_raw: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`pf materials` называет и выгрузку, и пропущенный документ.
+
+    Пропуск виден только в выводе команды: в контексте модели его нет —
+    именно поэтому он и должен быть назван человеку.
+    """
+    from pf.cli import main
+
+    project = _knowledge_raw.parent.parent.parent / "project"
+    project.mkdir(parents=True, exist_ok=True)
+    (_knowledge_raw / "megafon_tariffs_2026.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+    (project / "annual_report.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr("pf.materials._read_document", _no_document_libraries)
+
+    exit_code = main(["materials"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "knowledge/raw/2026-11-07/megafon_tariffs_2026.csv" in output
+    assert "требует проверки" in output, "происхождение выгрузки должно быть названо"
+    assert "annual_report.pdf" in output
+    assert "uv sync --extra documents" in output
+
+
+def test_knowledge_store_copy_of_project_file_is_named(_knowledge_raw: Path) -> None:
+    """Копия файла проекта в выгрузке не становится вторым источником.
+
+    Одни и те же байты не могут подтверждать друг друга: два статуса у одного
+    текста — это не два основания, а путаница. Копия называется в пропуске,
+    а не исчезает.
+    """
+    from pf.materials import scan_materials
+
+    project = _knowledge_raw.parent.parent.parent / "project"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "cbr_key_rate.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+    (_knowledge_raw / "cbr_key_rate.csv").write_text(TARIFFS_CSV, encoding="utf-8")
+
+    scan = scan_materials()
+    source_ids = [material.source_id for material in scan.materials]
+    assert source_ids == ["project/cbr_key_rate.csv"], source_ids
+    reasons = {Path(item.path).name: item.reason for item in scan.skipped}
+    assert "копия уже прочитанного материала" in reasons["cbr_key_rate.csv"]
+
+
+def test_knowledge_store_tests_do_not_read_real_snapshots() -> None:
+    """Набор тестов не читает закоммиченные выгрузки.
+
+    Иначе результат теста зависит от того, что лежит в репозитории: положили
+    новый снимок — покраснел чужой тест.
+    """
+    from pf.config import settings
+
+    repository_knowledge = Path(__file__).resolve().parent.parent / "knowledge"
+    assert settings.knowledge_dir.resolve() != repository_knowledge.resolve(), (
+        "тесты читают настоящий каталог knowledge/ — нужен conftest"
+    )

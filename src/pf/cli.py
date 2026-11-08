@@ -24,11 +24,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import TYPE_CHECKING
 
 from pf import __version__
 from pf.config import settings
 from pf.journal import Journal, journal_path
 from pf.state import Phase, SessionState, list_sessions, load, save
+
+if TYPE_CHECKING:
+    from pf.materials import MaterialScan
 
 #: Символы для вывода прогресса.
 CHECK = "✓"
@@ -307,26 +311,34 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
 
 def cmd_materials(args: argparse.Namespace) -> int:
-    """Показать материалы проекта: свои документы, таблицы и данные.
+    """Показать материалы: свои документы, таблицы и данные, и сырые выгрузки.
 
     У каждого материала — идентификатор для цитирования, адрес источника
     и хеш содержимого. По хешу видно, на какую версию данных опирался
     вывод: при пересмотре это первое, что нужно проверить.
-    """
-    from pf.materials import load_materials
 
-    materials = load_materials()
+    Пропущенные файлы называются отдельно и с причиной: молчаливый пропуск
+    выглядит как отсутствие документа, а это разные вещи.
+    """
+    from pf.materials import scan_materials
+
+    scan = scan_materials()
+    materials = scan.materials
     if not materials:
-        _out("Материалов проекта нет.")
+        _out("Материалов нет.")
         _out(
-            f"Положите файлы в {settings.project_dir}/ — .md, .txt, .csv, .json, .pdf, .docx, .xlsx"
+            f"Положите файлы в {settings.project_dir}/ — .md, .txt, .csv, .json, .pdf, .docx, .xlsx; "
+            f"выгрузки читаются из {settings.knowledge_dir}/raw/<дата>/"
         )
+        _report_skipped(scan)
         return 0
 
-    _rule(f"Материалы проекта: {len(materials)}")
+    from_knowledge = [material for material in materials if material.needs_review]
+    _rule(f"Материалы: {len(materials)} (своих: {len(materials) - len(from_knowledge)})")
     for material in materials:
         _out(f"{ARROW} {material.source_id}")
-        _out(f"    вид: {material.kind.value}   абзацев: {len(material.passages)}")
+        origin = "выгрузка — требует проверки" if material.needs_review else "материал проекта"
+        _out(f"    вид: {material.kind.value}   абзацев: {len(material.passages)}   {origin}")
         if material.url:
             _out(f"    источник: {material.url}")
         if material.retrieved:
@@ -335,7 +347,23 @@ def cmd_materials(args: argparse.Namespace) -> int:
         if material.passages:
             _out(f"    {material.passages[0].text[:150]}")
         _out()
+    _report_skipped(scan)
     return 0
+
+
+def _report_skipped(scan: MaterialScan) -> None:
+    """Назвать пропущенные файлы и причины пропуска.
+
+    Args:
+        scan: Итог обхода материалов (``pf.materials.MaterialScan``).
+    """
+    if not scan.skipped:
+        return
+    _rule(f"Пропущено: {len(scan.skipped)}")
+    for item in scan.skipped:
+        _out(f"✗ {item.path}")
+        _out(f"    причина: {item.reason}")
+    _out()
 
 
 # ── report ──────────────────────────────────────────────────────────────────

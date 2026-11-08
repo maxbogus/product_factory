@@ -33,6 +33,7 @@ from pf.ground import (
     Support,
     SupportStatus,
     find_quote,
+    mark_external,
     split_source_id,
     verify_claim,
     verify_quote,
@@ -40,7 +41,7 @@ from pf.ground import (
 from pf.lexical import number_tolerance
 from pf.lexical import significant_words as _significant_words
 from pf.lexical import stems as _stems
-from pf.materials import Material
+from pf.materials import KNOWLEDGE_SOURCE_PREFIX, Material
 
 #: Минимальная длина абзаца, пригодного для цитирования.
 MIN_PARAGRAPH_CHARS = 60
@@ -90,6 +91,35 @@ class Passage:
     def citation(self) -> str:
         """Ссылка на абзац для ответа агента."""
         return f"{self.source_id}#p{self.paragraph_index}"
+
+
+#: Пояснение для основания из сырой выгрузки. Своё, хотя правило то же, что у
+#: внешнего источника: человеку важно знать, что ограничение не про цитату.
+_KNOWLEDGE_REVIEW_REASON = (
+    "выгрузка из хранилища знаний: цитата найдена дословно, происхождение "
+    "не проверено — нужен взгляд человека"
+)
+
+
+def _limit_knowledge_source(support: Support, source_id: str) -> Support:
+    """Ограничить статус основания из сырой выгрузки.
+
+    Дословность у выгрузки проверяема так же, как у материала проекта, а
+    происхождение — нет: файл скачан из открытого источника и с тех пор мог
+    измениться. Поэтому «подтверждено» превращается в «требует проверки», а не
+    в отказ: знание не выбрасывается, но и за проверенный факт не выдаётся.
+
+    Args:
+        support: Результат обычной проверки.
+        source_id: Идентификатор источника цитаты.
+
+    Returns:
+        Основание со статусом не выше «требует проверки».
+    """
+    clean_id, _ = split_source_id(source_id)
+    if not clean_id.startswith(KNOWLEDGE_SOURCE_PREFIX):
+        return support
+    return mark_external(support, reason=_KNOWLEDGE_REVIEW_REASON)
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +331,32 @@ class SourceBundle:
         quote: str = "",
     ) -> Support:
         """Подтвердить утверждение по собранным источникам.
+
+        Args:
+            claim_text: Текст утверждения.
+            source_id: Идентификатор источника (может быть со склеенным ``#pN``).
+            paragraph: Номер абзаца.
+            quote: Дословная цитата, если модель её прислала.
+
+        Returns:
+            Основание со статусом подтверждения. У сырой выгрузки статус не
+            выше «требует проверки»: дословность проверена, происхождение — нет.
+        """
+        support = self._verify_claim(claim_text, source_id, paragraph, quote)
+        return _limit_knowledge_source(support, source_id or support.source_id)
+
+    def _verify_claim(
+        self,
+        claim_text: str,
+        source_id: str = "",
+        paragraph: int | None = None,
+        quote: str = "",
+    ) -> Support:
+        """Проверить утверждение, не ограничивая статус происхождением.
+
+        Отдельный метод, потому что ограничение статуса — одно правило для
+        цитаты и расчёта, и жить оно должно в одном месте, а не в каждой
+        ветке проверки.
 
         Args:
             claim_text: Текст утверждения.
@@ -773,6 +829,35 @@ def _is_identity_calculation(inputs: dict[str, Any], formula: str) -> bool:
 
 
 def verify_metric(
+    metric: Any,
+    materials: list[Material],
+    *,
+    tolerance: float | None = None,
+    rel_tolerance: float | None = None,
+) -> Support:
+    """Проверить расчётную метрику, ограничив статус происхождением источника.
+
+    Args:
+        metric: Метрика с provenance.
+        materials: Материалы проекта.
+        tolerance: Абсолютный допуск. По умолчанию — из настроек.
+        rel_tolerance: Относительный допуск. По умолчанию — из настроек.
+
+    Returns:
+        Результат проверки. У сырой выгрузки статус не выше «требует
+        проверки»: пересчёт верен, а происхождение данных — нет.
+    """
+    support = _verify_metric(
+        metric,
+        materials,
+        tolerance=tolerance,
+        rel_tolerance=rel_tolerance,
+    )
+    fields = _metric_fields(metric)
+    return _limit_knowledge_source(support, fields[2] if fields else support.source_id)
+
+
+def _verify_metric(
     metric: Any,
     materials: list[Material],
     *,

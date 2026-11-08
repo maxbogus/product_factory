@@ -142,6 +142,8 @@ class SessionReport:
         needs_review_details: Основания, ожидающие проверки человеком.
         lexical: Лексическое покрытие прогона и топ незнакомых слов.
         context: Окно контекста: сколько шагов, сколько упёрлось в предел.
+        hypotheses: Сколько гипотез поддержано, опровергнуто и осталось
+            неизвестными.
     """
 
     session_id: str
@@ -166,6 +168,7 @@ class SessionReport:
     needs_review_details: list[str] = field(default_factory=list)
     lexical: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
+    hypotheses: dict[str, int] = field(default_factory=dict)
 
     @property
     def total_citations(self) -> int:
@@ -290,6 +293,19 @@ class SessionReport:
             lines.append("")
             for item in self.contradictions:
                 lines.append(f"- {item}")
+            lines.append("")
+
+        if self.hypotheses:
+            # Вердикт ставит код, поэтому строка отчёта — результат проверки,
+            # а не пересказ ответа модели. «Требует проверки» назван наравне с
+            # остальными: неизвестность прятать нечем.
+            lines.append("**Гипотезы.**")
+            lines.append("")
+            lines.append(
+                f"поддержано {self.hypotheses.get('supported', 0)}, "
+                f"опровергнуто {self.hypotheses.get('refuted', 0)}, "
+                f"требует проверки {self.hypotheses.get('unknown', 0)}"
+            )
             lines.append("")
 
         lines.extend(conclusion_markdown(self.conclusion))
@@ -760,6 +776,41 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
     )
 
 
+def _collect_hypotheses(records: list[Any]) -> dict[str, int]:
+    """Счёт гипотез по вердиктам последнего разбора.
+
+    Берётся последний шаг разбора: при возврате назад гипотезы формулируются
+    заново, и складывать счётчики двух разборов значило бы удвоить работу.
+
+    Запись без поля ``verdict`` (журнал до правила) считается ``unknown``:
+    вердикта в ней нет, и выдавать её за проверенную гипотезу нельзя.
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Счётчик «вердикт → сколько гипотез». Пустой словарь, если гипотез не
+        было: «гипотез нет» и «все неизвестны» — разные ответы.
+    """
+    latest: list[Any] = []
+    for record in records:
+        if record.phase != "analyzing":
+            continue
+        detail = record.detail if isinstance(record.detail, dict) else {}
+        found = detail.get("hypotheses")
+        if isinstance(found, list):
+            latest = found
+    if not latest:
+        return {}
+    counts = {"supported": 0, "refuted": 0, "unknown": 0}
+    for item in latest:
+        if not isinstance(item, dict):
+            continue
+        verdict = str(item.get("verdict") or "unknown")
+        counts[verdict if verdict in counts else "unknown"] += 1
+    return counts
+
+
 def build_session_report(session_id: str) -> SessionReport:
     """Собрать отчёт по сессии из журнала шагов.
 
@@ -858,6 +909,7 @@ def build_session_report(session_id: str) -> SessionReport:
         metrics_with_formula=sum(1 for metric in metrics if metric.formula.strip()),
         conclusion=_collect_conclusion(records),
         contradictions=contradictions,
+        hypotheses=_collect_hypotheses(records),
         needs_review_details=needs_review_details,
         lexical=(
             {
@@ -912,5 +964,6 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "rejection_kinds": report.rejection_kinds,
         "routing_notes": report.routing_notes,
         "fact_check": report.fact_check,
+        "hypotheses": report.hypotheses,
         "conclusion": asdict(report.conclusion) if report.conclusion else None,
     }

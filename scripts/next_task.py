@@ -48,8 +48,7 @@ def ready_tasks(tasks: list[Task]) -> list[Task]:
     ready = [
         task
         for task in tasks
-        if task.status in {"⬜", "🔄"}
-        and all(dep in closed for dep in task.depends)
+        if task.status in {"⬜", "🔄"} and all(dep in closed for dep in task.depends)
     ]
     return sorted(
         ready,

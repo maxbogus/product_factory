@@ -57,9 +57,9 @@
 | T-04 | 1 | Числа в документах совпадают с каноном | 1 | 8.1 | ✅ | T-00 | `make docs-check` |
 | T-05 | 1 | Согласованность заявлений: README-цикл, `demo/BRIEF.md` про веб, оговорка про `--extra documents`, `.env.example` ↔ умолчания | 2 | 4.1 | ✅ | T-04 | `uv run pytest tests/test_documents_consistency.py -q` |
 | T-06 | 2 | `constraints.py`: направление не нарушает ограничений задачи | 3 | 3.7 | ⬜ | — | `uv run pytest tests/test_constraints.py -q` |
-| T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ⬜ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
+| T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам | 2 | 4.2 | ⬜ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
-| T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ⬜ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
+| T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
 | T-10 | 2 | Покрытие сценариев: `workflow`, `sources`, `strategy`, `data` feature-файлы и новые eval-кейсы | 3 | 4.0 | ⬜ | T-02 | `uv run pytest tests/test_scenario_coverage.py -q` |
 | T-11 | 3 | Данные: отток, ARPU, тарифы конкурентов, переносы номеров, один PDF | 3 | 4.8 | ⬜ | T-09 | `uv run pytest tests/test_demo_data.py -q` |
 | T-12 | 4 | `pf review`: пересмотр выводов по изменившимся хешам данных | 3 | 4.8 | ⬜ | T-09 | `uv run pytest tests/test_review.py -q` |

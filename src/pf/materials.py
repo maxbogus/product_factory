@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from pf.config import settings
+from pf.knowledge_store import MANIFEST_NAME
 
 #: Минимальная длина абзаца, пригодного для цитирования. Такой же порог,
 #: как у корпуса: из короткой строки нечего цитировать.
@@ -66,6 +67,14 @@ SERVICE_FILE_NAMES = frozenset({"readme.md", "readme.txt", "readme"})
 #: которые можно процитировать.
 METADATA_SUFFIX = ".meta.json"
 
+#: Префикс идентификатора выгрузки из хранилища знаний. По нему проверка
+#: оснований отличает выгрузку от собственного материала проекта: дословность
+#: у обеих проверяема, а происхождение — только у материала проекта.
+KNOWLEDGE_SOURCE_PREFIX = "knowledge/raw/"
+
+#: Каталог сырых выгрузок внутри хранилища знаний.
+KNOWLEDGE_RAW_DIRNAME = "raw"
+
 
 class MaterialError(RuntimeError):
     """Ошибка чтения материала."""
@@ -89,7 +98,8 @@ class Material:
     """Материал проекта с метаданными.
 
     Attributes:
-        source_id: Идентификатор источника вида ``project/<файл>``.
+        source_id: Идентификатор источника вида ``project/<файл>`` или
+            ``knowledge/raw/<дата>/<файл>``.
         title: Заголовок материала.
         kind: Вид материала: документ, таблица или данные.
         passages: Абзацы, пригодные для цитирования.
@@ -97,6 +107,7 @@ class Material:
         retrieved: Дата получения материала.
         sha256: Хеш содержимого — версия данных, на которые опирался вывод.
         path: Путь к файлу на диске.
+        origin: Откуда материал: свой документ проекта или сырая выгрузка.
     """
 
     class Kind(StrEnum):
@@ -109,6 +120,14 @@ class Material:
         #: Структурированные данные.
         DATA = "data"
 
+    class Origin(StrEnum):
+        """Происхождение материала."""
+
+        #: Свой документ проекта: происхождение известно человеку.
+        PROJECT = "project"
+        #: Сырая выгрузка из хранилища знаний: происхождение не проверено.
+        KNOWLEDGE_RAW = "knowledge_raw"
+
     source_id: str
     title: str
     kind: Kind
@@ -118,6 +137,17 @@ class Material:
     sha256: str = ""
     path: str = ""
     rows: list[dict[str, str]] = field(default_factory=list)
+    origin: Origin = Origin.PROJECT
+
+    @property
+    def needs_review(self) -> bool:
+        """Требует ли материал проверки человеком.
+
+        Выгрузка скачана когда-то и кем-то: дословность цитаты из неё
+        проверяема, а происхождение — нет. Поэтому её основание не бывает
+        «подтверждено», как и основание из внешнего источника.
+        """
+        return self.origin is Material.Origin.KNOWLEDGE_RAW
 
     @property
     def content(self) -> str:
@@ -368,29 +398,43 @@ def _read_sidecar(path: Path) -> dict[str, str]:
     }
 
 
-def _material_from_file(path: Path, root: Path) -> Material | None:
+def _material_from_file(
+    path: Path,
+    root: Path,
+    *,
+    prefix: str = "project/",
+    origin: Material.Origin = Material.Origin.PROJECT,
+    provenance: dict[str, str] | None = None,
+) -> Material:
     """Собрать материал из файла.
 
     Args:
         path: Путь к файлу.
         root: Корень каталога материалов — из него строится идентификатор.
+        prefix: Префикс идентификатора: ``project/`` или ``knowledge/raw/<дата>/``.
+        origin: Происхождение материала.
+        provenance: Запись манифеста выгрузки — адрес, дата, пояснение.
 
     Returns:
-        Материал либо ``None``, если формат не поддерживается.
+        Материал.
+
+    Raises:
+        MaterialError: Файл не читается или в нём нечего цитировать.
     """
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
-        return None
+        raise MaterialError(f"формат {suffix or 'без расширения'} не поддерживается")
 
     try:
         raw = path.read_bytes()
-    except OSError:
-        return None
+    except OSError as exc:
+        raise MaterialError(f"файл не читается: {exc}") from exc
 
     sidecar = _read_sidecar(path)
-    title = sidecar.get("title") or path.stem
-    url = sidecar.get("url", "")
-    retrieved = sidecar.get("retrieved", "")
+    manifest = provenance or {}
+    title = sidecar.get("title") or manifest.get("title") or path.stem
+    url = sidecar.get("url") or manifest.get("url", "")
+    retrieved = sidecar.get("retrieved") or manifest.get("retrieved", "")
     kind = Material.Kind.DOCUMENT
     blocks: list[str] = []
     rows: list[dict[str, str]] = []
@@ -410,10 +454,11 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
             title, url, retrieved, blocks = _json_records(payload)
         else:
             blocks = _split_paragraphs(_read_document(path))
-    except (MaterialError, json.JSONDecodeError, OSError, ValueError):
-        # Материал, который не прочитался, не должен ронять загрузку:
-        # агент работает с тем, что доступно, и называет пробелы.
-        return None
+    except (MaterialError, json.JSONDecodeError, OSError, ValueError) as exc:
+        # Материал, который не прочитался, не должен ронять загрузку: агент
+        # работает с тем, что доступно. Но и молчать нельзя — причина
+        # пропуска возвращается вызывающему, а не теряется здесь.
+        raise MaterialError(str(exc) or "материал не прочитался") from exc
 
     passages = [
         MaterialPassage(index=index, text=block)
@@ -421,13 +466,13 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
         if len(block) >= MIN_PASSAGE_CHARS
     ]
     if not passages:
-        return None
+        raise MaterialError("в материале нечего цитировать: нет абзацев")
 
     try:
         relative = path.relative_to(root)
     except ValueError:
         relative = Path(path.name)
-    source_id = f"project/{relative.as_posix()}"
+    source_id = f"{prefix}{relative.as_posix()}"
 
     return Material(
         source_id=source_id,
@@ -439,6 +484,7 @@ def _material_from_file(path: Path, root: Path) -> Material | None:
         sha256=_sha256(raw),
         path=str(path),
         rows=rows,
+        origin=origin,
     )
 
 
@@ -547,24 +593,96 @@ def resolve_citation(
     )
 
 
-def load_materials(directory: Path | None = None) -> list[Material]:
-    """Загрузить материалы проекта.
+@dataclass(frozen=True, slots=True)
+class SkippedMaterial:
+    """Материал, который не прочитался: путь и причина.
 
-    Обходятся все поддерживаемые форматы. Неподдерживаемые и нечитаемые
-    файлы пропускаются: отсутствие материала — это пробел в данных, а не
-    повод остановить работу.
+    Attributes:
+        path: Путь к файлу на диске.
+        reason: Почему материал пропущен — то, что человеку нужно знать.
+    """
+
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialScan:
+    """Итог обхода каталогов материалов.
+
+    Отдельный тип, потому что «прочитано» и «пропущено» — два разных факта.
+    Молчаливый пропуск превращает пробел в данных в незаметное отсутствие:
+    агент просто не находит документ и ничего об этом не говорит.
+
+    Attributes:
+        materials: Прочитанные материалы.
+        skipped: Пропущенные файлы с причинами.
+    """
+
+    materials: list[Material] = field(default_factory=list)
+    skipped: list[SkippedMaterial] = field(default_factory=list)
+
+    @property
+    def needs_review(self) -> list[Material]:
+        """Материалы, чьё происхождение не проверено."""
+        return [material for material in self.materials if material.needs_review]
+
+
+def _manifest_provenance(directory: Path) -> dict[str, dict[str, str]]:
+    """Записи манифеста выгрузок: «имя файла → адрес, дата, пояснение».
+
+    Манифест append-only, поэтому по имени берётся **последняя** запись:
+    она описывает текущее состояние файла. Отсутствие манифеста — не
+    ошибка: у старой выгрузки его может не быть, и тогда адрес источника
+    просто неизвестен.
 
     Args:
-        directory: Каталог материалов. По умолчанию — ``project/``.
+        directory: Каталог выгрузки за дату.
 
     Returns:
-        Список материалов.
+        Словарь записей по имени файла.
     """
-    root = directory or settings.project_dir
-    if not root.is_dir():
-        return []
+    from pf.knowledge_store import read_manifest
 
-    materials: list[Material] = []
+    entries: dict[str, dict[str, str]] = {}
+    for record in read_manifest(directory):
+        name = str(record.get("name", ""))
+        if not name:
+            continue
+        entries[name] = {
+            "url": str(record.get("url", "")),
+            "retrieved": str(record.get("retrieved", "")),
+            "note": str(record.get("note", "")),
+        }
+    return entries
+
+
+def _scan_directory(
+    root: Path,
+    scan: MaterialScan,
+    *,
+    prefix: str = "project/",
+    origin: Material.Origin = Material.Origin.PROJECT,
+    provenance: dict[str, dict[str, str]] | None = None,
+    seen: dict[str, str] | None = None,
+) -> None:
+    """Прочитать один каталог материалов, пополнив итог обхода.
+
+    Args:
+        root: Корень каталога.
+        scan: Итог обхода — пополняется на месте.
+        prefix: Префикс идентификатора источника.
+        origin: Происхождение материалов этого корня.
+        provenance: Записи манифеста по имени файла.
+        seen: Хеши уже прочитанных материалов — «хеш → идентификатор».
+            Копия того же файла в другом корне не становится вторым
+            источником: одни и те же байты не могут подтверждать друг друга
+            и удваивать контекст.
+    """
+    if not root.is_dir():
+        return
+    records = provenance or {}
+    known = seen if seen is not None else {}
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.name.startswith("."):
             continue
@@ -572,7 +690,100 @@ def load_materials(directory: Path | None = None) -> list[Material]:
             continue
         if path.name.endswith(METADATA_SUFFIX):
             continue
-        material = _material_from_file(path, root)
-        if material is not None:
-            materials.append(material)
-    return materials
+        if path.parent == root and path.name == MANIFEST_NAME:
+            continue
+        try:
+            material = _material_from_file(
+                path,
+                root,
+                prefix=prefix,
+                origin=origin,
+                provenance=records.get(path.name),
+            )
+        except MaterialError as exc:
+            scan.skipped.append(SkippedMaterial(path=str(path), reason=str(exc)))
+            continue
+        twin = known.get(material.sha256)
+        if twin is not None:
+            scan.skipped.append(
+                SkippedMaterial(
+                    path=str(path),
+                    reason=f"копия уже прочитанного материала: {twin}",
+                )
+            )
+            continue
+        known[material.sha256] = material.source_id
+        scan.materials.append(material)
+
+
+def scan_materials(
+    directory: Path | None = None,
+    *,
+    knowledge_root: Path | None = None,
+    include_knowledge: bool | None = None,
+) -> MaterialScan:
+    """Обойти каталоги материалов: свои документы и сырые выгрузки.
+
+    Два корня, потому что это два разных знания: свои документы проекта
+    человек знает, а выгрузка скачана из открытого источника и с тех пор
+    могла измениться. Поэтому у материала есть происхождение, и от него
+    зависит статус основания (``knowledge/raw`` — «требует проверки»).
+
+    Неподдерживаемые и нечитаемые файлы не ломают обход: они попадают в
+    ``skipped`` с причиной. Причина нужна человеку — иначе пропуск
+    документа выглядит как его отсутствие.
+
+    Args:
+        directory: Каталог материалов проекта. По умолчанию — ``project/``.
+        knowledge_root: Каталог сырых выгрузок. По умолчанию —
+            ``<knowledge_dir>/raw``.
+        include_knowledge: Читать ли выгрузки. По умолчанию — из настроек
+            (``PF_INCLUDE_KNOWLEDGE_RAW``).
+
+    Returns:
+        Итог обхода: материалы и пропуски.
+    """
+    scan = MaterialScan()
+    project_root = directory or settings.project_dir
+    seen: dict[str, str] = {}
+    _scan_directory(project_root, scan, seen=seen)
+
+    enabled = settings.include_knowledge_raw if include_knowledge is None else include_knowledge
+    if not enabled:
+        return scan
+
+    raw_root = knowledge_root or (settings.knowledge_dir / KNOWLEDGE_RAW_DIRNAME)
+    if not raw_root.is_dir():
+        return scan
+    for snapshot in sorted(path for path in raw_root.iterdir() if path.is_dir()):
+        _scan_directory(
+            snapshot,
+            scan,
+            prefix=f"{KNOWLEDGE_SOURCE_PREFIX}{snapshot.name}/",
+            origin=Material.Origin.KNOWLEDGE_RAW,
+            provenance=_manifest_provenance(snapshot),
+            seen=seen,
+        )
+    return scan
+
+
+def load_materials(
+    directory: Path | None = None,
+    *,
+    include_knowledge: bool | None = None,
+) -> list[Material]:
+    """Загрузить материалы: свои документы проекта и сырые выгрузки.
+
+    Обходятся все поддерживаемые форматы. Неподдерживаемые и нечитаемые
+    файлы пропускаются: отсутствие материала — это пробел в данных, а не
+    повод остановить работу. Кто именно пропущен и почему, знает
+    ``scan_materials``; эта функция возвращает только прочитанное.
+
+    Args:
+        directory: Каталог материалов. По умолчанию — ``project/``.
+        include_knowledge: Читать ли сырые выгрузки. По умолчанию — из настроек.
+
+    Returns:
+        Список материалов.
+    """
+    return scan_materials(directory, include_knowledge=include_knowledge).materials

@@ -334,6 +334,91 @@ def has_negation(text: str) -> bool:
     return bool(_NEGATION.search(text))
 
 
+# ── Направление утверждения ────────────────────────────────────────────────
+# Правило одно на репозиторий: противоречия в фактах, вердикт гипотез и
+# проверка полярности плана раньше держали по своей копии этих списков, и
+# копии расходились. Здесь — единственное место.
+
+#: Слова о падении показателя.
+DECLINE_MARKERS: tuple[str, ...] = (
+    "падает",
+    "снижается",
+    "уменьшается",
+    "сокращается",
+    "упало",
+    "снизилось",
+    "снизился",
+)
+
+#: Слова о неизменности показателя.
+STABLE_MARKERS: tuple[str, ...] = (
+    "не изменилось",
+    "не изменился",
+    "не меняется",
+    "без изменений",
+    "осталось прежним",
+)
+
+#: Слова о росте показателя.
+GROWTH_MARKERS: tuple[str, ...] = (
+    "растет",
+    "выросло",
+    "вырос",
+    "увеличилось",
+    "увеличился",
+)
+
+#: Слова, которые встречаются почти в любом утверждении: показатель они не
+#: определяют и общим предметом факты не делают.
+GENERIC_WORDS: frozenset[str] = frozenset(
+    {
+        "клиент",
+        "клиентов",
+        "клиенты",
+        "квартал",
+        "квартала",
+        "последний",
+        "данные",
+        "данных",
+        "может",
+        "могут",
+    }
+)
+
+
+def polarity(text: str) -> str | None:
+    """Направление, о котором говорит утверждение.
+
+    Args:
+        text: Текст утверждения.
+
+    Returns:
+        ``decline``, ``stable``, ``growth`` либо ``None``, если направление
+        не названо.
+    """
+    normalized = text.lower().replace("ё", "е")
+    if any(marker in normalized for marker in STABLE_MARKERS):
+        return "stable"
+    if any(marker in normalized for marker in DECLINE_MARKERS):
+        return "decline"
+    if any(marker in normalized for marker in GROWTH_MARKERS):
+        return "growth"
+    return None
+
+
+def topic_words(text: str) -> set[str]:
+    """Слова, которые называют предмет утверждения.
+
+    Args:
+        text: Текст утверждения.
+
+    Returns:
+        Множество значимых слов без служебных.
+    """
+    normalized = text.lower().replace("ё", "е")
+    return set(re.findall(r"[а-я]{5,}", normalized)) - GENERIC_WORDS
+
+
 def words(text: str) -> list[str]:
     """Значимые слова текста в форме лемм.
 
