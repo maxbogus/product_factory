@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from pf import roles
 from pf.config import Settings, settings
 from pf.ground import (
+    CONCLUSION_RULE,
     GroundTally,
     SupportStatus,
     citation_key,
@@ -1263,6 +1264,10 @@ class Workflow:
             "needs_review": tally.needs_review,
             "status": status,
             "grounds": grounds,
+            # Имя правила едет вместе со статусом. Статус без него читается
+            # как текущая оценка, оставаясь записью прогона, — так `demo-v9`
+            # печатал «подкреплено» рядом с «отклонено» по тем же строкам.
+            "rule": CONCLUSION_RULE,
         }
         if off_topic is not None:
             payload["off_topic"] = off_topic

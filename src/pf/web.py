@@ -231,12 +231,17 @@ class SearchHit:
         title: Заголовок результата.
         snippet: Краткое описание из выдачи.
         provider: Канал поиска, который нашёл результат.
+        peer_reviewed: Прошёл ли материал рецензирование. Препринт arXiv —
+            нет, и это свойство канала, а не примечание в тексте: статус
+            источника зависит от него, а не от того, заметил ли читатель
+            слово «препринт» в сниппете.
     """
 
     url: str
     title: str
     snippet: str = ""
     provider: str = "bing"
+    peer_reviewed: bool = True
 
     @property
     def domain(self) -> str:

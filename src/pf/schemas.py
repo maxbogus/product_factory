@@ -751,6 +751,7 @@ class ProductStrategy(BaseModel):
         alternatives: Рассмотренные альтернативы.
         chosen_direction: Выбранное направление.
         deliberate_omissions: Осознанные отказы.
+        assumptions: Что должно быть верно, чтобы вывод работал.
         value_to_cost: Связь пользы с затратами и доходами.
         evidence: Основания выбора.
     """
@@ -759,6 +760,7 @@ class ProductStrategy(BaseModel):
     alternatives: list[str] = Field(default_factory=list)
     chosen_direction: str = Field(min_length=1)
     deliberate_omissions: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
     value_to_cost: str = Field(default="")
     evidence: list[SourceRef] = Field(default_factory=list)
 
@@ -784,6 +786,9 @@ class ProductStrategy(BaseModel):
                 ("выбранное_направление", "chosen_direction"),
                 ("осознанные_отказы", "deliberate_omissions"),
                 ("отказы", "deliberate_omissions"),
+                ("допущения", "assumptions"),
+                ("предпосылки", "assumptions"),
+                ("what_must_be_true", "assumptions"),
                 ("польза_затраты", "value_to_cost"),
                 ("value_cost", "value_to_cost"),
             ):
@@ -792,6 +797,7 @@ class ProductStrategy(BaseModel):
             data["value_to_cost"] = as_text(data.get("value_to_cost"))
             data["alternatives"] = as_text_list(data.get("alternatives"))
             data["deliberate_omissions"] = as_text_list(data.get("deliberate_omissions"))
+            data["assumptions"] = as_text_list(data.get("assumptions"))
             data["audience"] = as_text(data.get("audience"))
             data["chosen_direction"] = as_text(data.get("chosen_direction"))
             # Обязательные поля нельзя оставлять пустыми: стратегия без
@@ -993,6 +999,7 @@ class Strategy(BaseModel):
                 "alternatives",
                 "chosen_direction",
                 "deliberate_omissions",
+                "assumptions",
                 "value_to_cost",
                 "evidence",
             }

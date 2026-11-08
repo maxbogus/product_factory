@@ -250,6 +250,27 @@ def tally_grounds(verdicts: Iterable[tuple[str, SupportStatus]]) -> GroundTally:
     )
 
 
+#: Из чего состоит правило счёта оснований вывода. Имя пишется в журнал
+#: вместе со статусом: без него унаследованный статус не отличить от
+#: текущего. Части, а не номер версии: когда правило теряет часть, разница
+#: называется, а не угадывается.
+#:
+#: * ``unique-grounds`` — повторная ссылка на ту же строку источника не
+#:   добавляет основания (`D-21`);
+#: * ``calc-line-demotion`` — посчитанное значение в строке расчёта не
+#:   считается цитатой (`D-36`);
+#: * ``indicator-cap`` — основание не про тот показатель не даёт
+#:   «подкреплено» (`D-41`).
+CONCLUSION_RULE_PARTS: tuple[str, ...] = (
+    "unique-grounds",
+    "calc-line-demotion",
+    "indicator-cap",
+)
+
+#: Имя правила счёта оснований вывода, которое действует сейчас.
+CONCLUSION_RULE: str = "+".join(CONCLUSION_RULE_PARTS)
+
+
 def conclusion_status(
     checked: int,
     confirmed: int,

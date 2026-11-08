@@ -582,6 +582,27 @@ def cmd_web(args: argparse.Namespace) -> int:
     from pf.web import collect_web, search_web
     from pf.webfetch import fetch_pages
 
+    if args.arxiv:
+        # Отдельная ветка, а не канал в `search_web`: общий фильтр считает
+        # основы русских слов и молча выбросил бы английские заголовки
+        # (`D-26`). arXiv не ищет по-русски, поэтому запрос — на английском.
+        from pf.arxiv import search_arxiv
+
+        hits = search_arxiv(args.query, limit=args.limit)
+        if not hits:
+            _out("arXiv не ответил или ничего не нашёл — канал считается недоступным.")
+            return 1
+        _rule(f"Препринты arXiv: {args.query}")
+        for hit in hits:
+            _out(f"{ARROW} {hit.title}")
+            _out(f"    {hit.url}")
+            _out("    препринт: не рецензирован")
+            if hit.snippet:
+                _out(f"    {hit.snippet[:180]}")
+            _out()
+        _out("Статус любого внешнего источника — «требует проверки».")
+        return 0
+
     if args.parse:
         hits = search_web(args.query, limit=args.limit)
         if not hits:
@@ -979,6 +1000,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--parse",
         action="store_true",
         help="искать в интернете и разбирать найденные страницы",
+    )
+    web_parser.add_argument(
+        "--arxiv",
+        action="store_true",
+        help="искать препринты в arXiv (запрос на английском, не рецензированы)",
     )
     web_parser.set_defaults(func=cmd_web)
 

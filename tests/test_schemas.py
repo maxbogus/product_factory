@@ -469,6 +469,87 @@ def test_analysis_metric_without_source_is_marked_not_reproducible() -> None:
     assert analysis.metrics[0].is_reproducible is False
 
 
+# ── Допущения вывода ──────────────────────────────────────────────────────────
+# «Осознанные отказы» отвечают на вопрос «что сознательно не учли», а не на
+# «что должно быть верно, чтобы решение сработало». В `cloud-deepseek-2` вывод
+# опирался на допущение «отток не ускорится», которого в документе не было ни в
+# каком виде: читатель не мог его ни принять, ни отвергнуть.
+
+
+def _strategy_with_assumptions(**product: object) -> dict[str, object]:
+    """Ответ модели с заданными полями продуктового блока.
+
+    Args:
+        **product: Поля продуктовой стратегии поверх обязательных.
+
+    Returns:
+        Ответ модели в форме, которую принимает ``Strategy``.
+    """
+    base: dict[str, object] = {
+        "audience": "клиенты мобильного тарифа",
+        "chosen_direction": "прозрачность тарифов",
+    }
+    base.update(product)
+    return {
+        "product": base,
+        "communication": {
+            "audience": "клиенты",
+            "barrier": "непрозрачность подписок",
+            "key_message": "покажем все подписки до подтверждения",
+        },
+        "verification": {
+            "expected_change": "рост удержания",
+            "compare_against": "база января",
+            "observation_period": "6 месяцев",
+            "adverse_effects": ["падение маржи"],
+        },
+    }
+
+
+def test_strategy_assumptions_are_kept() -> None:
+    """Допущения вывода сохраняются в продуктовом блоке."""
+    from pf.schemas import Strategy
+
+    strategy = Strategy.model_validate(
+        _strategy_with_assumptions(
+            assumptions=["Цена останется в прежней вилке", "Отток не ускорится"]
+        )
+    )
+
+    assert strategy.product.assumptions == [
+        "Цена останется в прежней вилке",
+        "Отток не ускорится",
+    ]
+
+
+def test_strategy_assumptions_accept_string_and_synonym() -> None:
+    """Одна строка и слово «допущения» — не повод отбрасывать шаг.
+
+    Модель называет поле по-своему и иногда отвечает одной строкой. Отказ
+    схемы на этом значил бы потерю готовой стратегии из-за названия поля.
+    """
+    from pf.schemas import Strategy
+
+    strategy = Strategy.model_validate(
+        _strategy_with_assumptions(**{"допущения": "Цена не изменится"})
+    )
+
+    assert strategy.product.assumptions == ["Цена не изменится"]
+
+
+def test_strategy_assumptions_from_flat_answer() -> None:
+    """Плоский ответ с допущениями собирается в продуктовый блок."""
+    from pf.schemas import Strategy
+
+    payload = _strategy_with_assumptions(assumptions=["Отток не ускорится"])
+    flat: dict[str, object] = {"product": "тариф"}
+    flat.update(payload.pop("product"))  # type: ignore[arg-type]
+    flat.update(payload)
+    strategy = Strategy.model_validate(flat)
+
+    assert strategy.product.assumptions == ["Отток не ускорится"]
+
+
 def test_strategy_accepts_flat_product_answer() -> None:
     """Плоский ответ стратегии должен собираться в блоки.
 

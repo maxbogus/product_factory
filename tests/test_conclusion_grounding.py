@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from pf.ground import SupportStatus
+from pf.ground import CONCLUSION_RULE, CONCLUSION_RULE_PARTS, SupportStatus
 from pf.schemas import (
     Analysis,
     Commitment,
@@ -270,6 +270,30 @@ def test_confirmed_conclusion_evidence_counts_as_grounds(
     assert grounding.conclusion["status"] == "подкреплено"
     assert grounding.conclusion["confirmed"] == 1
     assert grounding.citations
+
+
+def test_conclusion_rule_is_named_in_journal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Статус вывода записывается вместе с именем правила.
+
+    Без имени унаследованный статус не отличить от текущего: `demo-v9`
+    печатал «подкреплено» по правилу, которое считало посчитанное значение в
+    строке расчёта цитатой, и делал это уже после того, как правило сняли.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy([SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE)])
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["rule"] == CONCLUSION_RULE
+    parts = grounding.conclusion["rule"].split("+")
+    assert list(CONCLUSION_RULE_PARTS) == parts
 
 
 def test_conclusion_counts_unique_grounds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

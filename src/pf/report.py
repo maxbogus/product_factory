@@ -18,7 +18,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from pf.ground import GroundTally, SupportStatus, citation_key, conclusion_status, tally_grounds
+from pf.ground import (
+    CONCLUSION_RULE,
+    GroundTally,
+    SupportStatus,
+    citation_key,
+    conclusion_status,
+    tally_grounds,
+)
 from pf.journal import Journal, journal_path
 from pf.state import load
 
@@ -87,6 +94,7 @@ class ConclusionRecord:
         direction: Выбранное направление — что делать.
         value_to_cost: Почему это выгоднее альтернатив.
         deliberate_omissions: Что сознательно не учтено.
+        assumptions: Что должно быть верно, чтобы вывод работал.
         decision: Зафиксированное решение.
         commitments: Принятые обязательства.
         expected_change: Ожидаемое изменение.
@@ -106,11 +114,16 @@ class ConclusionRecord:
             этого правила называет только записи; если в нём были отказы,
             распределить их по уникальным ключам нечем, и отчёт говорит
             «записей» вместо «оснований».
+        rule: Имя правила, которым посчитан статус. Пусто — унаследованный
+            журнал, который правила не записывал.
+        contradicted: Ключи оснований, отклонённых в этом же журнале на других
+            шагах. Такая строка не бывает подтверждённым основанием.
     """
 
     direction: str = ""
     value_to_cost: str = ""
     deliberate_omissions: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
     decision: str = ""
     commitments: list[dict[str, Any]] = field(default_factory=list)
     expected_change: str = ""
@@ -126,6 +139,20 @@ class ConclusionRecord:
     off_topic_grounds: list[str] = field(default_factory=list)
     off_topic_conclusion: list[str] = field(default_factory=list)
     unique: bool = True
+    rule: str = ""
+    contradicted: list[str] = field(default_factory=list)
+
+    @property
+    def rule_is_current(self) -> bool:
+        """Статус посчитан правилом, которое действует сейчас.
+
+        Журнал до `D-44` правила не записывал, поэтому пустое имя — это
+        «неизвестно», а не «совпало».
+
+        Returns:
+            ``True``, если журнал назвал текущее правило счёта.
+        """
+        return self.rule == CONCLUSION_RULE
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +258,17 @@ class SessionReport:
             return (
                 "**Прогон даёт решение с оговоркой:** подтверждённые основания "
                 "называют другой показатель — причина названа в разделе «Вывод»."
+            )
+        if not self.conclusion.rule_is_current and self.conclusion.status in (
+            "подкреплено",
+            "подкреплено частично",
+        ):
+            # Унаследованный статус не бывает зелёным светом: он посчитан
+            # правилом, которого уже нет, и переносить его на сегодня нельзя.
+            return (
+                "**Прогон даёт решение по прежнему правилу:** статус оснований "
+                "вывода записан правилом прогона и на сегодня не переносится — "
+                "перепроверьте на сохранённых результатах (`make replay`)."
             )
         return ""
 
@@ -473,6 +511,24 @@ def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
             lines.append(f"- {item}")
         lines.append("")
 
+    # Допущения стоят рядом с выводом: пока они верны, вывод работает, и
+    # читатель должен увидеть их до обязательств, а не в приложении.
+    if conclusion.assumptions:
+        lines.append("**Что должно быть верно, чтобы вывод работал:**")
+        lines.append("")
+        for item in conclusion.assumptions:
+            lines.append(f"- {item}")
+        lines.append("")
+    elif conclusion.rule_is_current:
+        # Поля не было до `D-44`, поэтому унаследованный журнал не судится.
+        # Для нового прогона молчание недопустимо: отсутствие допущений
+        # спряталось бы в «всё хорошо».
+        lines.append(
+            "**Допущения вывода не названы** — проверить, при каких условиях решение "
+            "перестаёт работать, нечем. Назовите их в продуктовом блоке (`assumptions`)."
+        )
+        lines.append("")
+
     if conclusion.commitments:
         lines.append("| Обязательство | Владелец | Показатель | Условие пересмотра |")
         lines.append("|---|---|---|---|")
@@ -525,6 +581,10 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
         f"{label}: проверено {conclusion.checked}, подтверждено {conclusion.confirmed}, "
         f"отклонено {conclusion.rejected}"
     )
+    # Подпись «по правилу прогона» стоит там, где строка читается как
+    # сегодняшняя оценка: унаследованный журнал своего правила не записывал,
+    # и `demo-v9` печатал «подкреплено» рядом с «отклонено» по тем же строкам.
+    run_rule = "" if conclusion.rule_is_current else " по правилу прогона"
     if conclusion.status == "неподкреплено":
         lines.append(
             f"**Основания вывода: вывод не подкреплён** — ни одно основание не "
@@ -536,9 +596,9 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
             f"подтвердить их нечем ({numbers})."
         )
     elif conclusion.status == "подкреплено частично":
-        lines.append(f"**Основания вывода: подкреплено частично** ({numbers}).")
+        lines.append(f"**Основания вывода: подкреплено частично{run_rule}** ({numbers}).")
     elif conclusion.status == "подкреплено":
-        lines.append(f"**Основания вывода: подкреплено** ({numbers}).")
+        lines.append(f"**Основания вывода: подкреплено{run_rule}** ({numbers}).")
     else:
         lines.append(
             "**Основания вывода не проверялись:** журнал этого прогона старше "
@@ -546,6 +606,35 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
             "нового прогона — иначе статус вывода неизвестен."
         )
     lines.append("")
+
+    if not conclusion.rule_is_current and conclusion.status in (
+        "подкреплено",
+        "подкреплено частично",
+    ):
+        # Подпись нужна там, где статус **заявляет опору**. У «неподкреплено»
+        # и «ждут проверки» переносить нечего: они и так ничего не обещают,
+        # а лишняя строка в каждом унаследованном документе — шум.
+        recorded = f"`{conclusion.rule}`" if conclusion.rule else "правило не записано"
+        lines.append(
+            f"**Правило счёта: {recorded}.** Сейчас основания считают правилом "
+            f"`{CONCLUSION_RULE}`. Статус выше — запись прогона, а не проверка "
+            "сегодняшним правилом: унаследованный журнал на глаз не "
+            "пересчитывается, а перепроверка на сохранённых результатах — "
+            "`make replay SESSIONS=<сессия>`."
+        )
+        lines.append("")
+
+    if conclusion.contradicted:
+        # Противоречие внутри одного журнала: строка отклонена на одном шаге и
+        # подтверждена в выводе на другом. Молчать об этом нельзя — рядом в
+        # документе стоят «отклонено» и «подкреплено» по одной строке.
+        keys = ", ".join(f"`{key}`" for key in conclusion.contradicted)
+        lines.append(
+            "**Журнал себе противоречит:** эти строки отклонены на других шагах, "
+            f"а основания вывода считают их подтверждёнными — {keys}. "
+            "Повтор ссылки на отклонённую строку не делает её основанием."
+        )
+        lines.append("")
 
     if conclusion.off_topic_grounds:
         # Дословность цитаты не отвечает на вопрос, тот ли показатель она
@@ -932,6 +1021,29 @@ def _journal_tally(checks: list[dict[str, Any]], declared: list[str]) -> GroundT
     return None
 
 
+def _rejected_material_keys(records: list[Any]) -> set[str]:
+    """Ключи оснований, которые журнал отклонил хотя бы на одном шаге.
+
+    Строка отказа выглядит как ``путь#якорь: причина``. Отказы по имени
+    расчёта («Удержание пользователей: пересчёт по входам даёт 0») к
+    основаниям не относятся: у них нет ни пути, ни якоря, и попади они в
+    этот набор, отчёт назвал бы противоречием то, чем оно не является.
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Множество ключей оснований.
+    """
+    keys: set[str] = set()
+    for record in records:
+        for line in getattr(record, "rejected_details", []) or []:
+            prefix = str(line).split(":", 1)[0].strip()
+            if "#" in prefix or "/" in prefix:
+                keys.add(citation_key(prefix))
+    return keys
+
+
 def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
     """Собрать вывод прогона из журнала.
 
@@ -964,6 +1076,33 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         for key in _declared_ground_keys(recorded):
             if key not in declared:
                 declared.append(key)
+
+    # Правило, которым считали. Журнал до `D-44` его не записывал, поэтому
+    # пустое имя значит «неизвестно»: выдавать такой статус за текущую оценку
+    # нельзя — именно так `demo-v9` печатал «подкреплено» рядом с «отклонено».
+    rules = {str(check.get("rule") or "") for check in checks}
+    rule = rules.pop() if len(rules) == 1 else ""
+
+    # Подтверждённые основания по ключам: нужны, чтобы увидеть противоречие
+    # внутри одного журнала — та же строка отклонена на одном шаге и
+    # подтверждена в выводе на другом.
+    if all(isinstance(check.get("grounds"), dict) for check in checks):
+        confirmed_keys: list[str] = []
+        for check in checks:
+            for key in _mapping(check.get("grounds")).get("confirmed") or []:
+                clean = citation_key(str(key))
+                if clean not in confirmed_keys:
+                    confirmed_keys.append(clean)
+    elif checks and all(
+        int(check.get("rejected") or 0) == 0 and int(check.get("needs_review") or 0) == 0
+        for check in checks
+    ):
+        # Журнал без ключей, но и без отказов: подтверждено всё объявленное.
+        confirmed_keys = list(declared)
+    else:
+        confirmed_keys = []
+    rejected_keys = _rejected_material_keys(records)
+    contradicted = [key for key in confirmed_keys if key in rejected_keys]
 
     tally = _journal_tally(checks, declared) if checks else GroundTally()
     if tally is None:
@@ -1017,6 +1156,7 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         direction=str(product.get("chosen_direction") or ""),
         value_to_cost=str(product.get("value_to_cost") or ""),
         deliberate_omissions=_text_list(product.get("deliberate_omissions")),
+        assumptions=_text_list(product.get("assumptions")),
         decision=str(keeper_detail.get("decision") or ""),
         commitments=commitments,
         expected_change=str(verification.get("expected_change") or ""),
@@ -1038,6 +1178,8 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         off_topic_grounds=off_topic_grounds,
         off_topic_conclusion=off_topic_conclusion,
         unique=unique,
+        rule=rule,
+        contradicted=contradicted,
     )
 
 

@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from pf.ground import CONCLUSION_RULE
 from pf.journal import Journal, StepRecord, journal_path
 from pf.report import build_session_report
 
@@ -28,6 +29,9 @@ def _strategy_record(
     grounds: dict[str, list[str]] | None = None,
     evidence: list[str] | None = None,
     off_topic: dict[str, list[str]] | None = None,
+    rule: str | None = None,
+    rejected_details: list[str] | None = None,
+    assumptions: list[str] | None = None,
 ) -> StepRecord:
     """Запись шага стратегии.
 
@@ -39,6 +43,9 @@ def _strategy_record(
         grounds: Ключи оснований по вердиктам — так их называет новый журнал.
         evidence: Ссылки оснований вывода; повторы сохраняются, как в ответе модели.
         off_topic: Показатели вывода и оснований, когда они не совпали.
+        rule: Имя правила счёта. Не задано — как в унаследованном журнале.
+        rejected_details: Строки отказов шага; по ним отчёт видит противоречие.
+        assumptions: Что должно быть верно, чтобы вывод работал.
 
     Returns:
         Запись журнала.
@@ -53,6 +60,8 @@ def _strategy_record(
         check["grounds"] = grounds
     if off_topic is not None:
         check["off_topic"] = off_topic
+    if rule is not None:
+        check["rule"] = rule
     product: dict[str, Any] = {
         "audience": "клиенты мобильного тарифа",
         "alternatives": ["Оставить как есть", "Закрыть направление"],
@@ -64,13 +73,19 @@ def _strategy_record(
         product["evidence"] = [
             {"source_id": item, "paragraph": None, "quote": "цитата"} for item in evidence
         ]
+    if assumptions is not None:
+        product["assumptions"] = assumptions
     return StepRecord(
         ordinal=7,
         role="strategy",
         phase="strategy",
         summary="стратегия: продуктовая + коммуникационная + план проверки",
         citations=["project/data/telecom_open_metrics.csv#row0"],
-        rejected_details=["project/data/cbr_rates.csv#row1: источник не относится к задаче"],
+        rejected_details=(
+            ["project/data/cbr_rates.csv#row1: источник не относится к задаче"]
+            if rejected_details is None
+            else rejected_details
+        ),
         detail={
             "product": product,
             "communication": {
@@ -563,6 +578,182 @@ def test_report_marks_conclusion_awaiting_review(
     assert report.conclusion.status == "ждёт проверки"
     assert "ждут проверки" in text
     assert "Основания вывода: подкреплено**" not in text
+
+
+# ── Правило счёта ─────────────────────────────────────────────────────────────
+#
+# `demo-v9` печатал «Основания вывода: подкреплено» рядом с таблицей, где те же
+# две строки помечены «отклонено»: статус пришёл из журнала, записанного
+# правилом, которое считало посчитанное значение в строке расчёта цитатой
+# (`D-36` это правило сняло). Журнал своего правила не называл, и отчёт
+# принимал запись за сегодняшнюю оценку.
+
+ROW0 = "project/data/telecom_open_metrics.csv#row0"
+ROW1 = "project/data/telecom_open_metrics.csv#row1"
+
+
+def test_report_stale_rule_status_is_labelled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Журнал без имени правила не выдаёт свой статус за текущий.
+
+    Унаследованный журнал записан правилом, которого уже нет: оно считало
+    посчитанное значение в строке расчёта цитатой. Отчёт обязан назвать это
+    записью прогона и сказать, каким правилом считают сейчас, — иначе рядом
+    стоят «подкреплено» и «отклонено», и читатель выбирает удобное.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                confirmed=2,
+                rejected=0,
+                evidence=[ROW0, ROW1],
+                rejected_details=[f"{ROW0}: значение посчитано, а не процитировано"],
+            )
+        ],
+    )
+
+    report = build_session_report("session-conclusion")
+    text = report.as_markdown()
+
+    assert report.conclusion is not None
+    assert report.conclusion.rule_is_current is False
+    assert "по правилу прогона" in text
+    assert "не записано" in text
+    assert CONCLUSION_RULE in text
+    assert "Основания вывода: подкреплено**" not in text
+    assert "Журнал себе противоречит" in text
+
+
+def test_report_stale_rule_marker_absent_for_current_rule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Журнал, записанный текущим правилом, печатает статус как есть.
+
+    Подпись нужна только унаследованным журналам: если правило записано и
+    совпадает с текущим, оговорка превратилась бы в шум и перестала читаться.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                confirmed=2,
+                rejected=0,
+                evidence=[ROW0, ROW1],
+                rule=CONCLUSION_RULE,
+            )
+        ],
+    )
+
+    report = build_session_report("session-conclusion")
+    text = report.as_markdown()
+
+    assert report.conclusion is not None
+    assert report.conclusion.rule_is_current is True
+    assert "Основания вывода: подкреплено**" in text
+    assert "по правилу прогона" not in text
+    assert "Прогон даёт решение по прежнему правилу" not in text
+
+
+def test_report_stale_rule_caveats_readiness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Унаследованный статус не выглядит зелёным светом.
+
+    Иначе первая строка отчёта говорит «готово», а раздел «Вывод» ниже
+    уточняет, что статус посчитан прежним правилом. Порядок чтения важнее:
+    оговорка стоит там, где читатель решает, можно ли опираться на вывод.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [_strategy_record(confirmed=2, rejected=0, evidence=[ROW0, ROW1])],
+    )
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Прогон даёт решение по прежнему правилу" in text
+    assert "make replay" in text
+
+
+# ── Допущения вывода ──────────────────────────────────────────────────────────
+#
+# Вывод работает, пока верны его допущения. В `cloud-deepseek-2` обещание
+# «удержание вырастет» держалось на допущении «отток не ускорится», которого в
+# документе не было ни в каком виде: читатель не мог его ни принять, ни
+# отвергнуть, а проверять собирался только результат.
+
+
+def test_report_shows_assumptions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Допущения стоят рядом с выводом, а не в приложении.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                confirmed=2,
+                rejected=0,
+                evidence=[ROW0, ROW1],
+                rule=CONCLUSION_RULE,
+                assumptions=["Отток не ускорится", "Цена останется в прежней вилке"],
+            )
+        ],
+    )
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Что должно быть верно, чтобы вывод работал" in text
+    assert "Отток не ускорится" in text
+    assert "Допущения вывода не названы" not in text
+
+
+def test_report_names_missing_assumptions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Прогон текущим правилом без допущений называет пробел.
+
+    Унаследованный журнал не судится: поля тогда не было, и требовать его
+    задним числом — наказывать за отсутствие разметки. Для нового прогона
+    молчание недопустимо: отсутствие допущений спряталось бы в «всё хорошо».
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                confirmed=2,
+                rejected=0,
+                evidence=[ROW0, ROW1],
+                rule=CONCLUSION_RULE,
+            )
+        ],
+    )
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Допущения вывода не названы" in text
 
 
 # ── Согласованность артефакта ─────────────────────────────────────────────────
