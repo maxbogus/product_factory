@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -34,6 +35,7 @@ from pf.ground import (
     verify_quote_as_external,
 )
 from pf.journal import Journal, StepRecord, journal_path
+from pf.lexical import numbers_match, stems
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
     CLOSE_DIRECTION_TITLES,
@@ -47,7 +49,7 @@ from pf.schemas import (
     TaskFrame,
     Variants,
 )
-from pf.sources import SourceBundle, collect
+from pf.sources import SourceBundle, collect, indicator_of_citation
 from pf.state import Phase, SessionState, save
 
 if TYPE_CHECKING:
@@ -374,6 +376,15 @@ _LIMIT_PATTERN = re.compile(
 #: «2017», «2018», «конец июля» — это точки одного ряда во времени.
 _PERIOD_COLUMNS: frozenset[str] = frozenset(
     {"период", "дата", "period", "date", "месяц", "квартал", "год", "time", "day"}
+)
+
+#: Величина с единицей измерения. Счётчик, год и срок величиной не
+#: считаются: «3 месяца» — это горизонт проверки, а не измеренное
+#: значение, и требовать для него расчёта было бы шумом.
+_MAGNITUDE = re.compile(
+    r"(?P<value>-?\d+(?:[.,]\d+)?)\s*"
+    r"(?P<unit>%|процент\w*|п\.\s?п\.|млн|млрд|тыс\.?|руб\w*)",
+    re.IGNORECASE,
 )
 
 #: Фазы, которым нужны собранные источники. Для остальных набор не
@@ -810,13 +821,17 @@ class Workflow:
     def _stems(text: str) -> set[str]:
         """Основы слов текста — показатель сравнивается без словоформ.
 
+        Здесь раньше была своя копия правила, и она не отбрасывала скобки:
+        «удержание клиентов (МТС, абонентская база)» проходило по слову
+        «база» из скобок. Правило одно на репозиторий — ``pf.lexical.stems``.
+
         Args:
             text: Текст утверждения.
 
         Returns:
-            Множество основ длиной шесть букв.
+            Множество основ значимых слов.
         """
-        return {word[:6] for word in re.findall(r"[а-яё]{5,}", text.lower().replace("ё", "е"))}
+        return stems(text)
 
     @staticmethod
     def _check_success_criteria(data: Any) -> list[str]:
@@ -852,6 +867,165 @@ class Workflow:
             if Workflow._stems(text) & expected_stems:
                 continue
             notes.append(f"критерий успеха «{text}»: критерий не относится к показателю плана")
+        return notes
+
+    @staticmethod
+    def _magnitudes(text: str) -> list[tuple[float, str]]:
+        """Числа текста, заявленные как величина.
+
+        Берутся только числа с единицей измерения. Счётчики и сроки сюда
+        не попадают: «3 месяца» — горизонт проверки, а не измеренное
+        значение, и требовать для него расчёта было бы шумом.
+
+        Args:
+            text: Текст плана, критерия или обязательства.
+
+        Returns:
+            Пары ``(значение, единица)`` в порядке появления.
+        """
+        found: list[tuple[float, str]] = []
+        for match in _MAGNITUDE.finditer(text):
+            try:
+                value = float(match.group("value").replace(",", "."))
+            except ValueError:
+                continue
+            found.append((value, match.group("unit")))
+        return found
+
+    @staticmethod
+    def _calculation_pool(
+        metrics: Sequence[Metric] | None = None,
+    ) -> list[tuple[str, set[str], list[float]]]:
+        """Показатели расчётов и числа, которые в них есть.
+
+        Показатель расчёта берётся из строки источника, на которую расчёт
+        ссылается: имя метрики — это заголовок материала, и оно не
+        говорит, что посчитано. Правило то же, что в проверке оснований.
+
+        Args:
+            metrics: Расчёты. По умолчанию — посчитанные по материалам.
+
+        Returns:
+            Тройки «показатель — основы его слов — числа расчёта».
+        """
+        if metrics is None:
+            metrics = Workflow._computed_metric_records()
+        materials = []
+        if any("#row" in metric.citation for metric in metrics):
+            from pf.materials import load_materials
+
+            materials = load_materials()
+
+        pool: list[tuple[str, set[str], list[float]]] = []
+        for metric in metrics:
+            indicator = indicator_of_citation(metric.citation, materials) or metric.name
+            if not indicator:
+                continue
+            numbers = [float(metric.value)]
+            numbers.extend(
+                float(value)
+                for value in metric.inputs.values()
+                if isinstance(value, (int, float)) and not isinstance(value, bool)
+            )
+            pool.append((indicator, stems(indicator), numbers))
+        return pool
+
+    @staticmethod
+    def _plan_number_texts(data: Any) -> list[tuple[str, str]]:
+        """Тексты, в которых число — утверждение, а не оформление.
+
+        План проверки называет базу сравнения и критерии, решение —
+        обязательства. Сроки (``observation_period``, ``review_by``) сюда
+        не входят: это календарь, а не измерение.
+
+        Args:
+            data: Результат роли стратегии или решения.
+
+        Returns:
+            Пары «что это за текст — сам текст».
+        """
+        pairs: list[tuple[str, str]] = []
+        verification = getattr(data, "verification", None)
+        if verification is not None:
+            for label, field_name in (
+                ("ожидаемое изменение", "expected_change"),
+                ("база сравнения", "compare_against"),
+            ):
+                text = str(getattr(verification, field_name, "") or "").strip()
+                if text:
+                    pairs.append((label, text))
+            for criterion in getattr(verification, "success_criteria", None) or []:
+                text = str(criterion).strip()
+                if text:
+                    pairs.append(("критерий успеха", text))
+        for commitment in getattr(data, "commitments", None) or []:
+            for label, field_name in (
+                ("обязательство", "statement"),
+                ("показатель обязательства", "metric"),
+                ("условие пересмотра", "review_condition"),
+            ):
+                text = str(getattr(commitment, field_name, "") or "").strip()
+                if text:
+                    pairs.append((label, text))
+        return pairs
+
+    @staticmethod
+    def _check_plan_numbers(
+        data: Any,
+        metrics: Sequence[Metric] | None = None,
+    ) -> list[str]:
+        """Числа плана и обязательств сверяются с расчётами.
+
+        Прежняя проверка сравнивала только основы слов: критерий
+        «увеличение удержания на 5 %» проходил по слову «удержание», а
+        число не сверялось ни с чем. В прогоне `demo-v9` так появилось
+        «удержание на уровне 87 %», где 87 — абонентская база МТС.
+
+        Число подтверждено, только если расчёт **того же** показателя его
+        содержит. Три исхода различаются, потому что причина важнее
+        отметки:
+
+        - расчёт по этому показателю есть, но числа в нём нет — расхождение;
+        - расчёт есть, но про другой показатель — подмена;
+        - расчёта нет вовсе — величина ни из чего не следует.
+
+        Args:
+            data: Результат роли стратегии или решения.
+            metrics: Расчёты. По умолчанию — посчитанные по материалам.
+
+        Returns:
+            Строки замечаний для журнала.
+        """
+        pool = Workflow._calculation_pool(metrics)
+        notes: list[str] = []
+        for label, text in Workflow._plan_number_texts(data):
+            text_stems = stems(text)
+            same = [item for item in pool if item[1] & text_stems]
+            others = [item for item in pool if not item[1] & text_stems]
+            for value, unit in Workflow._magnitudes(text):
+                shown = f"{value:g} {unit}".strip()
+                if any(numbers_match([value], numbers)[0] for _name, _s, numbers in same):
+                    continue
+                if same:
+                    notes.append(
+                        f"{label} «{text}»: число {shown} не совпадает с расчётом "
+                        f"по показателю «{same[0][0]}»"
+                    )
+                    continue
+                foreign = next(
+                    (name for name, _s, numbers in others if numbers_match([value], numbers)[0]),
+                    "",
+                )
+                if foreign:
+                    notes.append(
+                        f"{label} «{text}»: число {shown} взято из расчёта «{foreign}» — "
+                        "другой показатель"
+                    )
+                    continue
+                notes.append(
+                    f"{label} «{text}»: число {shown} ничем не подтверждено — "
+                    "расчёта с таким показателем нет"
+                )
         return notes
 
     @staticmethod
@@ -1469,7 +1643,15 @@ class Workflow:
         lexical = self._lexical_report(data)
         # Критерии успеха проверяются вместе с основаниями: это тоже
         # утверждение о том, что и как будет измерено.
-        criteria_notes = self._check_success_criteria(data) if phase is Phase.STRATEGY else []
+        criteria_notes: list[str] = []
+        if phase is Phase.STRATEGY:
+            criteria_notes.extend(self._check_success_criteria(data))
+        if phase in (Phase.STRATEGY, Phase.KEEPER):
+            # Числа плана и обязательств — тоже утверждения. Раньше они
+            # проходили по совпадению основы слова: «удержание на уровне
+            # 87 %» не отличалось от «удержание вырастет», хотя 87 —
+            # абонентская база.
+            criteria_notes.extend(self._check_plan_numbers(data))
         if bundle is None and phase in (Phase.ANALYZING, Phase.STRATEGY):
             # Роутер может повести вперёд, перескочив сбор источников.
             # Тогда проверять основания нечем, и шаг обязан сказать это

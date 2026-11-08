@@ -37,6 +37,8 @@ from pf.ground import (
     verify_quote,
 )
 from pf.lexical import number_tolerance
+from pf.lexical import significant_words as _significant_words
+from pf.lexical import stems as _stems
 from pf.materials import Material
 
 #: Минимальная длина абзаца, пригодного для цитирования.
@@ -581,23 +583,6 @@ def _input_numbers(inputs: dict[str, Any]) -> list[Any]:
     return result
 
 
-def _significant_words(text: str) -> set[str]:
-    """Значимые слова текста: без скобок, цифр и коротких служебных.
-
-    Скобки отбрасываются: «удержание клиентов (МТС, абонентская база)» —
-    это метрика про удержание, а база в скобках лишь уточняет, откуда
-    взято число. Если оставить скобки, подмена показателя не видна.
-
-    Args:
-        text: Название метрики или текст строки.
-
-    Returns:
-        Множество слов длиной от четырёх букв.
-    """
-    without_notes = re.sub(r"\([^)]*\)", " ", text)
-    return set(re.findall(r"[a-zа-яё]{4,}", without_notes.lower().replace("ё", "е")))
-
-
 def _row_indicator(row: dict[str, Any]) -> str:
     """Показатель, который объявляет сама строка таблицы.
 
@@ -616,27 +601,6 @@ def _row_indicator(row: dict[str, Any]) -> str:
         if name in {"показатель", "показатели", "метрика", "metric", "indicator"}:
             return str(value)
     return ""
-
-
-def _stems(text: str) -> set[str]:
-    """Основы слов: показатель сравнивается без словоформ.
-
-    «абонентская» и «абонентов» — одно понятие, но леммы у них разные
-    («абонентский» и «абонент»), поэтому сравнение по леммам давало бы
-    ложный отказ. Шесть букв — та же мера, что в проверке критериев
-    успеха: разные показатели («удержание» и «база») остаются разными.
-
-    Скобки отбрасываются так же, как в ``_significant_words``: «удержание
-    клиентов (МТС, абонентская база)» — это метрика про удержание, а база
-    в скобках лишь говорит, откуда взято число.
-
-    Args:
-        text: Текст утверждения или строка таблицы.
-
-    Returns:
-        Множество основ значимых слов.
-    """
-    return {word[:6] for word in _significant_words(text) if len(word) >= 5}
 
 
 def _name_matches_row(name: str, row_text: str) -> bool:
@@ -931,6 +895,35 @@ def _row_indicator_at(article: Article, row: int) -> str:
             return _row_indicator(material.rows[row])
         return ""
     return ""
+
+
+def indicator_of_citation(citation: str, materials: list[Material] | None = None) -> str:
+    """Показатель строки, на которую ссылается расчёт.
+
+    Расчёт несёт номер строки (``#rowN``), а не название показателя: имя
+    метрики — это заголовок материала, и оно не говорит, что именно
+    посчитано. Показатель берётся из самой строки — тем же правилом, что
+    в проверке оснований. Иначе «87» из строки «абонентская база»
+    подтверждало бы «удержание 87 %» уже на уровне расчёта.
+
+    Args:
+        citation: Ссылка вида ``project/data/file.csv#row0``.
+        materials: Материалы проекта. По умолчанию — из каталога ``project/``.
+
+    Returns:
+        Показатель строки либо пустая строка, если строки или колонки нет.
+    """
+    clean_id, row = split_source_id(citation)
+    if row is None or not clean_id:
+        return ""
+    if materials is None:
+        from pf.materials import load_materials
+
+        materials = load_materials()
+    material = _find_material(clean_id, materials)
+    if material is None or not 0 <= row < len(material.rows):
+        return ""
+    return _row_indicator(material.rows[row])
 
 
 def _find_material(clean_id: str, materials: list[Material]) -> Material | None:
