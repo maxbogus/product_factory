@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -583,6 +584,48 @@ def _input_numbers(inputs: dict[str, Any]) -> list[Any]:
     return result
 
 
+#: Колонки таблицы, которые называют показатель: что строка измеряет.
+_INDICATOR_COLUMNS: frozenset[str] = frozenset(
+    {"показатель", "показатели", "метрика", "metric", "indicator"}
+)
+
+#: Колонки таблицы, которые называют субъекта: о ком строка.
+_SUBJECT_COLUMNS: frozenset[str] = frozenset(
+    {"оператор", "операторы", "компания", "игрок", "operator", "company", "player"}
+)
+
+#: Колонки провенанса: откуда взято. Это не утверждение строки, поэтому в
+#: оценку она не входит. Пока входила, порядок строк задавала длина URL:
+#: в прогоне `demo-v9` «МТС Беларусь 2026» стояла первой просто потому,
+#: что адрес её статьи в Википедии короче остальных.
+_PROVENANCE_COLUMNS: frozenset[str] = frozenset(
+    {"источник", "источники", "source", "sources", "url", "ссылка", "ссылки", "link"}
+)
+
+#: Балл строки, попавшей в срез по предметной области, а не по словам
+#: запроса. Меньше любого совпадения: строка, отвечающая на вопрос,
+#: всегда важнее строки, которая просто про ту же отрасль.
+_DOMAIN_FALLBACK_SCORE = 0.25
+
+#: Веса полей строки при отборе. Показатель — главное, что строка о себе
+#: говорит; субъект уточняет, о ком она; остальное содержание — контекст.
+_INDICATOR_WEIGHT = 2.0
+_SUBJECT_WEIGHT = 1.0
+_CONTENT_WEIGHT = 0.5
+
+
+def _column_name(key: Any) -> str:
+    """Имя колонки в сравнимом виде: «Показатель » и «показатель» — одно.
+
+    Args:
+        key: Заголовок колонки.
+
+    Returns:
+        Имя без лишних пробелов и подчёркиваний, в нижнем регистре.
+    """
+    return re.sub(r"[\s_]+", " ", str(key).strip().lower())
+
+
 def _row_indicator(row: dict[str, Any]) -> str:
     """Показатель, который объявляет сама строка таблицы.
 
@@ -597,10 +640,92 @@ def _row_indicator(row: dict[str, Any]) -> str:
         Значение колонки-показателя либо пустая строка.
     """
     for key, value in row.items():
-        name = str(key).strip().lower()
-        if name in {"показатель", "показатели", "метрика", "metric", "indicator"}:
+        if _column_name(key) in _INDICATOR_COLUMNS:
             return str(value)
     return ""
+
+
+def _row_subject(row: dict[str, Any]) -> str:
+    """Субъект строки: о ком она.
+
+    Args:
+        row: Строка таблицы.
+
+    Returns:
+        Значение колонки-субъекта либо пустая строка.
+    """
+    for key, value in row.items():
+        if _column_name(key) in _SUBJECT_COLUMNS:
+            return str(value)
+    return ""
+
+
+def _row_content(row: dict[str, Any]) -> str:
+    """Содержание строки без провенанса.
+
+    Args:
+        row: Строка таблицы.
+
+    Returns:
+        Пары «колонка: значение» через запятую.
+    """
+    parts = [
+        f"{key}: {value}"
+        for key, value in row.items()
+        if _column_name(key) not in _PROVENANCE_COLUMNS
+    ]
+    return ", ".join(parts)
+
+
+def _row_score(row: dict[str, Any], query_terms: set[str]) -> float:
+    """Балл строки таблицы: по её показателю, а не по словам вообще.
+
+    Три уровня, и они различаются намеренно:
+
+    1. **Совпадение по показателю** — строка отвечает на заданный вопрос.
+    2. **Совпадение по субъекту и содержанию** — строка про того же
+       оператора или год, но показатель другой.
+    3. **Предметная область** — совпадений нет, но показатель строки
+       называет объект отрасли («абонентская база»). Такая строка остаётся
+       контекстом, и её балл фиксирован: длиной текста он не меряется.
+
+    Строка, у которой нет ни одного из трёх признаков, в срез не идёт.
+    Так «доля на рынке спутникового ТВ» перестала попадать в окно: это
+    другой показатель и другая отрасль, а не уточнение к вопросу.
+
+    Args:
+        row: Строка таблицы.
+        query_terms: Значимые слова запроса.
+
+    Returns:
+        Балл релевантности; ноль — строку не брать.
+    """
+    indicator = _row_indicator(row)
+    subject = _row_subject(row)
+    content = _row_content(row)
+    tokens = tokenize(content)
+    if not tokens:
+        return 0.0
+
+    indicator_tokens = tokenize(indicator)
+    subject_tokens = tokenize(subject)
+    weighted = 0.0
+    for word in indicator_tokens:
+        if word in query_terms:
+            weighted += _INDICATOR_WEIGHT
+    for word in subject_tokens:
+        if word in query_terms:
+            weighted += _SUBJECT_WEIGHT
+    for word in tokens:
+        if word in query_terms and word not in indicator_tokens and word not in subject_tokens:
+            weighted += _CONTENT_WEIGHT
+    if weighted:
+        return weighted / math.sqrt(len(tokens))
+
+    anchors = {lemmatize(word) for word in tokenize(indicator or content)}
+    if anchors & strong_domain_lemmas():
+        return _DOMAIN_FALLBACK_SCORE
+    return 0.0
 
 
 def _name_matches_row(name: str, row_text: str) -> bool:
@@ -1216,6 +1341,13 @@ def _score_material(
        никогда не попадали бы в срез, и они были бы видны только
        при дословном повторении формулировки задачи.
 
+    Строка таблицы оценивается иначе, чем абзац документа: по своим
+    полям (показатель, субъект, остальное содержание), а не по тексту
+    строки целиком. Провенанс в оценку не входит. Иначе порядок строк
+    задавала их длина, то есть длина URL, и в окно попадали строки о
+    другом показателе — «МТС Беларусь 2026» и «доля на рынке
+    спутникового ТВ».
+
     Материал не по теме (рецепты при запросе про отток) не проходит
     ни по одному признаку.
 
@@ -1249,9 +1381,17 @@ def _score_material(
     domain_in_query = query_lemmas & domain_lemmas()
     same_domain = bool(strong_in_material) and bool(domain_in_query)
 
+    rows_by_index = {index: row for index, row in enumerate(material.rows)}
+
     scored: list[tuple[float, int, str]] = []
     for passage in material.passages:
         text = passage.text
+        row = rows_by_index.get(passage.index)
+        if row is not None:
+            row_score = _row_score(row, query_terms)
+            if row_score > 0.0:
+                scored.append((row_score, passage.index, text))
+            continue
         words = tokenize(text)
         if not words:
             continue
@@ -1268,7 +1408,9 @@ def _score_material(
         score = weighted / (len(words) ** 0.5)
         scored.append((score, passage.index, text))
 
-    scored.sort(reverse=True)
+    # Ничьи разрешает порядок источника, а не номер строки: сортировка
+    # кортежа по убыванию ставила последнюю строку таблицы первой.
+    scored.sort(key=lambda item: (-item[0], item[1]))
     return [
         Passage(
             source_id=material.source_id,

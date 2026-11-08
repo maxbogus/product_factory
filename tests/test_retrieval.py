@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from pf.corpus import (
@@ -236,3 +238,101 @@ def test_empty_query_returns_nothing() -> None:
     """Пустой запрос не выбирает источники."""
     corpus = _corpus(_article("telecom/A", "A", "Абзац " * 20))
     assert corpus.search("   ", top_k=3) == []
+
+
+# ── Отбор строк таблицы ─────────────────────────────────────────────────────
+
+#: Вопрос демонстрационного прогона.
+DEMO_QUESTION = "Почему падает удержание у мобильного тарифа и что с этим делать?"
+
+
+@pytest.fixture
+def _project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Каталог с материалами проекта вместо настоящего.
+
+    Args:
+        tmp_path: Временный каталог теста.
+        monkeypatch: Подмена настроек.
+
+    Returns:
+        Пустой каталог материалов.
+    """
+    directory = tmp_path / "project"
+    directory.mkdir()
+    monkeypatch.setattr("pf.config.settings.project_dir", directory)
+    monkeypatch.setattr("pf.config.settings.knowledge_dir", tmp_path / "knowledge")
+    return directory
+
+
+def test_row_filter_drops_row_about_other_indicator() -> None:
+    """Строка о другом показателе не попадает в срез демо-вопроса.
+
+    В `demo-v9` окно занимали «МТС Беларусь 2026» и «доля на рынке
+    спутникового ТВ». С вопросом у них не было ни одного общего слова,
+    но материал был про ту же отрасль, и вес получала каждая строка — а
+    порядок решала длина строки, то есть длина URL в колонке «источник».
+    Отбор обязан идти по показателю строки.
+    """
+    from pf.sources import collect
+
+    bundle = collect(DEMO_QUESTION)
+    rows = [passage for passage in bundle.passages if passage.source_id.endswith(".csv")]
+
+    assert rows, "строки про абонентскую базу должны остаться в срезе"
+    assert not any("спутников" in passage.text for passage in rows), (
+        "строка о другом показателе попала в срез: "
+        f"{[passage.text for passage in rows if 'спутников' in passage.text]}"
+    )
+
+    window = bundle.context(limit=5)
+    assert "МТС Беларусь" not in window, f"в окне чужая строка: {window!r}"
+    assert "абонентская база" in window, "в окне нет ни одной строки про показатель"
+
+
+def test_row_filter_ignores_provenance_length(_project: Path) -> None:
+    """Длина URL в колонке «источник» не решает, какая строка важнее.
+
+    Провенанс — это откуда взято, а не что строка утверждает. Пока он
+    входил в оценку, «МТС Беларусь» выигрывала у всех строк таблицы
+    только потому, что адрес Википедии у неё короче.
+    """
+    from pf.sources import collect
+
+    long_url = "https://ru.wikipedia.org/wiki/" + "длинный_адрес_оператора_" * 4
+    (_project / "metrics.csv").write_text(
+        "оператор,показатель,значение,период,источник\n"
+        "МТС,абонентская база,87,2024,https://a.ru\n"
+        f"Т2,абонентская база,89,2024,{long_url}\n",
+        encoding="utf-8",
+    )
+    bundle = collect("абонентская база операторов связи")
+
+    rows = [passage for passage in bundle.passages if passage.source_id.endswith("metrics.csv")]
+    assert len(rows) == 2, [passage.text for passage in rows]
+    assert rows[0].relevance == pytest.approx(rows[1].relevance), (
+        f"балл строки зависит от провенанса: {rows[0].relevance} и {rows[1].relevance}"
+    )
+    assert "МТС" in rows[0].text, "при равном балле порядок задаёт источник, а не адрес"
+
+
+def test_row_filter_prefers_indicator_hit_over_domain_fallback(_project: Path) -> None:
+    """Строка, чей показатель совпал с вопросом, стоит выше доменного добора.
+
+    Иначе строка «про ту же отрасль» вытесняет строку, которая отвечает
+    на заданный вопрос.
+    """
+    from pf.sources import collect
+
+    (_project / "metrics.csv").write_text(
+        "оператор,показатель,значение,период,источник\n"
+        "МТС,абонентская база,87,2024,https://a.ru\n"
+        "МТС,удержание клиентов,78,2024,https://a.ru/очень/длинный/адрес/строки\n",
+        encoding="utf-8",
+    )
+    bundle = collect("почему падает удержание клиентов на мобильном тарифе")
+
+    rows = [passage for passage in bundle.passages if passage.source_id.endswith("metrics.csv")]
+    assert rows, "строки про удержание должны попасть в срез"
+    assert "удержание" in rows[0].text, (
+        f"первой стоит строка без совпадения по показателю: {rows[0].text!r}"
+    )

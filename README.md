@@ -370,7 +370,7 @@ uv run python scripts/replay_verification.py --json /tmp/new.json --compare /tmp
 ## Разработка
 
 ```bash
-make test        # 523 теста, без обращения к модели
+make test        # 526 тестов, без обращения к модели
 make test-slow   # живые тесты с моделью
 make eval        # eval-сценарии: правила поведения агента
 make bench       # замеры: агент против обычного чата
