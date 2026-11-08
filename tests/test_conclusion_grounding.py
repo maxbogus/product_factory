@@ -55,11 +55,12 @@ def _bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SourceBundle:
     return collect("абоненты оператора связи тарифы удержание")
 
 
-def _strategy(evidence: list[SourceRef]) -> Strategy:
+def _strategy(evidence: list[SourceRef], direction: str = "снизить цену на тариф") -> Strategy:
     """Стратегия с заданными основаниями вывода.
 
     Args:
         evidence: Основания продуктовой стратегии.
+        direction: Выбранное направление — по нему проверяется основание.
 
     Returns:
         Заполненная стратегия.
@@ -67,7 +68,7 @@ def _strategy(evidence: list[SourceRef]) -> Strategy:
     return Strategy(
         product=ProductStrategy(
             audience="клиенты мобильного тарифа",
-            chosen_direction="снизить цену на тариф",
+            chosen_direction=direction,
             evidence=evidence,
         ),
         communication=CommunicationStrategy(
@@ -414,6 +415,145 @@ def test_facts_only_result_has_no_conclusion_block(
     grounding = Workflow._verify_claims(analysis, bundle)
 
     assert grounding.conclusion is None
+
+
+# ── Основание не про тот показатель ─────────────────────────────────────────
+#
+# Дословность цитаты не говорит, о **чём** она. В прогоне `cloud-deepseek-2`
+# вывод был про удержание, а держался на статье об операторе и на уровне ARPU;
+# в `cloud-deepseek-baseline-1` — на абонентской базе. Проверка этого не
+# видела: она подтверждала цитату, а не отвечала на вопрос, тот ли показатель
+# подтверждён.
+#
+# Показатель есть только у основания-строки таблицы (колонка «показатель»).
+# У абзаца статьи его нет, и правило про такие основания молчит: иначе оно
+# срабатывало бы на каждом выводе и превратилось бы в шум.
+
+#: Таблица с колонкой «показатель»: основание про абонентскую базу.
+BASE_ROW_QUOTE = "показатель: абонентская база, значение: 87"
+
+#: Таблица с колонкой «показатель»: основание про удержание.
+RETENTION_ROW_QUOTE = "показатель: удержание клиентов, значение: 82"
+
+
+def _indicator_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SourceBundle:
+    """Собрать источники с двумя таблицами, у которых назван показатель.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+
+    Returns:
+        Набор источников с основаниями «абонентская база» и «удержание».
+    """
+    monkeypatch.setattr("pf.config.settings.project_dir", tmp_path)
+    (tmp_path / "base.csv").write_text(
+        "показатель,значение\nабонентская база,87\n", encoding="utf-8"
+    )
+    (tmp_path / "retention.csv").write_text(
+        "показатель,значение\nудержание клиентов,82\n", encoding="utf-8"
+    )
+    return collect("абоненты оператора связи тарифы удержание")
+
+
+def test_ground_about_other_indicator_weakens_conclusion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Подтверждённое основание про другой показатель не даёт «подкреплено».
+
+    Вывод обещает изменение удержания, а основание подтверждает абонентскую
+    базу. Цитата дословна — и всё равно вывод не подкреплён: подтверждён не
+    тот показатель.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _indicator_bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [SourceRef(source_id="project/base.csv#row0", quote=BASE_ROW_QUOTE)],
+        direction="абонентская база вырастет",
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["confirmed"] == 1
+    assert grounding.conclusion["status"] == "подкреплено частично"
+    off_topic = grounding.conclusion["off_topic"]
+    assert off_topic["grounds"] == ["абонентская база"]
+    assert any("удержание" in item for item in off_topic["conclusion"])
+
+
+def test_ground_about_same_indicator_keeps_conclusion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Основание про тот же показатель оставляет вывод подкреплённым.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _indicator_bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [SourceRef(source_id="project/retention.csv#row0", quote=RETENTION_ROW_QUOTE)],
+        direction="удержание клиентов вырастет",
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "подкреплено"
+    assert "off_topic" not in grounding.conclusion
+
+
+def test_ground_anchor_from_paragraph_is_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Номер строки берётся из поля ``paragraph``, если его нет в ссылке.
+
+    Модель часто присылает ``source_id`` путём, а номер строки — отдельным
+    полем. В журнале от такого основания остаётся только путь, и без склейки
+    двух полей показатель строки не найти.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _indicator_bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [SourceRef(source_id="project/base.csv", paragraph=0, quote=BASE_ROW_QUOTE)],
+        direction="абонентская база вырастет",
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "подкреплено частично"
+    assert grounding.conclusion["off_topic"]["grounds"] == ["абонентская база"]
+
+
+def test_ground_without_named_indicator_is_not_judged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """У основания без названного показателя правило молчит.
+
+    В таблице теста нет колонки «показатель», и у абзацев статей её тоже
+    нет. Объявлять такой вывод неподкреплённым значило бы наказывать за
+    отсутствие разметки, а не за подмену показателя.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy([SourceRef(source_id="project/numbers.csv#row0", quote=REAL_QUOTE)])
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "подкреплено"
+    assert "off_topic" not in grounding.conclusion
 
 
 def _external_state(quote_source: str) -> object:

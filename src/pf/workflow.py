@@ -31,12 +31,13 @@ from pf.ground import (
     citation_key,
     conclusion_status,
     ground_buckets,
+    split_source_id,
     tally_grounds,
     verify_quote_as_external,
 )
 from pf.hypotheses import verdict_of
 from pf.journal import Journal, StepRecord, journal_path
-from pf.lexical import numbers_match, stems
+from pf.lexical import indicator_stems, numbers_match, stems
 from pf.lexical import polarity as lexical_polarity
 from pf.lexical import topic_words as lexical_topic_words
 from pf.llm import LLMClient, LLMError, build_client, extract_json
@@ -52,7 +53,7 @@ from pf.schemas import (
     TaskFrame,
     Variants,
 )
-from pf.sources import SourceBundle, collect, indicator_of_citation
+from pf.sources import SourceBundle, collect, indicator_of_citation, same_material
 from pf.state import Phase, SessionState, save
 
 if TYPE_CHECKING:
@@ -389,6 +390,31 @@ _MAGNITUDE = re.compile(
     r"(?P<unit>%|процент\w*|п\.\s?п\.|млн|млрд|тыс\.?|руб\w*)",
     re.IGNORECASE,
 )
+
+#: Ссылка на строку расчёта внутри текста плана. Модель копирует её из блока
+#: РАСЧЁТЫ вместе с числом: «7,39 млн … [project/data/mnp_stats.csv#row2]».
+#: Такой якорь называет расчёт прямо, и сравнивать число нужно с ним, а не с
+#: показателем, у которого случайно совпало служебное слово.
+_CALC_ANCHOR = re.compile(r"\[(?P<path>[^\[\]]+?)#row(?P<row>\d+)\]")
+
+
+@dataclass(slots=True)
+class _Calculation:
+    """Расчёт в сверке чисел плана.
+
+    Attributes:
+        indicator: Показатель — из строки источника, если расчёт на неё
+            ссылается, иначе из имени метрики.
+        stems: Основы слов показателя без служебных.
+        numbers: Числа расчёта: значение и входы агрегата.
+        citation: Ссылка на строку источника (``путь#rowN``) либо пусто.
+    """
+
+    indicator: str
+    stems: set[str]
+    numbers: list[float]
+    citation: str
+
 
 #: Фазы, которым нужны собранные источники. Для остальных набор не
 #: собирается: это экономит время и не засоряет контекст модели.
@@ -906,18 +932,22 @@ class Workflow:
     @staticmethod
     def _calculation_pool(
         metrics: Sequence[Metric] | None = None,
-    ) -> list[tuple[str, set[str], list[float]]]:
+    ) -> list[_Calculation]:
         """Показатели расчётов и числа, которые в них есть.
 
         Показатель расчёта берётся из строки источника, на которую расчёт
         ссылается: имя метрики — это заголовок материала, и оно не
         говорит, что посчитано. Правило то же, что в проверке оснований.
 
+        Основы показателя берутся без служебных слов
+        (:func:`pf.lexical.indicator_stems`): «изменение за период» есть в
+        названии каждого второго расчёта и показателем не является.
+
         Args:
             metrics: Расчёты. По умолчанию — посчитанные по материалам.
 
         Returns:
-            Тройки «показатель — основы его слов — числа расчёта».
+            Список расчётов: показатель, его основы, числа и ссылка.
         """
         if metrics is None:
             metrics = Workflow._computed_metric_records()
@@ -927,7 +957,7 @@ class Workflow:
 
             materials = load_materials()
 
-        pool: list[tuple[str, set[str], list[float]]] = []
+        pool: list[_Calculation] = []
         for metric in metrics:
             indicator = indicator_of_citation(metric.citation, materials) or metric.name
             if not indicator:
@@ -938,8 +968,43 @@ class Workflow:
                 for value in metric.inputs.values()
                 if isinstance(value, (int, float)) and not isinstance(value, bool)
             )
-            pool.append((indicator, stems(indicator), numbers))
+            pool.append(
+                _Calculation(
+                    indicator=indicator,
+                    stems=indicator_stems(indicator),
+                    numbers=numbers,
+                    citation=metric.citation,
+                )
+            )
         return pool
+
+    @staticmethod
+    def _anchored_calculations(text: str, pool: Sequence[_Calculation]) -> list[_Calculation]:
+        """Расчёты, на строки которых текст ссылается сам.
+
+        Число, названное вместе со ссылкой ``[путь#rowN]``, подтверждается
+        тем расчётом, на который ссылка указывает. Без этого правила база
+        сравнения из `cloud-deepseek-2` («рыночный фон: 7,39 млн …
+        [mnp_stats.csv#row2]») отклонялась расчётом по ключевой ставке.
+
+        Args:
+            text: Текст плана, критерия или обязательства.
+            pool: Расчёты, среди которых ищется строка.
+
+        Returns:
+            Расчёты, чья строка названа в тексте.
+        """
+        found: list[_Calculation] = []
+        for match in _CALC_ANCHOR.finditer(text):
+            path = match.group("path")
+            row = int(match.group("row"))
+            for calc in pool:
+                clean, calc_row = split_source_id(calc.citation)
+                if calc_row != row or not same_material(clean, path):
+                    continue
+                if calc not in found:
+                    found.append(calc)
+        return found
 
     @staticmethod
     def _plan_number_texts(data: Any) -> list[tuple[str, str]]:
@@ -993,12 +1058,18 @@ class Workflow:
         «удержание на уровне 87 %», где 87 — абонентская база МТС.
 
         Число подтверждено, только если расчёт **того же** показателя его
-        содержит. Три исхода различаются, потому что причина важнее
-        отметки:
+        содержит либо текст сам называет строку расчёта якорем. Четыре
+        исхода различаются, потому что причина важнее отметки:
 
         - расчёт по этому показателю есть, но числа в нём нет — расхождение;
         - расчёт есть, но про другой показатель — подмена;
+        - текст называет строку расчёта, и число в ней есть — подтверждено;
         - расчёта нет вовсе — величина ни из чего не следует.
+
+        Служебные слова в показателе не участвуют: в прогоне
+        `cloud-deepseek-2` из-за слова «период» расчёт по ключевой ставке
+        считался «тем же показателем», что и рыночный фон, и верные числа
+        отклонялись с чужим именем в причине.
 
         Args:
             data: Результат роли стратегии или решения.
@@ -1010,21 +1081,24 @@ class Workflow:
         pool = Workflow._calculation_pool(metrics)
         notes: list[str] = []
         for label, text in Workflow._plan_number_texts(data):
-            text_stems = stems(text)
-            same = [item for item in pool if item[1] & text_stems]
-            others = [item for item in pool if not item[1] & text_stems]
+            text_stems = indicator_stems(text)
+            same = [calc for calc in pool if calc.stems & text_stems]
+            others = [calc for calc in pool if not calc.stems & text_stems]
+            anchored = Workflow._anchored_calculations(text, pool)
             for value, unit in Workflow._magnitudes(text):
                 shown = f"{value:g} {unit}".strip()
-                if any(numbers_match([value], numbers)[0] for _name, _s, numbers in same):
+                if any(numbers_match([value], calc.numbers)[0] for calc in same):
+                    continue
+                if any(numbers_match([value], calc.numbers)[0] for calc in anchored):
                     continue
                 if same:
                     notes.append(
                         f"{label} «{text}»: число {shown} не совпадает с расчётом "
-                        f"по показателю «{same[0][0]}»"
+                        f"по показателю «{same[0].indicator}»"
                     )
                     continue
                 foreign = next(
-                    (name for name, _s, numbers in others if numbers_match([value], numbers)[0]),
+                    (calc.indicator for calc in others if numbers_match([value], calc.numbers)[0]),
                     "",
                 )
                 if foreign:
@@ -1079,9 +1153,75 @@ class Workflow:
         return pairs
 
     @staticmethod
+    def _conclusion_topic(data: Any) -> tuple[set[str], list[str]]:
+        """Показатель вывода: что в нём обещано измерить.
+
+        Берутся два места результата: ожидаемое изменение и показатель
+        обязательства. Выбранное направление сюда **не** входит: это текст
+        действия, и модель упоминает в нём любой показатель — тогда правило
+        перестаёт различать подмену («направление: поднять абонентскую базу»
+        пересекалось бы с основанием про базу, хотя вывод измеряет удержание).
+        Вопрос задачи тоже не входит: «почему падает удержание» — вопрос, а
+        не утверждение, и честный вывод может быть про другое.
+
+        Args:
+            data: Результат роли стратегии или решения.
+
+        Returns:
+            Пары «основы показателя вывода» и «как он назван словами».
+        """
+        texts: list[str] = []
+        verification = getattr(data, "verification", None)
+        if verification is not None:
+            texts.append(str(getattr(verification, "expected_change", "") or ""))
+        metrics = [
+            str(getattr(commitment, "metric", "") or "")
+            for commitment in getattr(data, "commitments", None) or []
+        ]
+        texts.extend(metrics)
+        topic: set[str] = set()
+        for text in texts:
+            if text.strip():
+                topic |= indicator_stems(text)
+        named = [text.strip() for text in metrics if text.strip()]
+        if not named:
+            named = [text.strip()[:200] for text in texts if text.strip()][:1]
+        return topic, named
+
+    @staticmethod
+    def _ground_indicators(keys: Sequence[str]) -> list[str]:
+        """Показатели подтверждённых оснований вывода.
+
+        Показатель известен только у основания-строки таблицы: у абзаца статьи
+        его нет. Такие основания правило не судит — иначе оно срабатывало бы на
+        каждом выводе, а не на подмене показателя.
+
+        Args:
+            keys: Ключи оснований вывода (``путь#якорь``).
+
+        Returns:
+            Названия показателей без повторов.
+        """
+        indicators: list[str] = []
+        materials = None
+        for key in keys:
+            clean, row = split_source_id(key)
+            if row is None or not clean:
+                continue
+            if materials is None:
+                from pf.materials import load_materials
+
+                materials = load_materials()
+            indicator = indicator_of_citation(key, materials)
+            if indicator and indicator not in indicators:
+                indicators.append(indicator)
+        return indicators
+
+    @staticmethod
     def _conclusion_verdict(
         tally: GroundTally,
         grounds: dict[str, list[str]],
+        off_topic: dict[str, list[str]] | None = None,
     ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
@@ -1101,25 +1241,32 @@ class Workflow:
             tally: Счёт по уникальным ключам (худший вердикт побеждает).
             grounds: Ключи оснований по вердиктам — по ним отчёт
                 объединяет шаги, не складывая повторы.
+            off_topic: Показатель вывода и показатели подтверждённых
+                оснований, когда они не совпали.
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
         """
         if tally.checked <= 0:
             return None
-        return {
+        status = conclusion_status(
+            tally.checked,
+            tally.confirmed,
+            tally.rejected,
+            tally.needs_review,
+            off_topic=off_topic is not None,
+        )
+        payload: dict[str, Any] = {
             "checked": tally.checked,
             "confirmed": tally.confirmed,
             "rejected": tally.rejected,
             "needs_review": tally.needs_review,
-            "status": conclusion_status(
-                tally.checked,
-                tally.confirmed,
-                tally.rejected,
-                tally.needs_review,
-            ),
+            "status": status,
             "grounds": grounds,
         }
+        if off_topic is not None:
+            payload["off_topic"] = off_topic
+        return payload
 
     @staticmethod
     def _external_text(named: str, state: SessionState | None) -> str:
@@ -1252,6 +1399,10 @@ class Workflow:
         # счёт по записям завышал число, когда на одну строку источника
         # ссылались дважды.
         conclusion_verdicts: list[tuple[str, SupportStatus]] = []
+        # Якорь основания с номером строки — если модель положила номер в
+        # поле ``paragraph``, а не в ссылку. Нужен, чтобы понять, о каком
+        # показателе строка; счёт оснований он не меняет.
+        conclusion_anchors: dict[str, str] = {}
         oov: set[str] = set()
         oov_context = ""
         verdicts: list[ClaimVerdict] = []
@@ -1263,6 +1414,12 @@ class Workflow:
             # (модель прислала имя поля вместо ссылки) различается по
             # цитате: два разных утверждения — это два основания.
             key = citation_key(named) or f"без источника: {quote}"
+            # Строка таблицы не всегда в ссылке: модель кладёт её номер в
+            # поле ``paragraph``, и тогда в журнале остаётся только путь.
+            # Для сверки показателя основания якорь нужен, а счёт оснований
+            # он менять не должен — поэтому якорь живёт отдельной картой.
+            paragraph = getattr(source, "paragraph", None)
+            anchor = named if "#" in named or paragraph is None else f"{named}#p{paragraph}"
 
             external = Workflow._external_text(named, state)
             if external:
@@ -1327,6 +1484,8 @@ class Workflow:
                 confirmed.append(support.citation)
                 if is_conclusion:
                     conclusion_verdicts.append((key, SupportStatus.CONFIRMED))
+                    if anchor and anchor != key:
+                        conclusion_anchors[key] = anchor
             elif support.status is SupportStatus.NEEDS_REVIEW:
                 needs_review.append(support.citation)
                 needs_review_details.append(f"{_named_source(named)}: {support.detail}")
@@ -1368,6 +1527,27 @@ class Workflow:
                 for key, status in conclusion_verdicts
             ]
 
+        # Дословная цитата ничего не говорит о том, **тот ли** показатель
+        # подтверждён. В `cloud-deepseek-2` вывод про удержание держался на
+        # уровне ARPU, в `cloud-deepseek-baseline-1` — на абонентской базе.
+        # Правило узкое: судит только те основания, у которых показатель
+        # назван (строка таблицы с колонкой «показатель»); про абзацы статей
+        # молчит.
+        off_topic: dict[str, list[str]] | None = None
+        if conclusion_verdicts:
+            topic, named = Workflow._conclusion_topic(data)
+            confirmed_keys = {
+                key for key, status in conclusion_verdicts if status is SupportStatus.CONFIRMED
+            }
+            anchors = [conclusion_anchors.get(key, key) for key in confirmed_keys]
+            indicators = Workflow._ground_indicators(anchors)
+            if (
+                topic
+                and indicators
+                and not any(indicator_stems(item) & topic for item in indicators)
+            ):
+                off_topic = {"conclusion": named[:3], "grounds": indicators[:5]}
+
         Workflow._queue_oov(oov, context=oov_context, role=role_name, session=session_id)
 
         return GroundingResult(
@@ -1377,6 +1557,7 @@ class Workflow:
             conclusion=Workflow._conclusion_verdict(
                 tally_grounds(conclusion_verdicts),
                 ground_buckets(conclusion_verdicts),
+                off_topic,
             ),
             needs_review=needs_review,
             needs_review_details=needs_review_details,

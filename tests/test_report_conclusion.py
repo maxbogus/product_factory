@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ def _strategy_record(
     checked: int | None = None,
     grounds: dict[str, list[str]] | None = None,
     evidence: list[str] | None = None,
+    off_topic: dict[str, list[str]] | None = None,
 ) -> StepRecord:
     """Запись шага стратегии.
 
@@ -35,6 +38,7 @@ def _strategy_record(
         checked: Сколько проверено. По умолчанию — подтверждённые и отклонённые.
         grounds: Ключи оснований по вердиктам — так их называет новый журнал.
         evidence: Ссылки оснований вывода; повторы сохраняются, как в ответе модели.
+        off_topic: Показатели вывода и оснований, когда они не совпали.
 
     Returns:
         Запись журнала.
@@ -47,6 +51,8 @@ def _strategy_record(
     }
     if grounds is not None:
         check["grounds"] = grounds
+    if off_topic is not None:
+        check["off_topic"] = off_topic
     product: dict[str, Any] = {
         "audience": "клиенты мобильного тарифа",
         "alternatives": ["Оставить как есть", "Закрыть направление"],
@@ -174,6 +180,79 @@ def test_report_names_ungrounded_conclusion(
     assert "cbr_rates.csv" in text
 
 
+def test_report_names_off_topic_grounds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Отчёт называет, что основания не про тот показатель.
+
+    Дословная цитата про абонентскую базу не подкрепляет вывод про удержание.
+    Без этой строки читатель видит только «подкреплено частично» и не знает
+    почему — статус выглядит случайной строгостью.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                status="подкреплено частично",
+                confirmed=1,
+                rejected=0,
+                off_topic={
+                    "grounds": ["абонентская база"],
+                    "conclusion": ["удержание клиентов"],
+                },
+            ),
+            _keeper_record(),
+        ],
+    )
+
+    report = build_session_report("session-conclusion")
+
+    assert report.conclusion is not None
+    assert report.conclusion.off_topic_grounds == ["абонентская база"]
+    text = report.as_markdown()
+    assert "не про тот показатель" in text
+    assert "абонентская база" in text
+    assert "удержание клиентов" in text
+
+
+def test_off_topic_grounds_cap_status_at_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Без отказов, но с чужим показателем вывод не бывает «подкреплено».
+
+    Счётчики говорят «1 из 1 подтверждено», и прежнее правило объявило бы
+    вывод подкреплённым. Показатель у основания другой — значит потолок
+    «подкреплено частично», и это решает одно правило на весь репозиторий
+    (`pf.ground.conclusion_status`), а не два разных расчёта.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                status="подкреплено",
+                confirmed=1,
+                rejected=0,
+                off_topic={"grounds": ["абонентская база"], "conclusion": ["удержание"]},
+            ),
+            _keeper_record(),
+        ],
+    )
+
+    report = build_session_report("session-conclusion")
+
+    assert report.conclusion is not None
+    assert report.conclusion.status == "подкреплено частично"
+    assert "Основания вывода: подкреплено частично" in report.as_markdown()
+
+
 def test_report_says_when_there_is_no_conclusion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -202,6 +281,137 @@ def test_report_says_when_there_is_no_conclusion(
 
     assert report.conclusion is None
     assert "Вывод не получен" in text
+
+
+def test_report_groups_repeated_rejections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Одно и то же отклонение не повторяется в списке по числу шагов.
+
+    В прогоне `cloud-deepseek-2` строка «источник не назван — вместо ссылки
+    указано поле „Ответ человека"» встречалась трижды, а выгрузка `.docx` —
+    тоже трижды. Читается это как шесть разных отказов, хотя отказ один.
+    Число повторов сохраняется: оно показывает, на скольких шагах модель
+    повторила ошибку.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    repeated = "project/data/numbers.csv#row0: цитата не найдена в источнике дословно"
+    other = "project/data/cbr_rates.csv#row1: источник не относится к задаче"
+    records = [
+        StepRecord(
+            ordinal=1,
+            role="collector",
+            phase="collecting",
+            summary="сбор",
+            rejected_details=[repeated, other],
+        ),
+        StepRecord(
+            ordinal=2,
+            role="analyst",
+            phase="analyzing",
+            summary="разбор",
+            rejected_details=[repeated],
+        ),
+    ]
+    _session(tmp_path, monkeypatch, records)
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert text.count(f"- {repeated}") == 1, "повтор остался отдельной строкой"
+    assert "(×2)" in text
+    assert f"- {other}" in text
+
+
+def test_report_marks_run_unfit_for_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Прогон без вывода назван непригодным, а не равноправным участником.
+
+    `demo-final` и `demo-v6` читались как обычные отчёты: числа, расход,
+    отклонения — и только разобравшись, можно было заметить, что ответа на
+    вопрос в них нет.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            StepRecord(
+                ordinal=1,
+                role="collector",
+                phase="collecting",
+                summary="сбор",
+                citations=["project/data/numbers.csv#row0"],
+            )
+        ],
+    )
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "не даёт решения" in text
+
+
+def test_report_names_share_as_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Доля подписана честно: она про записи, а не про основания.
+
+    В `cloud-deepseek-baseline-1` и `cloud-deepseek-2` «Доля подтверждённых»
+    считалась по записям, а читалась как доля уникальных оснований: 83 % и
+    73 % при 9 и 7 уникальных основаниях.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(tmp_path, monkeypatch, [_strategy_record(), _keeper_record()])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Доля подтверждённых записей" in text
+
+
+def test_report_counts_commitments_without_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Обязательства без владельца названы числом, а не спрятаны в таблице.
+
+    В `cloud-deepseek-2` четыре обязательства из шести имели владельца
+    «не назначен». Это видно в таблице, но не видно как риск: обязательство
+    без владельца некому исполнить.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    keeper = _keeper_record()
+    detail = dict(keeper.detail or {})
+    detail["commitments"] = [
+        {
+            "statement": "Внедрить уведомление о сумме продления",
+            "owner": "руководитель продукта",
+            "metric": "доля уведомлений до списания",
+        },
+        {
+            "statement": "Сверить текст во всех каналах",
+            "owner": "не назначен",
+            "metric": "совпадение суммы между каналами",
+        },
+    ]
+    keeper = StepRecord(
+        ordinal=8,
+        role="keeper",
+        phase="keeper",
+        summary="решение: 2 обязательства",
+        detail=detail,
+    )
+    _session(tmp_path, monkeypatch, [_strategy_record(), keeper])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Без владельца: 1 из 2" in text
 
 
 def test_report_counts_unique_grounds_across_steps(
@@ -353,3 +563,104 @@ def test_report_marks_conclusion_awaiting_review(
     assert report.conclusion.status == "ждёт проверки"
     assert "ждут проверки" in text
     assert "Основания вывода: подкреплено**" not in text
+
+
+# ── Согласованность артефакта ─────────────────────────────────────────────────
+#
+# `cloud-deepseek-baseline-1` печатал «Шагов выполнено: 12» при десяти реальных
+# шагах: в журнал писали два запуска, и номера 9 и 10 встречались дважды. На
+# HEAD такой журнал уже не создать (`journal.DuplicateOrdinalError`), но
+# унаследованные журналы читаются — и отчёт обязан сказать, что это два
+# запуска, а не двенадцать шагов одного.
+
+
+def _write_raw(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, records: list[StepRecord]) -> None:
+    """Записать журнал в обход защиты от дублей — так выглядит старый журнал.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+        records: Записи в том порядке, в каком они лежат в файле.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    with journal_path("session-conclusion").open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+
+
+def test_report_counts_steps_by_ordinal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Шаг считается по номеру: дубль номера — два запуска, а не два шага.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    records = [
+        StepRecord(ordinal=1, role="intake", phase="intake", summary="постановка"),
+        StepRecord(ordinal=1, role="intake", phase="intake", summary="постановка"),
+        StepRecord(ordinal=2, role="planner", phase="planning", summary="план"),
+    ]
+    _write_raw(tmp_path, monkeypatch, records)
+
+    report = build_session_report("session-conclusion")
+
+    assert report.steps == 2
+    text = report.as_markdown()
+    assert "записан 2 раза" in text
+    assert "| Шагов выполнено | 2 |" in text
+
+
+def test_report_shows_considered_variants(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Отчёт показывает набор вариантов и его полюса.
+
+    В `cloud-deepseek-2` вариантов было четыре, включая «Оставить как есть:
+    работать только с коммуникацией», а в отчёте их не было вовсе: читатель
+    видел «осознанные отказы» и не мог понять, из чего выбирали и был ли
+    вообще набор решением, а не списком пожеланий.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    options = StepRecord(
+        ordinal=3,
+        role="options",
+        phase="options",
+        summary="варианты: 3",
+        detail={
+            "variants": [
+                {
+                    "title": "Оставить как есть: только коммуникация",
+                    "summary": "Ничего не менять в тарифе и цене.",
+                    "approach": "Переписать коммуникацию о том, что уже действует.",
+                    "objections": ["Если падение вызвано условиями, текст не поможет"],
+                    "distinct_axis": "что меняем: продукт или текст",
+                },
+                {
+                    "title": "Гибкий тариф с персонализацией",
+                    "summary": "Собрать тариф из блоков.",
+                    "approach": "Дать выбор состава.",
+                    "objections": ["Дорого и долго"],
+                    "distinct_axis": "цена и состав",
+                },
+                {
+                    "title": "Закрыть направление",
+                    "summary": "Прекратить продукт.",
+                    "approach": "Вывести тариф.",
+                    "objections": ["Теряем базу"],
+                    "distinct_axis": "оставаться ли в продукте",
+                },
+            ],
+            "keep_current_marker": "Оставить как есть",
+            "close_direction_marker": "Закрыть направление",
+        },
+    )
+    _session(tmp_path, monkeypatch, [options, _strategy_record(), _keeper_record()])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "## Рассмотренные варианты" in text
+    assert "Гибкий тариф с персонализацией" in text
+    assert "Если падение вызвано условиями, текст не поможет" in text
+    assert "оставить как есть" in text.lower()
+    assert "закрыть направление" in text.lower()

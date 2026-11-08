@@ -448,7 +448,7 @@ class SourceBundle:
             quote, quoted_id, quoted_row = calc_line
             if source_id:
                 given_id, given_row = split_source_id(source_id)
-                if not _same_file(given_id, quoted_id) or (
+                if not same_material(given_id, quoted_id) or (
                     "#row" in source_id and given_row != quoted_row
                 ):
                     # Ссылка и разметка указывают в разные места. Выбирать
@@ -1428,12 +1428,17 @@ def _calc_line_anchor(quote: str) -> tuple[str, str, int] | None:
     return body, source, int(match.group("row"))
 
 
-def _same_file(left: str, right: str) -> bool:
+def same_material(left: str, right: str) -> bool:
     """Указывают ли два идентификатора на один материал.
 
     Модель называет файл то полным путём, то коротким именем
     («telecom_arpu.csv» вместо «project/data/telecom_arpu.csv»). Для сверки
     ссылки с якорем цитаты достаточно совпадения имени файла без расширения.
+
+    Правило публичное: им пользуется и сверка чисел плана
+    (``Workflow._check_plan_numbers``), когда проверяет, что число названо
+    вместе со ссылкой на свою строку расчёта. Вторая копия сравнения имён
+    разошлась бы с первой.
 
     Args:
         left: Первый идентификатор.

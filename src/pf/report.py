@@ -99,6 +99,9 @@ class ConclusionRecord:
         rejected: Сколько отклонено.
         grounds: Подтверждённые ссылки вывода.
         rejected_grounds: Отклонённые ссылки вывода.
+        off_topic_grounds: Показатели подтверждённых оснований, когда они не
+            совпали с показателем вывода.
+        off_topic_conclusion: Показатель, который обещает изменить вывод.
         unique: Посчитаны ли счётчики по уникальным основаниям. Журнал до
             этого правила называет только записи; если в нём были отказы,
             распределить их по уникальным ключам нечем, и отчёт говорит
@@ -120,6 +123,8 @@ class ConclusionRecord:
     rejected: int = 0
     grounds: list[str] = field(default_factory=list)
     rejected_grounds: list[str] = field(default_factory=list)
+    off_topic_grounds: list[str] = field(default_factory=list)
+    off_topic_conclusion: list[str] = field(default_factory=list)
     unique: bool = True
 
 
@@ -144,6 +149,9 @@ class SessionReport:
         context: Окно контекста: сколько шагов, сколько упёрлось в предел.
         hypotheses: Сколько гипотез поддержано, опровергнуто и осталось
             неизвестными.
+        variants: Набор рассмотренных вариантов — с полюсами и возражениями.
+        duplicate_steps: Номера шагов, записанных в журнал больше одного раза.
+            Так выглядит унаследованный журнал, в который писали два запуска.
     """
 
     session_id: str
@@ -169,6 +177,8 @@ class SessionReport:
     lexical: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
     hypotheses: dict[str, int] = field(default_factory=dict)
+    variants: list[dict[str, Any]] = field(default_factory=list)
+    duplicate_steps: list[str] = field(default_factory=list)
 
     @property
     def total_citations(self) -> int:
@@ -177,14 +187,52 @@ class SessionReport:
 
     @property
     def grounding_rate(self) -> float:
-        """Доля подтверждённых оснований.
+        """Доля подтверждённых **записей**.
+
+        Считается по записям, а не по уникальным основаниям: строка
+        источника, процитированная двумя ролями, даёт две записи. Поэтому и
+        подпись в отчёте говорит «записей»: прежняя «доля подтверждённых»
+        читалась как доля оснований.
 
         Returns:
-            Доля от 0 до 1; ноль, если оснований не было.
+            Доля от 0 до 1; ноль, если записей не было.
         """
         if not self.total_citations:
             return 0.0
         return self.confirmed_citations / self.total_citations
+
+    def readiness(self) -> str:
+        """Готова ли работа к решению — одной строкой.
+
+        Отчёт с числами, расходом и отклонениями читается как результат, даже
+        если вывода в нём нет: `demo-final` и `demo-v6` выглядели
+        равноправными участниками сравнения, хотя ответа на вопрос в них не
+        было.
+
+        Returns:
+            Строка-вердикт либо пустая строка, если вывод подкреплён.
+        """
+        if self.conclusion is None:
+            return (
+                "**Прогон не даёт решения:** работа не дошла до вывода — это "
+                "заготовка, а не ответ на заданный вопрос."
+            )
+        if self.conclusion.status == "неподкреплено":
+            return (
+                "**Прогон не даёт решения:** ни одно основание вывода не "
+                "подтверждено — рекомендации держатся ни на чём."
+            )
+        if self.conclusion.status == "ждёт проверки":
+            return (
+                "**Прогон не даёт решения:** основания вывода требуют проверки "
+                "человеком — подтвердить их нечем."
+            )
+        if self.conclusion.off_topic_grounds:
+            return (
+                "**Прогон даёт решение с оговоркой:** подтверждённые основания "
+                "называют другой показатель — причина названа в разделе «Вывод»."
+            )
+        return ""
 
     @property
     def limitations(self) -> list[str]:
@@ -244,8 +292,27 @@ class SessionReport:
         lines.append(f"| Использовано источников | {self.unique_sources} |")
         lines.append(f"| Оснований отклонено | {self.rejected_citations} |")
         lines.append(f"| Ожидают проверки человеком | {len(self.needs_review_details)} |")
-        lines.append(f"| Доля подтверждённых | {self.grounding_rate:.0%} |")
+        # Доля считается по записям, а не по уникальным основаниям: одна и та
+        # же строка источника, процитированная двумя ролями, даёт две записи.
+        # Прежняя подпись «Доля подтверждённых» читалась как доля оснований.
+        lines.append(f"| Доля подтверждённых записей | {self.grounding_rate:.0%} |")
         lines.append("")
+
+        readiness = self.readiness()
+        if readiness:
+            lines.append(readiness)
+            lines.append("")
+
+        if self.duplicate_steps:
+            # Унаследованный журнал: в один файл писали два запуска. На HEAD
+            # такой журнал уже не создать (`journal.DuplicateOrdinalError`),
+            # но прочитать его можно — и молчать об этом нельзя.
+            lines.append(
+                "**Журнал писался дважды:** "
+                + "; ".join(self.duplicate_steps)
+                + ". Счётчики шага объединены, статус не удваивается."
+            )
+            lines.append("")
 
         if self.metrics:
             lines.append("## Расчёты по данным")
@@ -308,6 +375,7 @@ class SessionReport:
             )
             lines.append("")
 
+        lines.extend(_variants_markdown(self.variants))
         lines.extend(conclusion_markdown(self.conclusion))
 
         lines.append("## Расход")
@@ -340,8 +408,9 @@ class SessionReport:
         if self.rejected_details:
             lines.append("## Отклонённые основания")
             lines.append("")
-            for detail in self.rejected_details:
-                lines.append(f"- {detail}")
+            for detail, count in _group_repeats(self.rejected_details):
+                suffix = f" (×{count})" if count > 1 else ""
+                lines.append(f"- {detail}{suffix}")
             lines.append("")
 
         if self.needs_review_details:
@@ -350,8 +419,9 @@ class SessionReport:
             # читалось как «выдумка».
             lines.append("## Ожидают проверки человеком")
             lines.append("")
-            for detail in self.needs_review_details:
-                lines.append(f"- {detail}")
+            for detail, count in _group_repeats(self.needs_review_details):
+                suffix = f" (×{count})" if count > 1 else ""
+                lines.append(f"- {detail}{suffix}")
             lines.append("")
 
         lines.append("## Чего этот замер не показывает")
@@ -413,6 +483,15 @@ def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
                 f"{commitment.get('review_condition', '—')} |"
             )
         lines.append("")
+        ownerless = _ownerless_count(conclusion.commitments)
+        if ownerless:
+            # В `cloud-deepseek-2` так было у трёх обязательств из шести.
+            # В таблице это видно, но как риск — нет.
+            lines.append(
+                f"**Без владельца: {ownerless} из {len(conclusion.commitments)}.** "
+                "Обязательство без владельца некому исполнить — это риск, а не оформление."
+            )
+            lines.append("")
 
     if conclusion.expected_change or conclusion.adverse_effects:
         adverse = "; ".join(conclusion.adverse_effects) or "не указаны"
@@ -467,6 +546,19 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
             "нового прогона — иначе статус вывода неизвестен."
         )
     lines.append("")
+
+    if conclusion.off_topic_grounds:
+        # Дословность цитаты не отвечает на вопрос, тот ли показатель она
+        # подтверждает. Строка нужна, чтобы читатель видел причину потолка
+        # статуса, а не считал её случайной строгостью.
+        promised = _join_names(conclusion.off_topic_conclusion) or "другой показатель"
+        confirmed = _join_names(conclusion.off_topic_grounds)
+        lines.append(
+            f"**Основания не про тот показатель:** вывод обещает изменение по «{promised}», "
+            f"а подтверждённые основания называют «{confirmed}». Дословная цитата здесь "
+            "ничего не доказывает, поэтому статус не выше «подкреплено частично»."
+        )
+        lines.append("")
 
     if conclusion.grounds:
         lines.append("На чём держится:")
@@ -615,6 +707,155 @@ def _text_list(value: Any) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
+#: Как в ответе модели называется отсутствующий владелец обязательства.
+_NO_OWNER: frozenset[str] = frozenset({"", "нет", "—", "-", "не назначен", "не назначена"})
+
+
+def _times(count: int) -> str:
+    """Сколько раз — с правильным окончанием.
+
+    Args:
+        count: Число повторов.
+
+    Returns:
+        Строка вида «2 раза» или «5 раз».
+    """
+    tail = count % 100
+    if 11 <= tail <= 14:
+        return f"{count} раз"
+    if count % 10 == 1:
+        return f"{count} раз"
+    if count % 10 in (2, 3, 4):
+        return f"{count} раза"
+    return f"{count} раз"
+
+
+def _variants_markdown(variants: list[dict[str, Any]]) -> list[str]:
+    """Раздел «Рассмотренные варианты»: набор, полюса и возражения.
+
+    Набор вариантов писался в журнал, но в отчёт не попадал: в
+    `cloud-deepseek-2` четыре варианта, включая «Оставить как есть: работать
+    только с коммуникацией», были невидимы, и читатель видел только
+    «осознанные отказы». Полюса определяются тем же правилом, что и в схеме
+    (`pf.schemas.pole_of`, D-23), — второй копии списков названий нет.
+
+    Args:
+        variants: Варианты из журнала шага «варианты решения».
+
+    Returns:
+        Строки раздела либо пустой список, если вариантов нет.
+    """
+    if not variants:
+        return []
+
+    from pf.schemas import (
+        POLE_CLOSE_DIRECTION,
+        POLE_KEEP_CURRENT,
+        pole_of,
+    )
+
+    lines: list[str] = ["## Рассмотренные варианты", ""]
+    lines.append("| Вариант | Полюс | Возражения |")
+    lines.append("|---|---|---|")
+    found_poles: set[str] = set()
+    for variant in variants:
+        title = str(variant.get("title") or variant.get("name") or "—").strip()
+        pole = pole_of(title) or ""
+        if pole:
+            found_poles.add(pole)
+        objections = "; ".join(
+            str(item).strip() for item in (variant.get("objections") or []) if str(item).strip()
+        )
+        lines.append(f"| {title} | {pole or '—'} | {objections or '—'} |")
+    lines.append("")
+    missing = [
+        label
+        for pole, label in (
+            (POLE_KEEP_CURRENT, "оставить как есть"),
+            (POLE_CLOSE_DIRECTION, "закрыть направление"),
+        )
+        if pole not in found_poles
+    ]
+    if missing:
+        lines.append(
+            "**Полюса нет:** "
+            + ", ".join(f"«{item}»" for item in missing)
+            + " — без него набор читается как список пожеланий, а не как решение."
+        )
+    else:
+        lines.append(
+            "**Полюса набора:** «оставить как есть» и «закрыть направление» — оба присутствуют."
+        )
+    lines.append("")
+    return lines
+
+
+def _ownerless_count(commitments: list[dict[str, Any]]) -> int:
+    """Сколько обязательств осталось без владельца.
+
+    «Не назначен» — честный ответ модели, и он лучше выдуманной фамилии. Но
+    обязательство без владельца некому исполнить, поэтому отчёт называет это
+    числом: в `cloud-deepseek-2` так было у четырёх из шести.
+
+    Args:
+        commitments: Обязательства из журнала шага решения.
+
+    Returns:
+        Число обязательств без владельца.
+    """
+    count = 0
+    for commitment in commitments:
+        owner = str(commitment.get("owner") or "").strip().lower()
+        if owner in _NO_OWNER or owner.startswith("не назначен"):
+            count += 1
+    return count
+
+
+def _group_repeats(items: list[str]) -> list[tuple[str, int]]:
+    """Схлопнуть одинаковые строки, сохранив число повторов.
+
+    Один и тот же отказ приходит с нескольких шагов: в `cloud-deepseek-2`
+    строка «источник не назван — вместо ссылки указано поле „Ответ
+    человека"» стояла трижды. Читается это как шесть разных отказов, хотя
+    отказ один. Число повторов сохраняется — оно показывает, на скольких
+    шагах модель повторила ошибку.
+
+    Args:
+        items: Строки в порядке появления.
+
+    Returns:
+        Пары «строка — сколько раз встретилась», тоже в порядке появления.
+    """
+    counts: dict[str, int] = {}
+    for item in items:
+        counts[item] = counts.get(item, 0) + 1
+    return list(counts.items())
+
+
+def _join_names(items: list[str], limit: int = 3) -> str:
+    """Назвать показатели по-человечески: без повторов и без полотна.
+
+    Показатель обязательства бывает длинной фразой целиком: «наличие
+    зафиксированных определения удержания, базового периода и источника
+    замера». В строку отчёта такое название вставляется целиком, но не
+    больше `limit` штук — иначе причина статуса занимает абзац.
+
+    Args:
+        items: Названия показателей.
+        limit: Сколько назвать.
+
+    Returns:
+        Строка через запятую; пустая, если названий нет.
+    """
+    unique: list[str] = []
+    for item in items:
+        text = str(item).strip()
+        if text and text not in unique:
+            unique.append(text)
+    shown = ", ".join(unique[:limit])
+    return f"{shown}, …" if len(unique) > limit else shown
+
+
 #: Как вердикт основания называется в журнале шага.
 _STATUS_BY_BUCKET: dict[str, SupportStatus] = {
     "confirmed": SupportStatus.CONFIRMED,
@@ -753,6 +994,22 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
             if detail not in rejected_grounds:
                 rejected_grounds.append(detail)
 
+    # Показатель основания против показателя вывода. Правило живёт в
+    # рабочем процессе (`Workflow._verify_claims`); отчёт только переносит
+    # его вывод в документ, а статус считает тем же `conclusion_status`.
+    off_topic_grounds: list[str] = []
+    off_topic_conclusion: list[str] = []
+    for check in checks:
+        block = _mapping(check.get("off_topic"))
+        for key, target in (
+            ("grounds", off_topic_grounds),
+            ("conclusion", off_topic_conclusion),
+        ):
+            for item in block.get(key) or []:
+                text = str(item).strip()
+                if text and text not in target:
+                    target.append(text)
+
     commitments = [
         item for item in (keeper_detail.get("commitments") or []) if isinstance(item, dict)
     ]
@@ -766,12 +1023,20 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         compare_against=str(verification.get("compare_against") or ""),
         observation_period=str(verification.get("observation_period") or ""),
         adverse_effects=_text_list(verification.get("adverse_effects")),
-        status=conclusion_status(checked, confirmed, rejected, needs_review),
+        status=conclusion_status(
+            checked,
+            confirmed,
+            rejected,
+            needs_review,
+            off_topic=bool(off_topic_grounds),
+        ),
         checked=checked,
         confirmed=confirmed,
         rejected=rejected,
         grounds=grounds,
         rejected_grounds=rejected_grounds,
+        off_topic_grounds=off_topic_grounds,
+        off_topic_conclusion=off_topic_conclusion,
         unique=unique,
     )
 
@@ -888,10 +1153,31 @@ def build_session_report(session_id: str) -> SessionReport:
     unique_citations = {citation_key(citation) for citation in all_citations}
     unique_sources = {citation.split("#", 1)[0] for citation in all_citations}
 
+    # Шаги считаются по номерам, а не по записям: в унаследованный журнал
+    # писали два запуска, и номера 9 и 10 встречались дважды. Двенадцать
+    # записей — это десять шагов, и отчёт обязан сказать это словом, иначе
+    # два запуска выглядят как более долгая работа.
+    ordinal_counts: dict[int, int] = {}
+    for record in records:
+        ordinal_counts[record.ordinal] = ordinal_counts.get(record.ordinal, 0) + 1
+    duplicate_steps = [
+        f"шаг {ordinal} записан {_times(count)}"
+        for ordinal, count in ordinal_counts.items()
+        if count > 1
+    ]
+    variants: list[dict[str, Any]] = []
+    for record in records:
+        if str(getattr(record, "phase", "")) != "options":
+            continue
+        detail = _mapping(getattr(record, "detail", None))
+        found = detail.get("variants")
+        if isinstance(found, list):
+            variants = [item for item in found if isinstance(item, dict)]
+
     state = load(session_id)
     return SessionReport(
         session_id=session_id,
-        steps=len(records),
+        steps=len(ordinal_counts),
         confirmed_citations=confirmed,
         rejected_citations=rejected,
         total_cost_units=total_cost,
@@ -910,6 +1196,8 @@ def build_session_report(session_id: str) -> SessionReport:
         conclusion=_collect_conclusion(records),
         contradictions=contradictions,
         hypotheses=_collect_hypotheses(records),
+        variants=variants,
+        duplicate_steps=duplicate_steps,
         needs_review_details=needs_review_details,
         lexical=(
             {
