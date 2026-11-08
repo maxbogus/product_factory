@@ -59,7 +59,7 @@
 | T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 3.7 | ⬜ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
 | T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 3.7 | ⬜ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
 | T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
-| T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ⬜ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
+| T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ✅ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
 | T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
 | T-10a | 1 | Покрытие сценариев: `workflow` feature-файл (фазы, роутер, остановка) и eval-кейс на автомат; карточка — `docs/tasks/T-10.md` | 1 | 4.0 | ⬜ | T-02 | `uv run pytest tests/test_scenario_coverage.py -k workflow_features -q` |
 | T-10b | 1 | Покрытие сценариев: `sources` feature-файл (отбор строки по полям, агрегат по имени расчёта) | 1 | 4.0 | ⬜ | T-10a | `uv run pytest tests/test_scenario_coverage.py -k sources_features -q` |
@@ -92,7 +92,7 @@
 | T-45 | 2 | Предлагатель понятий **без эмбеддингов**: TF-IDF и леммы по корпусу ставят кандидата в очередь OOV (`proposed`), подтверждает человек; `D-09`/`D-37` в силе | 2 | 1.4 | ⬜ | T-43 | `uv run pytest tests/test_proposer.py -k propose -q` |
 | T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 2.3 | ⬜ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
 | T-47 | 1 | Унаследованный журнал не выдаёт статус снятого правила за текущий: отчёт говорит, каким правилом считали | 2 | 15.2 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k stale_rule -q` |
-| T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ⬜ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
+| T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ✅ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
 | T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ⬜ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |
 | T-49 | 2 | Показатель подтверждённого основания сверяется с показателем вывода; потолок статуса — «подкреплено частично» | 3 | 4.2 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k indicator -q` |
 | T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 1.8 | ⬜ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |

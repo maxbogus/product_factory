@@ -116,6 +116,186 @@ def test_verdict_ignores_unconfirmed_grounds() -> None:
     assert Workflow._confirmed_grounds(grounding) == []
 
 
+def test_collection_targets_unknown_hypotheses_and_gaps() -> None:
+    """Добор идёт только туда, где ответа нет.
+
+    Поддержанная и опровергнутая гипотеза уже получила вердикт — искать по
+    ним значит повторять работу. Противоречие тоже не ищется: поиск не
+    отвечает на вопрос, какой из двух фактов верен, поэтому оно
+    возвращается отдельным списком с причиной, а не превращается в запрос.
+    """
+    from pf.hypotheses import collection_nodes
+    from pf.schemas import Claim
+
+    unknown = Claim(kind="гипотеза", text="Отток абонентов растёт")
+    supported = Claim(kind="гипотеза", text="Удержание снижается")
+    supported.verdict = "supported"
+    refuted = Claim(kind="гипотеза", text="Цены на тарифы вырастут")
+    refuted.verdict = "refuted"
+    contradiction = (
+        "противоречие: «отток растёт» и «отток падает» говорят разное об одном показателе"
+    )
+
+    nodes, not_collectable = collection_nodes(
+        [unknown, supported, refuted],
+        ["нет данных об оттоке за квартал", contradiction],
+    )
+
+    assert [node.text for node in nodes] == [
+        "Отток абонентов растёт",
+        "нет данных об оттоке за квартал",
+    ]
+    assert nodes[0].kind == "гипотеза"
+    assert nodes[1].kind == "пробел"
+    assert nodes[0].query
+    assert not_collectable and "противоречие" in not_collectable[0]
+
+
+def test_collection_ranks_candidates_by_closeness() -> None:
+    """Кандидаты упорядочены по близости к узлу, а не по порядку корпуса.
+
+    Это то место, где `D-37` разрешает ранжирование: повышать статус
+    ранжирование не может, а выбрать, что показать человеку первым, —
+    его работа. Оценка — лексическая (`score_passages`), без моделей.
+    """
+    from pf.corpus import Article, Corpus
+    from pf.hypotheses import plan_collection
+    from pf.schemas import Claim
+
+    corpus = Corpus(
+        [
+            Article(
+                source_id="test/Физика",
+                title="Эрланг",
+                section="test",
+                content=(
+                    "Формула Эрланга описывает вероятность потери вызова "
+                    "в телефонной сети и к тарифам отношения не имеет."
+                ),
+            ),
+            Article(
+                source_id="test/Отток",
+                title="Отток",
+                section="test",
+                content=(
+                    "Отток абонентов растёт третий квартал подряд, и оператор "
+                    "связывает это с ростом цен на тарифы."
+                ),
+            ),
+        ]
+    )
+    hypothesis = Claim(kind="гипотеза", text="Отток абонентов растёт из-за цен на тарифы")
+
+    plan = plan_collection([hypothesis], [], corpus=corpus, per_node=1)
+
+    assert len(plan.candidates) == 1
+    assert plan.candidates[0].source_id == "test/Отток"
+    assert plan.candidates[0].relevance > 0
+    assert plan.outcomes[0].outcome == "new"
+
+
+def test_collection_skips_known_and_repeated_passages() -> None:
+    """Уже собранный абзац и его копия под другим адресом — не прогресс.
+
+    Добор, который приносит то же знание, выглядит как работа, но ничего не
+    добавляет: в `demo-v5` шесть отказов подряд были одним и тем же
+    источником. Копия узнаётся по тексту (`pf.policy.content_key`), а не по
+    ссылке.
+    """
+    from pf.corpus import Article, Corpus
+    from pf.hypotheses import plan_collection
+    from pf.schemas import Claim
+    from pf.sources import Passage
+
+    text = (
+        "Отток абонентов растёт третий квартал подряд, и оператор связывает "
+        "это с ростом цен на тарифы."
+    )
+    corpus = Corpus(
+        [
+            Article(source_id="test/Отток", title="Отток", section="test", content=text),
+            Article(source_id="test/Копия", title="Копия", section="test", content=text),
+        ]
+    )
+    known = Passage(
+        source_id="test/Отток",
+        title="Отток",
+        section="test",
+        paragraph_index=0,
+        text=text,
+        relevance=1.0,
+    )
+    hypothesis = Claim(kind="гипотеза", text="Отток абонентов растёт")
+
+    plan = plan_collection([hypothesis], [], corpus=corpus, known=[known])
+
+    assert plan.candidates == ()
+    assert plan.outcomes[0].outcome == "duplicate"
+
+
+def test_collection_closes_node_after_two_empty_rounds() -> None:
+    """Два пустых раунда закрывают узел — правило `pf.policy`, а не счёт в коде.
+
+    Один пустой результат — случайность, два — закономерность. Закрытый узел
+    больше не запрашивается, и это видно причиной, а не молчанием.
+    """
+    from pf.corpus import Article, Corpus
+    from pf.hypotheses import plan_collection
+    from pf.schemas import Claim
+
+    corpus = Corpus(
+        [
+            Article(
+                source_id="test/Физика",
+                title="Эрланг",
+                section="test",
+                content=(
+                    "Формула Эрланга описывает вероятность потери вызова "
+                    "в телефонной сети и к тарифам отношения не имеет."
+                ),
+            )
+        ]
+    )
+    hypothesis = Claim(kind="гипотеза", text="Отток абонентов растёт")
+
+    first = plan_collection([hypothesis], [], corpus=corpus)
+    second = plan_collection([hypothesis], [], corpus=corpus, progress=first.progress)
+
+    assert first.outcomes[0].outcome == "empty"
+    assert second.outcomes[0].outcome == "no_progress"
+    assert second.candidates == ()
+
+
+def test_collection_does_not_change_hypothesis_verdict() -> None:
+    """Кандидат — не основание: вердикт по-прежнему ставит код из оснований.
+
+    Добор приносит абзац, который может ответить, но не подтверждает его:
+    дословность проверяет `pf.ground`, а вердикт выводится из подтверждённых
+    утверждений. Иначе поиск сам себе выдавал бы подтверждение.
+    """
+    from pf.corpus import Article, Corpus
+    from pf.hypotheses import Verdict, plan_collection
+    from pf.schemas import Claim
+
+    corpus = Corpus(
+        [
+            Article(
+                source_id="test/Отток",
+                title="Отток",
+                section="test",
+                content="Отток абонентов растёт третий квартал подряд, а цены на тарифы выросли.",
+            )
+        ]
+    )
+    hypothesis = Claim(kind="гипотеза", text="Отток абонентов растёт")
+
+    plan = plan_collection([hypothesis], [], corpus=corpus)
+
+    assert plan.candidates
+    assert hypothesis.verdict is Verdict.UNKNOWN
+    assert hypothesis.verdict_basis == ""
+
+
 def test_verdict_reaches_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Отчёт называет: поддержано столько, опровергнуто столько, неизвестно."""
     from pf.report import build_session_report
@@ -165,3 +345,57 @@ def test_verdict_reaches_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert "поддержано 1" in markdown
     assert "опровергнуто 1" in markdown
     assert "требует проверки 1" in markdown
+
+
+def test_collection_reaches_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Отчёт называет добор и говорит, что кандидаты — не основания.
+
+    Иначе «нашли кандидатов» читалось бы как «вывод подкреплён». Числа
+    берутся из журнала шага, как и остальные: отчёт — чтение прогона.
+    """
+    from pf.report import build_session_report
+
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    session_id = "session-collection"
+    journal = Journal(journal_path(session_id))
+    journal.append(
+        StepRecord(
+            ordinal=1,
+            role="analyst",
+            phase="analyzing",
+            summary="фактов: 0, гипотез: 0, пробелов: 0",
+            detail={
+                "facts": [],
+                "hypotheses": [],
+                "gaps": [],
+                "collection": {
+                    "nodes": [
+                        {"kind": "гипотеза", "text": "Отток абонентов растёт", "query": "отток"}
+                    ],
+                    "candidates": [
+                        {
+                            "node": "Отток абонентов растёт",
+                            "citation": "test/Отток#p0",
+                            "title": "Отток",
+                            "relevance": 1.5,
+                        }
+                    ],
+                    "outcomes": [
+                        {"node": "Отток абонентов растёт", "outcome": "new", "reason": ""}
+                    ],
+                    "not_collectable": ["противоречие: два факта говорят разное"],
+                },
+            },
+        )
+    )
+
+    report = build_session_report(session_id)
+    markdown = report.as_markdown()
+
+    assert report.collection_nodes == 1
+    assert report.collection_candidates == 1
+    assert report.collection_outcomes == {"new": 1}
+    assert report.collection_not_collectable
+    assert "Добор оснований" in markdown
+    assert "основаниями не считаются" in markdown
+    assert "test/Отток#p0" in markdown

@@ -20,7 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from pf.ground import CONCLUSION_RULE, CONCLUSION_RULE_PARTS, SupportStatus
+from pf.ground import (
+    CONCLUSION_RULE,
+    CONCLUSION_RULE_PARTS,
+    GroundTally,
+    SupportStatus,
+    conclusion_status,
+)
 from pf.schemas import (
     Analysis,
     Commitment,
@@ -292,8 +298,57 @@ def test_conclusion_rule_is_named_in_journal(
 
     assert grounding.conclusion is not None
     assert grounding.conclusion["rule"] == CONCLUSION_RULE
-    parts = grounding.conclusion["rule"].split("+")
-    assert list(CONCLUSION_RULE_PARTS) == parts
+    # Части правила перечислены буквально, а не выведены из самой константы:
+    # сравнение `CONCLUSION_RULE.split("+")` с `CONCLUSION_RULE_PARTS` зелено
+    # при любом составе и не заметило бы, что часть из правила выпала.
+    assert list(CONCLUSION_RULE_PARTS) == [
+        "unique-grounds",
+        "calc-line-demotion",
+        "indicator-cap",
+        "unsupported-number-cap",
+    ]
+
+
+def test_unsupported_number_caps_status() -> None:
+    """Число плана без своего расчёта — потолок статуса, а не заметка.
+
+    `_check_plan_numbers` уже называет такую величину в `rejected_details`,
+    но на статус вывода это не влияло: в `demo-v9` «удержание на уровне
+    87 %» (87 — абонентская база МТС) стояло рядом со статусом
+    «подкреплено». Потолок получает `conclusion_status`, чтобы правило
+    счёта оставалось одним и было видно в имени правила.
+
+    Потолок умеет только понижать: «неподкреплено» и «ждёт проверки» он не
+    поднимает — иначе это была бы подмена статуса, а не ограничение.
+    """
+    assert conclusion_status(2, 2, 0) == "подкреплено"
+    assert conclusion_status(2, 2, 0, unsupported_numbers=1) == "подкреплено частично"
+    assert conclusion_status(1, 0, 0, unsupported_numbers=1) == "неподкреплено"
+    assert conclusion_status(1, 0, 0, needs_review=1, unsupported_numbers=1) == "ждёт проверки"
+
+
+def test_unsupported_number_is_written_to_journal() -> None:
+    """Причина потолка едет в журнал вместе со статусом.
+
+    Без ключа читатель видит «подкреплено частично» и не знает, почему:
+    причина осталась бы только в `rejected_details` шага, а статус вывода
+    живёт отдельной записью. Ноль пишется тоже — пропуск ключа читался бы
+    как «не проверяли».
+    """
+    tally = GroundTally(checked=2, confirmed=2, rejected=0, needs_review=0)
+
+    plain = Workflow._conclusion_verdict(tally, {})
+
+    assert plain is not None
+    assert plain["unsupported_numbers"] == 0
+    assert plain["status"] == "подкреплено"
+
+    capped = Workflow._conclusion_verdict(tally, {}, unsupported_numbers=1)
+
+    assert capped is not None
+    assert capped["unsupported_numbers"] == 1
+    assert capped["status"] == "подкреплено частично"
+    assert "unsupported-number-cap" in capped["rule"].split("+")
 
 
 def test_conclusion_counts_unique_grounds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

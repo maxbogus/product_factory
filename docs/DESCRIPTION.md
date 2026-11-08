@@ -123,7 +123,7 @@ INTAKE → PLANNING → ROUTING → COLLECTING → ANALYZING
 | **Разбор страниц** | `bs4` + `robots.txt` (stdlib) | Извлечение абзацев, пригодных для цитирования |
 | **MCP** | `static-parser` (6 инструментов) из соседнего `mcp-servers` | Разбор страниц, метаданные, проверка robots |
 | **Трекинг замеров** | MLflow (файловая база) + JSONL | Накопитель измерений для сравнения с обычным чатом |
-| **Тесты** | pytest, ruff, mypy --strict | 666 детерминированных + 4 живых теста с моделью |
+| **Тесты** | pytest, ruff, mypy --strict | 674 детерминированных + 4 живых теста с моделью |
 
 Внешние зависимости минимальны: `httpx`, `pydantic`, `scikit-learn`,
 `pymorphy3`, `beautifulsoup4`. Нет `torch`, нет векторной базы, нет
@@ -299,7 +299,7 @@ uv run pf mcp static-parser                  # инструменты MCP
 Полезное:
 
 ```bash
-make test          # 666 детерминированных тестов
+make test          # 674 детерминированных тестов
 make test-slow     # живые тесты с моделью
 make bench         # замеры: агент против обычного чата
 make ci            # всё вместе

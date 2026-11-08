@@ -36,7 +36,7 @@ from pf.ground import (
     tally_grounds,
     verify_quote_as_external,
 )
-from pf.hypotheses import verdict_of
+from pf.hypotheses import CollectionPlan, plan_collection, verdict_of
 from pf.journal import Journal, StepRecord, journal_path
 from pf.lexical import indicator_stems, numbers_match, stems
 from pf.lexical import polarity as lexical_polarity
@@ -853,6 +853,54 @@ class Workflow:
             hypothesis.verdict = result.verdict
             hypothesis.verdict_basis = result.basis
 
+    # ── Добор оснований по неизвестному ─────────────────────────────────────
+
+    def _plan_collection(
+        self,
+        state: SessionState,
+        data: Any,
+        bundle: SourceBundle | None,
+    ) -> CollectionPlan | None:
+        """Спланировать добор по неизвестным гипотезам и пробелам.
+
+        Добор детерминированный: корпус ищется по тексту узла, модель не
+        вызывается. Кандидат — не основание: он не повышает статус и не
+        меняет вердикт, а называется в отчёте отдельным разделом. Иначе
+        поиск сам себе выдавал бы подтверждение.
+
+        Без собранных источников добор не идёт: сравнивать найденное с уже
+        известным нечем, и «новое» могло бы оказаться тем, что уже собрано.
+
+        Args:
+            state: Состояние сессии — в нём живёт прогресс узлов.
+            data: Результат разбора с гипотезами и пробелами.
+            bundle: Собранные источники.
+
+        Returns:
+            План добора либо ``None``, если добор не нужен или невозможен.
+        """
+        if bundle is None:
+            return None
+        hypotheses = list(getattr(data, "hypotheses", None) or [])
+        gaps = [str(item) for item in (getattr(data, "gaps", None) or [])]
+        if not hypotheses and not gaps:
+            return None
+
+        from pf.corpus import get_corpus
+
+        recorded = state.results.get("collection_progress")
+        plan = plan_collection(
+            hypotheses,
+            gaps,
+            corpus=get_corpus(),
+            known=bundle.passages,
+            progress=recorded if isinstance(recorded, dict) else None,
+        )
+        # Состояние узлов переезжает в следующий раунд: два пустых раунда
+        # закрывают узел правилом `pf.policy`, а не повторным поиском.
+        state.results["collection_progress"] = plan.progress
+        return plan
+
     # ── Проверка оснований ──────────────────────────────────────────────────
 
     @staticmethod
@@ -1223,6 +1271,7 @@ class Workflow:
         tally: GroundTally,
         grounds: dict[str, list[str]],
         off_topic: dict[str, list[str]] | None = None,
+        unsupported_numbers: int = 0,
     ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
@@ -1244,6 +1293,9 @@ class Workflow:
                 объединяет шаги, не складывая повторы.
             off_topic: Показатель вывода и показатели подтверждённых
                 оснований, когда они не совпали.
+            unsupported_numbers: Сколько величин плана осталось без своего
+                расчёта. Ключ пишется всегда, включая ноль: пропуск
+                читался бы как «не проверяли».
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
@@ -1256,6 +1308,7 @@ class Workflow:
             tally.rejected,
             tally.needs_review,
             off_topic=off_topic is not None,
+            unsupported_numbers=unsupported_numbers,
         )
         payload: dict[str, Any] = {
             "checked": tally.checked,
@@ -1264,6 +1317,9 @@ class Workflow:
             "needs_review": tally.needs_review,
             "status": status,
             "grounds": grounds,
+            # Число без расчёта понижает статус — причина едет вместе с ним,
+            # иначе читатель видит потолок и не знает, за что.
+            "unsupported_numbers": unsupported_numbers,
             # Имя правила едет вместе со статусом. Статус без него читается
             # как текущая оценка, оставаясь записью прогона, — так `demo-v9`
             # печатал «подкреплено» рядом с «отклонено» по тем же строкам.
@@ -1917,6 +1973,12 @@ class Workflow:
                         for item in report.findings
                     ],
                 }
+            # Добор — часть того же шага разбора: кандидаты попадают в
+            # журнал, а не остаются в состоянии сессии. Ищутся только
+            # неизвестные гипотезы и пробелы; противоречия сюда не идут.
+            plan = self._plan_collection(state, data, bundle)
+            if plan is not None:
+                state.results["collection"] = plan.as_detail()
 
         self._record(state, result)
         self._apply_hooks(state, result)
@@ -2455,6 +2517,11 @@ class Workflow:
             fact_check = state.results.get("fact_check")
             if isinstance(fact_check, dict):
                 detail["fact_check"] = fact_check
+            # Добор оснований — часть шага разбора. Забирается из состояния,
+            # а не пересчитывается: журнал — след шага, а не второй прогон.
+            collection = state.results.pop("collection", None)
+            if isinstance(collection, dict):
+                detail["collection"] = collection
         if result.phase in (Phase.STRATEGY, Phase.KEEPER):
             # Статус оснований вывода пишется вместе с выводом: иначе он
             # останется в состоянии сессии и в поставляемый отчёт не попадёт.

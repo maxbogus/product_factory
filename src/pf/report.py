@@ -176,6 +176,12 @@ class SessionReport:
         context: Окно контекста: сколько шагов, сколько упёрлось в предел.
         hypotheses: Сколько гипотез поддержано, опровергнуто и осталось
             неизвестными.
+        collection_nodes: Сколько узлов добора объявил последний разбор.
+        collection_found: Кандидаты добора — ссылки, заголовки и близость.
+            Это **не** основания: статус у них не ставится.
+        collection_outcomes: Исходы добора по узлам: ``new``, ``duplicate``,
+            ``empty``, ``no_progress``.
+        collection_not_collectable: Пробелы, которые поиском не закрываются.
         variants: Набор рассмотренных вариантов — с полюсами и возражениями.
         duplicate_steps: Номера шагов, записанных в журнал больше одного раза.
             Так выглядит унаследованный журнал, в который писали два запуска.
@@ -204,8 +210,24 @@ class SessionReport:
     lexical: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
     hypotheses: dict[str, int] = field(default_factory=dict)
+    collection_nodes: int = 0
+    collection_found: list[dict[str, Any]] = field(default_factory=list)
+    collection_outcomes: dict[str, int] = field(default_factory=dict)
+    collection_not_collectable: list[str] = field(default_factory=list)
     variants: list[dict[str, Any]] = field(default_factory=list)
     duplicate_steps: list[str] = field(default_factory=list)
+
+    @property
+    def collection_candidates(self) -> int:
+        """Сколько абзацев нашёл добор.
+
+        Считается по найденному, а не хранится отдельным числом: два
+        счётчика одного и того же разошлись бы при первой правке.
+
+        Returns:
+            Число кандидатов.
+        """
+        return len(self.collection_found)
 
     @property
     def total_citations(self) -> int:
@@ -413,6 +435,7 @@ class SessionReport:
             )
             lines.append("")
 
+        lines.extend(_collection_markdown(self))
         lines.extend(_variants_markdown(self.variants))
         lines.extend(conclusion_markdown(self.conclusion))
 
@@ -819,6 +842,48 @@ def _times(count: int) -> str:
     return f"{count} раз"
 
 
+def _collection_markdown(report: SessionReport) -> list[str]:
+    """Раздел «Добор оснований»: что искали и что нашли.
+
+    Раздел нужен, потому что «нашли кандидатов» легко читается как «вывод
+    подкреплён». Кандидат — абзац, который может ответить, а не основание:
+    дословность проверяет `pf.ground`, вердикт гипотезы ставит код.
+
+    Args:
+        report: Отчёт по сессии.
+
+    Returns:
+        Строки раздела; пусто, если добора не было.
+    """
+    if report.collection_nodes <= 0:
+        return []
+    lines = ["**Добор оснований.**", ""]
+    outcomes = ", ".join(
+        f"{name} {count}" for name, count in sorted(report.collection_outcomes.items())
+    )
+    summary = f"узлов: {report.collection_nodes}, найдено абзацев: {report.collection_candidates}"
+    if outcomes:
+        summary += f" (исходы: {outcomes})"
+    lines.append(summary)
+    lines.append("")
+    for item in report.collection_found[:5]:
+        citation = str(item.get("citation") or "")
+        title = str(item.get("title") or "")
+        node = str(item.get("node") or "")
+        lines.append(f"- `{citation}` {title} — под узел «{node}»")
+    if report.collection_found:
+        lines.append("")
+    if report.collection_not_collectable:
+        lines.append("Поиском не закрывается: " + "; ".join(report.collection_not_collectable))
+        lines.append("")
+    lines.append(
+        "Кандидаты основаниями не считаются: цитату проверяет `pf.ground`, "
+        "вердикт гипотезы ставит код по подтверждённым утверждениям."
+    )
+    lines.append("")
+    return lines
+
+
 def _variants_markdown(variants: list[dict[str, Any]]) -> list[str]:
     """Раздел «Рассмотренные варианты»: набор, полюса и возражения.
 
@@ -1218,6 +1283,52 @@ def _collect_hypotheses(records: list[Any]) -> dict[str, int]:
     return counts
 
 
+def _collect_collection(records: list[Any]) -> dict[str, Any]:
+    """Добор оснований из последнего шага разбора.
+
+    Берётся последний шаг разбора: при возврате назад узлы формулируются
+    заново, и складывать кандидатов двух раундов значило бы выдать повтор за
+    новое знание (`pf.policy.content_key` — тот же ответ на уровне текста).
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Словарь с числом узлов, найденными абзацами, исходами и
+        неразбираемыми пробелами. Пустой, если добора не было.
+    """
+    latest: dict[str, Any] = {}
+    for record in records:
+        if record.phase != "analyzing":
+            continue
+        detail = record.detail if isinstance(record.detail, dict) else {}
+        found = detail.get("collection")
+        if isinstance(found, dict):
+            latest = found
+    if not latest:
+        return {}
+
+    nodes = latest.get("nodes")
+    candidates = latest.get("candidates")
+    node_items: list[Any] = nodes if isinstance(nodes, list) else []
+    found_items: list[Any] = candidates if isinstance(candidates, list) else []
+    outcomes: dict[str, int] = {}
+    for item in latest.get("outcomes") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("outcome") or "unknown")
+        outcomes[name] = outcomes.get(name, 0) + 1
+    not_collectable = [
+        str(item) for item in (latest.get("not_collectable") or []) if str(item).strip()
+    ]
+    return {
+        "nodes": len(node_items),
+        "found": [item for item in found_items if isinstance(item, dict)],
+        "outcomes": outcomes,
+        "not_collectable": not_collectable,
+    }
+
+
 def build_session_report(session_id: str) -> SessionReport:
     """Собрать отчёт по сессии из журнала шагов.
 
@@ -1316,6 +1427,8 @@ def build_session_report(session_id: str) -> SessionReport:
         if isinstance(found, list):
             variants = [item for item in found if isinstance(item, dict)]
 
+    collection = _collect_collection(records)
+
     state = load(session_id)
     return SessionReport(
         session_id=session_id,
@@ -1338,6 +1451,10 @@ def build_session_report(session_id: str) -> SessionReport:
         conclusion=_collect_conclusion(records),
         contradictions=contradictions,
         hypotheses=_collect_hypotheses(records),
+        collection_nodes=int(collection.get("nodes") or 0),
+        collection_found=list(collection.get("found") or []),
+        collection_outcomes=dict(collection.get("outcomes") or {}),
+        collection_not_collectable=list(collection.get("not_collectable") or []),
         variants=variants,
         duplicate_steps=duplicate_steps,
         needs_review_details=needs_review_details,
@@ -1395,5 +1512,11 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "routing_notes": report.routing_notes,
         "fact_check": report.fact_check,
         "hypotheses": report.hypotheses,
+        "collection": {
+            "nodes": report.collection_nodes,
+            "candidates": report.collection_candidates,
+            "outcomes": report.collection_outcomes,
+            "not_collectable": report.collection_not_collectable,
+        },
         "conclusion": asdict(report.conclusion) if report.conclusion else None,
     }
