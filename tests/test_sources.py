@@ -14,7 +14,7 @@ from pf.config import settings
 from pf.corpus import Article
 from pf.ground import SupportStatus
 from pf.materials import load_materials
-from pf.sources import SourceBundle, collect, score_passages
+from pf.sources import Passage, SourceBundle, collect, score_passages
 
 
 def _article(source_id: str, title: str, content: str) -> Article:
@@ -97,6 +97,63 @@ def test_bundle_limit_caps_passages() -> None:
     context = bundle.context(limit=3)
     # Каждый абзац начинается с «[раздел/Заголовок#pN]».
     assert context.count("#p") == 3
+
+
+def test_available_sources_are_named_in_context() -> None:
+    """Доступные источники перечислены в контексте модели.
+
+    Модель видит абзацы окна, а срез задачи может быть шире окна: от одного
+    источника в окно попадает не больше двух абзацев. Если доступные
+    источники не названы, ссылка на существующий, но не показанный источник
+    выглядит как выдумка, а не как пробел в сборе.
+    """
+    passages = [
+        Passage(
+            source_id="security/Тест",
+            title="Тест",
+            section="test",
+            paragraph_index=0,
+            text="Первый абзац достаточно длинный, чтобы его можно было процитировать.",
+            relevance=1.0,
+        ),
+        Passage(
+            source_id="project/data/x.csv",
+            title="x",
+            section="project",
+            paragraph_index=0,
+            text="оператор: МТС, значение: 87",
+            relevance=0.9,
+        ),
+    ]
+    bundle = SourceBundle(passages=passages, articles=[], query="тест")
+
+    context = bundle.context(include_sources=True)
+
+    # Оба источника среза названы — даже если в окно попал один абзац.
+    assert "security/Тест" in context
+    assert "project/data/x.csv" in context
+    # Правило честности названо прямо: источник вне списка — пробел, а не
+    # основание.
+    assert "пробел" in context.lower()
+    assert "не основание" in context.lower()
+
+
+def test_available_sources_outside_slice_is_gap_not_basis() -> None:
+    """Ссылка на источник вне среза называется пробелом, а не основанием.
+
+    Источник существует в корпусе, но в срез задачи не попал. Его цитата
+    может быть дословной, однако подтвердить утверждение по задаче она не
+    может: это пробел в сборе, а не основание. Отказ при этом не «фантомный
+    источник» — он называет настоящую причину, и класс отказа считается по
+    ней.
+    """
+    bundle = collect("удержание абонентов оператора связи тариф")
+    foreign = "mathematics/Испытание (техника)"
+
+    # Источник настоящий (иначе причина была бы «не найден»), но чужой задаче.
+    assert not bundle.is_relevant(foreign)
+    assert bundle.absence_reason(foreign) == "источник вне среза задачи"
+    assert bundle.absence_kind(foreign) == "outside_slice"
 
 
 def test_collect_returns_bundle_for_real_query() -> None:

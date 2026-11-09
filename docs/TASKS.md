@@ -109,7 +109,7 @@
 | T-59 | 1 | Вид отказа хранится в журнале, а класс считается по нему: таблица видов, подпись и владелец исправления | 1 | 8.1 | ✅ | — | `uv run pytest tests/test_verdict_kinds.py -k known_details -q` |
 | T-60a | 1 | Канал основания: `basis_kind` в `SourceRef` — факт, ввод пользователя со стадией, решение, гипотеза | 1 | 18.0 | ✅ | T-59 | `uv run pytest tests/test_basis_channel.py -k basis_kind -q` |
 | T-60b | 1 | Отчёт называет опоры на ввод пользователя отдельно от оснований; ввод не поднимает статус вывода | 1 | 8.1 | ✅ | T-60a | `uv run pytest tests/test_basis_channel.py -k human_input_does_not_raise_status -q` |
-| T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 6.5 | ⬜ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
+| T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 6.5 | ✅ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
 | T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 6.0 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
 | T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ✅ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
 | T-65 | 1 | Противоречия источников по осям: скил и хук (не агент), ось названа, раздел отчёта | 2 | 7.0 | ✅ | T-59 | `uv run pytest tests/test_contradictions.py tests/test_report_conclusion.py -k contradiction -q` |

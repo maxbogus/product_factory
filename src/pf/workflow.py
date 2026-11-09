@@ -2722,10 +2722,16 @@ class Workflow:
 
     @classmethod
     def _bundle_context(cls, bundle: SourceBundle | None) -> str:
-        """Собрать контекст из источников."""
+        """Собрать контекст из источников.
+
+        Список доступных источников идёт перед абзацами: модель должна
+        знать не только то, что попало в окно, но и то, на что вообще можно
+        сослаться. Ссылка на источник вне списка — пробел в сборе, а не
+        основание, и проверка оснований это подтверждает.
+        """
         if bundle is None:
             return ""
-        return bundle.context(limit=cls.CONTEXT_PASSAGES)
+        return bundle.context(limit=cls.CONTEXT_PASSAGES, include_sources=True)
 
     @staticmethod
     def _web_context(state: SessionState) -> str:

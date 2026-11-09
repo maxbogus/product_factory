@@ -69,6 +69,17 @@ REASON_HUMAN_INPUT = "не источник — это ввод человека
 REASON_OUTSIDE_SLICE = "источник вне среза задачи"
 REASON_UNKNOWN_SOURCE = "источник не найден среди материалов"
 
+#: Правило цитирования, которое контекст называет модели прямо. Модель
+#: видит абзацы окна, а срез задачи шире окна: от одного источника в окно
+#: попадает не больше ``MAX_PASSAGES_PER_SOURCE`` абзацев. Без списка
+#: доступных источников ссылка на существующий, но не показанный источник
+#: неотличима от выдумки, и модель не знает, что это пробел в сборе, а не
+#: основание.
+SOURCES_RULE = (
+    "ДОСТУПНЫЕ ИСТОЧНИКИ (цитировать можно только их; "
+    "ссылка на источник вне списка — пробел, а не основание):"
+)
+
 
 def human_input_stage(source_id: str) -> str | None:
     """Стадия из ссылки на ввод пользователя.
@@ -273,11 +284,26 @@ class SourceBundle:
                 seen.append(passage.source_id)
         return seen
 
+    def available_sources(self) -> list[str]:
+        """Источники среза, доступные модели для цитирования.
+
+        Это шире окна контекста: в окно попадает не больше
+        ``MAX_PASSAGES_PER_SOURCE`` абзацев от источника, а срез задачи —
+        все отобранные источники. Назвать их важно: иначе модель не
+        отличает «источник не показан» от «источника нет», и ссылка на
+        доступный, но не показанный источник выглядит как выдумка.
+
+        Returns:
+            Идентификаторы источников в порядке первого появления.
+        """
+        return list(self.source_ids)
+
     def context(
         self,
         limit: int | None = None,
         *,
         max_per_source: int = MAX_PASSAGES_PER_SOURCE,
+        include_sources: bool = False,
     ) -> str:
         """Собрать контекст для модели.
 
@@ -292,6 +318,9 @@ class SourceBundle:
         Args:
             limit: Сколько абзацев включить. По умолчанию — все.
             max_per_source: Предел абзацев от одного источника.
+            include_sources: Назвать ли доступные источники перед абзацами.
+                По умолчанию нет: окно и список — разные вещи, и проверки
+                состава окна не должны зависеть от заголовка.
 
         Returns:
             Текст с абзацами, перед каждым — его идентификатор для цитирования.
@@ -300,7 +329,21 @@ class SourceBundle:
         blocks = []
         for passage in selected:
             blocks.append(f"[{passage.citation}] {passage.text}")
-        return "\n\n".join(blocks)
+        body = "\n\n".join(blocks)
+        if not include_sources:
+            return body
+        header = self._sources_header()
+        return f"{header}\n\n{body}" if body else header
+
+    def _sources_header(self) -> str:
+        """Заголовок «что вообще можно цитировать».
+
+        Returns:
+            Правило цитирования и список доступных источников.
+        """
+        lines = [SOURCES_RULE]
+        lines.extend(f"- {source_id}" for source_id in self.available_sources())
+        return "\n".join(lines)
 
     def _window(self, limit: int, max_per_source: int) -> list[Passage]:
         """Выбрать абзацы окна: сначала с разнообразием, затем добор.

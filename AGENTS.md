@@ -348,6 +348,15 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
   `SourceBundle._window` резервирует один слот корпусу (D-32); проверка —
   `test_window_reserves_slot_for_corpus` и
   `test_context_is_not_eaten_by_one_table`.
+- **Окно и срез — разные вещи, и срез назван.** Модель видит абзацы окна, а
+  отобрано может быть больше источников: от одного источника в окно попадает
+  не больше двух абзацев. `SourceBundle.context(include_sources=True)` ставит
+  перед абзацами правило `sources.SOURCES_RULE` и перечень
+  `available_sources()`, а `Workflow._bundle_context` передаёт флаг явно.
+  Ссылка вне среза по-прежнему не основание: `absence_reason` →
+  `outside_slice` → `NO_DATA` (D-56). По умолчанию заголовок выключен, чтобы
+  проверки состава окна не зависели от него; тесты —
+  `tests/test_sources.py -k available_sources`.
 - **Журнал append-only.** Не переписывайте `journal/*.jsonl` — это след.
   Второй шаг с тем же номером журнал не принимает (`DuplicateOrdinalError`,
   T-32): дубль `ordinal` означает два запуска в один файл, и молча его
