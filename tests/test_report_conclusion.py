@@ -981,3 +981,61 @@ def test_component_justification(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     # граница честности: где конвейер из ролей не нужен
     assert "## Где multi-agent не нужен" in text
+
+
+def test_signal_summary_in_header(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Шапка отчёта называет сигнал/шум прогона.
+
+    Читатель видел отдельные счётчики, но не видел ответа «сколько в этом
+    прогоне сигнала, а сколько — мнение модели». Три корзины обязаны стоять
+    в шапке рядом с остальными числами: подтверждено фактом, мнение модели,
+    не подтверждено.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    analyzing = StepRecord(
+        ordinal=5,
+        role="analyst",
+        phase="analyzing",
+        summary="разбор",
+        detail={
+            "facts": [],
+            "gaps": ["нет телеметрии"],
+            "hypotheses": [{"verdict": "supported"}, {"verdict": "unknown"}],
+        },
+    )
+    strategy = StepRecord(
+        ordinal=7,
+        role="strategy",
+        phase="strategy",
+        summary="стратегия",
+        citations=["project/data/a.csv#row0", "project/data/b.csv#row1"],
+        rejected_details=["project/data/c.csv#row5: цитата не найдена"],
+        detail={
+            "product": {
+                "audience": "абонент",
+                "alternatives": ["Оставить как есть", "Закрыть направление"],
+                "chosen_direction": "внедрить тариф",
+                "assumptions": ["спрос сохранится"],
+            },
+            "communication": {},
+            "verification": {},
+            "conclusion_check": {
+                "checked": 3,
+                "confirmed": 2,
+                "rejected": 1,
+                "status": "подкреплено частично",
+            },
+        },
+    )
+    _session(tmp_path, monkeypatch, [analyzing, strategy])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "Сигнал/шум" in text
+    line = next(item for item in text.splitlines() if "Сигнал/шум" in item)
+    assert "2 подтверждено фактом" in line
+    assert "3 — мнение модели" in line
+    assert "1 не подтверждено" in line

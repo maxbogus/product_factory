@@ -441,6 +441,8 @@ def _render(report: SessionReport, records: list[StepRecord], origin: Provenance
     lines.append(f"| Токенов | {sum(report.tokens.values())} |")
     lines.append(f"| Расход | {report.total_cost_units:.6f} условных единиц |")
     lines.append("")
+    lines.append(report.signal_noise_line)
+    lines.append("")
     report_file = settings.reports_dir / f"session-{report.session_id}.md"
     if report_file.is_file():
         lines.append(f"Полный отчёт с разбивкой расхода по ролям — `{report_file}`.")

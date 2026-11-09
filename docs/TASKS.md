@@ -61,7 +61,7 @@
 | T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ✅ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
 | T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
-| T-10a | 1 | Покрытие сценариев: `workflow` feature-файл (фазы, роутер, остановка) и eval-кейс на автомат; карточка — `docs/tasks/T-10.md` | 1 | 4.0 | ⬜ | T-02 | `uv run pytest tests/test_scenario_coverage.py -k workflow_features -q` |
+| T-10a | 1 | Покрытие сценариев: `workflow` feature-файл (фазы, роутер, остановка) и eval-кейс на автомат; карточка — `docs/tasks/T-10.md` | 1 | 4.0 | ✅ | T-02 | `uv run pytest tests/test_scenario_coverage.py -k workflow_features -q` |
 | T-10b | 1 | Покрытие сценариев: `sources` feature-файл (отбор строки по полям, агрегат по имени расчёта) · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10a | `uv run pytest tests/test_scenario_coverage.py -k sources_features -q` |
 | T-10c | 1 | Покрытие сценариев: `strategy` feature-файл (полюса вариантов, числа плана, допущения вывода) · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10b | `uv run pytest tests/test_scenario_coverage.py -k strategy_features -q` |
 | T-10d | 1 | Покрытие сценариев: `data` feature-файл (метрика, период, шкала) и новые eval-кейсы · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10c | `uv run pytest tests/test_scenario_coverage.py -k data_features -q` |
@@ -118,7 +118,7 @@
 | T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ✅ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
 | T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ✅ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
 | T-71 | 2 | Дедуп и группировка отказов в документе демонстрации: `_group_repeats` вместо плоского списка; группировка по виду причины, а не по тексту | 2 | 1.8 | ⬜ | T-59 | `uv run pytest tests/test_demo_doc_generated.py -k rejection_grouping -q` |
-| T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ⬜ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |
+| T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ✅ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

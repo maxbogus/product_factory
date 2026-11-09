@@ -265,6 +265,46 @@ class SessionReport:
             return 0.0
         return self.confirmed_citations / self.total_citations
 
+    @property
+    def signal_noise(self) -> tuple[int, int, int]:
+        """Сигнал и шум прогона: что подтверждено, что сказано моделью.
+
+        Три корзины различаются принципиально:
+
+        * **подтверждено фактом** — уникальные основания, прошедшие проверку
+          по документу (``unique_citations``);
+        * **мнение модели** — гипотезы и допущения, то есть утверждения,
+          которые модель сделала, но документ их не подтверждает;
+        * **не подтверждено** — отклонённые основания, ожидающие проверки и
+          числа плана без своего расчёта.
+
+        Это одно правило для отчёта и документа: иначе две шапки разошлись
+        бы в том, сколько в прогоне сигнала.
+
+        Returns:
+            Три числа: подтверждено фактом, мнение модели, не подтверждено.
+        """
+        model_opinion = sum(self.hypotheses.values())
+        if self.conclusion is not None:
+            model_opinion += len(self.conclusion.assumptions)
+        unconfirmed = self.rejected_citations + len(self.needs_review_details)
+        if self.conclusion is not None:
+            unconfirmed += self.conclusion.unsupported_numbers
+        return self.unique_citations, model_opinion, unconfirmed
+
+    @property
+    def signal_noise_line(self) -> str:
+        """Строка «Сигнал/шум» для шапки отчёта и документа.
+
+        Returns:
+            Готовая строка markdown с тремя числами.
+        """
+        confirmed, opinion, unconfirmed = self.signal_noise
+        return (
+            f"**Сигнал/шум:** {confirmed} подтверждено фактом · "
+            f"{opinion} — мнение модели · {unconfirmed} не подтверждено."
+        )
+
     def readiness(self) -> str:
         """Готова ли работа к решению — одной строкой.
 
@@ -391,6 +431,8 @@ class SessionReport:
             lines.append(
                 f"| Опор на ввод пользователя (не основания) | {len(self.user_input_grounds)} |"
             )
+        lines.append("")
+        lines.append(self.signal_noise_line)
         lines.append("")
 
         readiness = self.readiness()

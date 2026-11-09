@@ -592,6 +592,19 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
   `pf.roles` (`D-60`, `T-70`). Ради этой таблицы документ демонстрации не
   пересобирают: `build_document` собирает свои разделы, а не `as_markdown`.
 
+- **Критерий приёмки сценарной задачи выбирает и файл, и кейс.** `T-10a` —
+  это `workflow.feature` (8 сценариев) **и** eval-кейс на автомат. Один
+  `-k workflow_features` обязан выбирать обе проверки, иначе сломанный
+  обработчик кейса пройдёт мимо: `tests/test_scenario_coverage.py` зовёт
+  `contracts_check.check_feature_covered` и `evalrun.run_all`, а не только
+  смотрит файл (`D-61`).
+- **Сигнал/шум считается одним правилом и попадает в обе шапки.**
+  `SessionReport.signal_noise` — три корзины (факт / мнение модели / не
+  подтверждено); `signal_noise_line` печатают и `report.as_markdown`, и
+  `artifacts._render`. Меняете правило — `make demo-doc SESSION=demo-v12`,
+  иначе `test_document_matches_its_journal` краснеет (`D-62`).
+
+
 ## Как ведётся работа
 
 Работа идёт сессиями по 1–2 задачи. Порядок:

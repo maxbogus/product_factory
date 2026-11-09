@@ -38,6 +38,11 @@ from pf.state import Phase, SessionState, load, save
 
 EVAL_CASES = Path(__file__).resolve().parent.parent.parent / "eval" / "cases" / "scenarios.jsonl"
 
+#: Кейс на автомат: маршрут назад исправляется. Имя вынесено константой,
+#: чтобы точечная проверка покрытия (``tests/test_scenario_coverage.py``)
+#: адресовала его по имени, а не по подстроке в id.
+AUTOMATON_CASE_ID = "D-23-workflow-router-backward-corrected"
+
 
 class Expectation(StrEnum):
     """Что ожидается от кейса."""
@@ -725,6 +730,36 @@ def _d21_constraint_violated() -> tuple[Expectation, str]:
     return Expectation.PASS, "нарушения не найдено"
 
 
+def _d23_workflow_router_backward_corrected() -> tuple[Expectation, str]:
+    """Автомат исправляет маршрут назад.
+
+    Роутер из фазы стратегии предлагает вернуться к сбору источников —
+    это откат, который испортил бы связность работы: результат сборщика
+    перестал бы быть входом аналитика. Код обязан отбросить маршрут и
+    продолжить по порядку фаз, назвав причину. Падение ветки отдаёт
+    другой исход — кейс краснеет и по исходу, и по тексту.
+
+    Returns:
+        Исход и текст: исправленный маршрут и причина.
+    """
+    from pf.schemas import NextStep
+    from pf.state import Phase, SessionState
+    from pf.workflow import StepResult, Workflow
+
+    workflow = Workflow()
+    state = SessionState(session_id="eval-router", phase=Phase.STRATEGY, question="задача")
+    result = StepResult(
+        role="router",
+        phase=Phase.ROUTING,
+        data=NextStep(role="collector", reason="надо пересобрать источники"),
+    )
+    next_phase = workflow.route_next(state, result)
+    note = str(state.results.get("routing_note", ""))
+    if next_phase is Phase.KEEPER and "назад" in note:
+        return Expectation.PASS, note
+    return Expectation.REJECT, f"откат исполнен: {next_phase.title_ru}"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -748,6 +783,7 @@ _HANDLERS = {
     "D-20-unknown-word-goes-to-queue": _d20_unknown_word_goes_to_queue,
     "D-21-constraint-violated": _d21_constraint_violated,
     "D-22-hypothesis-verdict": _d22_hypothesis_verdict,
+    "D-23-workflow-router-backward-corrected": _d23_workflow_router_backward_corrected,
     "D-31-review-on-changed-data": _d31_review_on_changed_data,
 }
 

@@ -425,6 +425,38 @@ def check_scenarios_covered() -> list[str]:
     return problems
 
 
+def check_feature_covered(name: str) -> list[str]:
+    """Покрытие одного feature-файла по имени.
+
+    Нужно для точечных проверок: ``check_scenarios_covered`` смотрит все
+    файлы сразу, а тест задачи обязан показать, что исполняется именно
+    его файл. Правило одно и то же, поэтому функция переиспользует те же
+    разбор шагов и реестр подключений, что и общий гейт.
+
+    Args:
+        name: Имя файла в ``tests/features`` (например,
+            ``workflow.feature``).
+
+    Returns:
+        Список нарушений. Пустой — файл подключён и все шаги определены.
+    """
+    path = FEATURES_DIR / name
+    if not path.is_file():
+        return [f"файл {name}: не найден"]
+    definitions = _step_definitions()
+    registered = _registered_features()
+    problems: list[str] = []
+    if not any(_normalize(path.name) in item for item in registered):
+        problems.append(f"файл {path.name}: не подключён через scenarios()")
+    for scenario, steps in _feature_steps(path).items():
+        if not steps:
+            problems.append(f"сценарий «{scenario}» не содержит шагов")
+        for step in steps:
+            if not _step_is_defined(step, definitions):
+                problems.append(f"сценарий «{scenario}»: шаг «{step}» без определения")
+    return problems
+
+
 def check_untrusted_not_confirmed() -> list[str]:
     """Ненадёжные зоны не могут быть источником подтверждённого основания.
 

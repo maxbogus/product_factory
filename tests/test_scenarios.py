@@ -16,8 +16,10 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -27,12 +29,16 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from pf.analysis import Metric as AnalysisMetric
 from pf.corpus import Article
 from pf.ground import SupportStatus
+from pf.llm import LLMError, LLMResponse, LLMUsage
 from pf.materials import Material, load_materials
 from pf.report import build_session_report
-from pf.schemas import Analysis, Claim, SourceRef, Variants, VerificationPlan
+from pf.schemas import Analysis, Claim, NextStep, SourceRef, Variants, VerificationPlan
 from pf.sources import SourceBundle, verify_metric
+from pf.state import Phase, SessionState
+from pf.workflow import StepResult, Workflow
 
 scenarios("features/grounding.feature")
+scenarios("features/workflow.feature")
 
 #: Каталог материалов сценария: подменяется на временный в фикстуре.
 MATERIALS_DIR: Path
@@ -130,6 +136,15 @@ class ScenarioState:
     verification: Any = None
     variants: Any = None
     session_id: str = ""
+    # ── Рабочий процесс (workflow.feature) ──
+    workflow: Any = None
+    session: Any = None
+    phases: list[Any] | None = None
+    next_step: Any = None
+    next_phase: Any = None
+    stop_question: str = ""
+    step_result: Any = None
+    error: Any = None
 
 
 STATE = ScenarioState()
@@ -710,3 +725,354 @@ def _then_recheck_is_confirmed() -> None:
     _when_verified()
     assert STATE.support is not None
     assert STATE.support.status is SupportStatus.CONFIRMED, STATE.support.detail
+
+
+# ── Рабочий процесс: фазы, роутер, остановка ───────────────────────────────
+
+
+class _AnsweringClient:
+    """Модель, которая отвечает заранее заданным JSON."""
+
+    def __init__(self, answer: dict[str, Any]) -> None:
+        """Запомнить ответ.
+
+        Args:
+            answer: Ответ, который вернёт модель.
+        """
+        self.answer = answer
+
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
+        """Ответить заранее подготовленным JSON.
+
+        Args:
+            system: Системная инструкция (не используется).
+            user: Текст задачи (не используется).
+            model: Имя модели (не используется).
+
+        Returns:
+            Ответ модели.
+        """
+        return LLMResponse(
+            content=json.dumps(self.answer, ensure_ascii=False),
+            usage=LLMUsage(prompt_tokens=10, completion_tokens=10),
+        )
+
+
+class _GarbledClient:
+    """Модель, которая возвращает текст, не разбираемый как JSON."""
+
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
+        """Вернуть неразборчивый ответ.
+
+        Args:
+            system: Системная инструкция (не используется).
+            user: Текст задачи (не используется).
+            model: Имя модели (не используется).
+
+        Returns:
+            Ответ модели без JSON.
+        """
+        return LLMResponse(
+            content="это не JSON",
+            usage=LLMUsage(prompt_tokens=1, completion_tokens=1),
+        )
+
+
+def _phase_by_title(title: str) -> Phase:
+    """Фаза по русскому названию.
+
+    Args:
+        title: Название фазы, как его печатает ``Phase.title_ru``.
+
+    Returns:
+        Фаза с таким названием.
+
+    Raises:
+        AssertionError: Фазы с таким названием нет.
+    """
+    for phase in Phase:
+        if phase.title_ru == title:
+            return phase
+    raise AssertionError(f"фаза «{title}» не найдена")
+
+
+def _workflow_session(phase: Phase) -> SessionState:
+    """Состояние сессии для сценария рабочего процесса.
+
+    Идентификатор уникальный: сценарии не должны делить журнал.
+
+    Args:
+        phase: Стартовая фаза.
+
+    Returns:
+        Свежее состояние сессии.
+    """
+    return SessionState(
+        session_id=f"scenario-workflow-{uuid4().hex[:8]}",
+        phase=phase,
+        question="вопрос сценария",
+    )
+
+
+def _workflow_with_client(client: Any, config: Any = None) -> Workflow:
+    """Рабочий процесс с подставной моделью.
+
+    Args:
+        client: Клиент модели.
+        config: Настройки; по умолчанию — из окружения.
+
+    Returns:
+        Готовый исполнитель.
+    """
+    return Workflow(client=client, config=config)
+
+
+@given("рабочий процесс начинается с фазы постановки задачи")
+def _given_workflow_starts() -> None:
+    """Первая фаза автомата — постановка задачи."""
+    assert Phase.INTAKE.title_ru == "Постановка задачи"
+
+
+@when("фазы проходят до завершения")
+def _when_phases_walk() -> None:
+    """Пройти автомат по порядку до терминальной фазы."""
+    phases = [Phase.INTAKE]
+    while phases[-1] is not Phase.DONE:
+        phases.append(phases[-1].next)
+    STATE.phases = phases
+
+
+@then("пройдено девять рабочих фаз")
+def _then_nine_working_phases() -> None:
+    """Девять рабочих фаз без терминальной «Завершено»."""
+    assert STATE.phases is not None
+    working = [phase for phase in STATE.phases if phase is not Phase.DONE]
+    assert len(working) == 9, [phase.title_ru for phase in working]
+
+
+@then("последняя фаза — «Завершено»")
+def _then_last_is_done() -> None:
+    """Автомат заканчивается терминальной фазой."""
+    assert STATE.phases is not None
+    assert STATE.phases[-1] is Phase.DONE
+    assert STATE.phases[-1].title_ru == "Завершено"
+
+
+@given(parsers.parse("сессия находится в фазе «{title}»"))
+def _given_session_phase(title: str) -> None:
+    """Поставить сессию в названную фазу.
+
+    Args:
+        title: Название фазы.
+    """
+    STATE.session = _workflow_session(_phase_by_title(title))
+
+
+@given(parsers.parse("роутер предлагает роль «{role}»"))
+def _given_router_role(role: str) -> None:
+    """Запомнить решение роутера.
+
+    Args:
+        role: Роль, которую выбрал роутер.
+    """
+    STATE.next_step = NextStep(role=role, reason="причина сценария")
+
+
+@when("роутер выбирает следующую фазу")
+def _when_router_chooses() -> None:
+    """Применить решение роутера к состоянию."""
+    assert STATE.session is not None and STATE.next_step is not None
+    STATE.workflow = _workflow_with_client(_AnsweringClient({}))
+    result = StepResult(role="router", phase=Phase.ROUTING, data=STATE.next_step)
+    STATE.next_phase = STATE.workflow.route_next(STATE.session, result)
+
+
+@then(parsers.parse("работа продолжается по порядку — «{title}»"))
+def _then_next_phase_is(title: str) -> None:
+    """Маршрут исправлен, работа идёт по порядку фаз.
+
+    Args:
+        title: Ожидаемое название следующей фазы.
+    """
+    assert STATE.next_phase == _phase_by_title(title), (
+        STATE.next_phase.title_ru if STATE.next_phase else None
+    )
+
+
+@then("причина названа: маршрут вёл назад")
+def _then_note_backward() -> None:
+    """Роутер объяснил исправление маршрута назад."""
+    assert STATE.session is not None
+    assert "назад" in STATE.session.results.get("routing_note", "")
+
+
+@then("причина названа: маршрут неизвестен")
+def _then_note_unknown() -> None:
+    """Роутер объяснил, что маршрут неизвестен."""
+    assert STATE.session is not None
+    assert "неизвестен" in STATE.session.results.get("routing_note", "")
+
+
+@given(parsers.parse("роутер задал вопрос «{question}»"))
+def _given_router_question(question: str) -> None:
+    """Решение роутера требует человека.
+
+    Args:
+        question: Вопрос человеку.
+    """
+    STATE.next_step = NextStep(role="options", need_human=True, question=question)
+
+
+@given(parsers.parse("вопрос «{question}» уже задан и на него ответили"))
+def _given_answered_question(question: str) -> None:
+    """Вопрос задан, и человек на него ответил.
+
+    Args:
+        question: Уже заданный вопрос.
+    """
+    STATE.session = _workflow_session(Phase.ROUTING)
+    STATE.session.results["human_questions"] = [question]
+    STATE.session.results["human_answers"] = [{"question": question, "answer": "сегмент B"}]
+
+
+@given(parsers.parse("роутер повторил вопрос «{question}»"))
+def _given_repeated_question(question: str) -> None:
+    """Роутер повторяет уже заданный вопрос.
+
+    Args:
+        question: Повторённый вопрос.
+    """
+    STATE.next_step = NextStep(role="options", need_human=True, question=question)
+
+
+@when("проверяется, нужно ли остановиться")
+def _when_check_stop() -> None:
+    """Решить, останавливает ли вопрос работу."""
+    assert STATE.next_step is not None
+    if STATE.session is None:
+        STATE.session = _workflow_session(Phase.ROUTING)
+    result = StepResult(role="router", phase=Phase.ROUTING, data=STATE.next_step)
+    STATE.stop_question = Workflow.human_question_to_stop(STATE.session, result)
+
+
+@then("работа останавливается")
+def _then_stopped() -> None:
+    """Работа останавливается на вопросе."""
+    assert STATE.stop_question, "работа не остановилась"
+
+
+@then(parsers.parse("вопрос для человека — «{question}»"))
+def _then_stop_question(question: str) -> None:
+    """Вопрос, из-за которого остановились, назван.
+
+    Args:
+        question: Ожидаемый вопрос.
+    """
+    assert STATE.stop_question == question, STATE.stop_question
+
+
+@then("работа продолжается")
+def _then_continues() -> None:
+    """Работа не останавливается."""
+    assert STATE.stop_question == "", STATE.stop_question
+
+
+@then("причина названа: ответ уже записан")
+def _then_note_answered() -> None:
+    """Повтор снят, причина записана."""
+    assert STATE.session is not None
+    assert "ответ записан" in STATE.session.results.get("routing_note", "")
+
+
+@given("модель возвращает неразборчивый ответ")
+def _given_garbled_model() -> None:
+    """Подставить модель, отвечающую не-JSON текстом."""
+    STATE.workflow = _workflow_with_client(_GarbledClient())
+
+
+@when("роль вызывается у модели, которая не отвечает по схеме")
+def _when_role_call_fails() -> None:
+    """Вызвать роль; повторы не дают пригодного ответа."""
+    assert STATE.workflow is not None
+    try:
+        STATE.workflow._call_role("router", {"task": "сценарий"})
+    except LLMError as exc:
+        STATE.error = exc
+
+
+@then("шаг завершается ошибкой «не дала пригодного ответа»")
+def _then_error_garbled() -> None:
+    """Ошибка называет, что роль не дала пригодного ответа."""
+    assert STATE.error is not None, "неразборчивый ответ не привёл к ошибке"
+    assert "не дала пригодного ответа" in str(STATE.error), str(STATE.error)
+
+
+@then("текст ошибки называет роль")
+def _then_error_names_role() -> None:
+    """В тексте ошибки — имя роли."""
+    assert STATE.error is not None
+    assert "router" in str(STATE.error), str(STATE.error)
+
+
+@given("расход сессии достиг предела")
+def _given_budget_reached() -> None:
+    """Сессия с расходом и пределом, при котором хук срабатывает."""
+    STATE.session = _workflow_session(Phase.STRATEGY)
+    STATE.session.cost_units = 0.5
+    STATE.workflow = _workflow_with_client(
+        _GarbledClient(), config=SimpleNamespace(max_cost_units=1.0)
+    )
+
+
+@when("применяются хуки после шага")
+def _when_apply_hooks() -> None:
+    """Применить хуки к результату шага."""
+    assert STATE.workflow is not None and STATE.session is not None
+    result = StepResult(
+        role="strategy",
+        phase=Phase.STRATEGY,
+        data=SimpleNamespace(gaps=[]),
+    )
+    STATE.workflow._apply_hooks(STATE.session, result)
+
+
+@then("работа помечена остановленной")
+def _then_stopped_at() -> None:
+    """Фаза остановки записана в состоянии."""
+    assert STATE.session is not None
+    assert STATE.session.results.get("stopped_at") == "strategy", STATE.session.results
+
+
+@then("вопрос называет предел расхода")
+def _then_budget_question() -> None:
+    """Вопрос человеку называет достигнутый расход."""
+    assert STATE.session is not None
+    assert "Расход достиг предела" in STATE.session.pending_question, STATE.session.pending_question
+
+
+@given(parsers.parse("фаза — «{title}», а источники не собраны"))
+def _given_analyzing_without_sources(title: str) -> None:
+    """Аналитик работает без собранных источников.
+
+    Args:
+        title: Название фазы разбора.
+    """
+    STATE.session = _workflow_session(_phase_by_title(title))
+    answer = {"facts": [], "hypotheses": [], "forecasts": [], "gaps": ["нет телеметрии"]}
+    STATE.workflow = _workflow_with_client(_AnsweringClient(answer))
+
+
+@when("разбор выполняется без собранных источников")
+def _when_run_without_sources() -> None:
+    """Выполнить шаг разбора без среза источников."""
+    assert STATE.workflow is not None and STATE.session is not None
+    STATE.step_result = STATE.workflow.run_step(STATE.session, None)
+
+
+@then("шаг говорит, что основания не проверялись")
+def _then_sources_not_collected() -> None:
+    """Шаг называет, что проверять основания было нечем."""
+    assert STATE.step_result is not None
+    assert any("источники не собраны" in detail for detail in STATE.step_result.rejected_details), (
+        STATE.step_result.rejected_details
+    )

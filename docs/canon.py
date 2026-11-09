@@ -33,16 +33,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # ── Числа ────────────────────────────────────────────────────────────────────
 #: Детерминированные тесты: ``pytest -m "not slow"``.
-TESTS_DETERMINISTIC = 830
+TESTS_DETERMINISTIC = 840
 
 #: Тесты с живой моделью: ``pytest -m slow``.
 TESTS_LIVE = 4
 
 #: Кейсов в eval-наборе (``eval/cases/scenarios.jsonl``).
-EVAL_CASES = 23
+EVAL_CASES = 24
 
 #: BDD-сценариев в ``tests/features/*.feature``.
-SCENARIOS_BDD = 12
+SCENARIOS_BDD = 20
 
 #: Рабочих фаз (``pf.state.Phase`` без терминальной ``DONE``).
 WORKFLOW_PHASES = 9
