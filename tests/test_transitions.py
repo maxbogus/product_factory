@@ -48,7 +48,7 @@ class FakeClient:
         self.answers = answers
         self.calls: list[tuple[str, str]] = []
 
-    def complete(self, system: str, user: str) -> LLMResponse:
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
         """Ответить заранее подготовленным JSON.
 
         Args:

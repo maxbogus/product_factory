@@ -397,3 +397,70 @@ def test_number_range_is_not_negative() -> None:
     assert hyphen == [10.0]
     assert dash == [10.0]
     assert all(value > 0 for value in [*hyphen, *dash])
+
+
+# ── Готовый агрегат: расчёт даёт система ─────────────────────────────────────
+#
+# Агрегат и его первая строка делят один якорь `[… #rowN]`: у среднего
+# `source_id` и `row` взяты у первого наблюдения (`analysis.summarize_series`).
+# Поэтому значение строки и значение среднего различимы только по виду
+# расчёта. Модель, назвавшая средним значение строки (87), складывает сама:
+# среднее посчитал код, и оно равно 84,5. Общий якорь не должен подтверждать
+# подмену (`T-62`).
+
+
+def _row_and_mean_metrics() -> list[Metric]:
+    """Строка таблицы и её среднее — делят строку № 0 и якорь.
+
+    Returns:
+        Расчёт строки (87) и среднее по ряду (84,5).
+    """
+    row = _metric(
+        "Открытые метрики: база, МТС",
+        87.0,
+        "млн",
+        "project/data/telecom_open_metrics.csv",
+        0,
+    )
+    mean = Metric(
+        name="Открытые метрики: база, МТС: среднее",
+        value=84.5,
+        unit="млн",
+        source_id="project/data/telecom_open_metrics.csv",
+        row=0,
+        formula="сумма / количество",
+        inputs={"наблюдения": ["87", "82"]},
+    )
+    return [row, mean]
+
+
+def test_aggregate_anchor_does_not_confirm_row_value() -> None:
+    """Значение строки не подтверждает среднее, даже если якорь общий.
+
+    «Среднее 87 млн» — это арифметика модели: готовый агрегат системы равен
+    84,5. Оба расчёта ссылаются на `#row0`, и прежняя сверка принимала 87
+    по строке, не замечая, что назван агрегат.
+    """
+    strategy = _strategy(
+        ["Средняя абонентская база"],
+        "Повышение удержания клиентов",
+        compare_against="Среднее 87 млн [project/data/telecom_open_metrics.csv#row0]",
+    )
+
+    check = Workflow._check_plan_numbers(strategy, metrics=_row_and_mean_metrics())
+
+    assert check.notes, "значение строки не должно подтверждать среднее"
+    assert "не совпадает" in check.notes[0].text
+
+
+def test_aggregate_anchor_confirms_ready_aggregate_value() -> None:
+    """Ссылка на готовый агрегат (84,5) подтверждается — иначе правило бесполезно."""
+    strategy = _strategy(
+        ["Средняя абонентская база"],
+        "Повышение удержания клиентов",
+        compare_against="Среднее 84,5 млн [project/data/telecom_open_metrics.csv#row0]",
+    )
+
+    check = Workflow._check_plan_numbers(strategy, metrics=_row_and_mean_metrics())
+
+    assert check.notes == (), f"готовый агрегат отклонён: {[n.text for n in check.notes]}"

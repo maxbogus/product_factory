@@ -97,8 +97,15 @@ class LLMResponse:
 class LLMClient(Protocol):
     """Протокол клиента модели."""
 
-    def complete(self, system: str, user: str) -> LLMResponse:
-        """Выполнить запрос."""
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
+        """Выполнить запрос.
+
+        Args:
+            system: Системная инструкция.
+            user: Текст задачи.
+            model: Модель для этого вызова; пусто — модель по умолчанию
+                из настроек. Модель выбирает ``pf.roles.model_for``.
+        """
         ...
 
 
@@ -167,12 +174,13 @@ class OllamaClient:
     def __init__(self, config: Settings | None = None) -> None:
         self.config = config or settings
 
-    def complete(self, system: str, user: str) -> LLMResponse:
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
         """Выполнить запрос к локальной модели.
 
         Args:
             system: Системная инструкция.
             user: Текст задачи.
+            model: Модель для этого вызова; пусто — модель по умолчанию.
 
         Returns:
             Ответ модели с расходом.
@@ -180,8 +188,9 @@ class OllamaClient:
         Raises:
             LLMError: Модель недоступна или вернула ошибку.
         """
+        name = model or self.config.effective_model
         payload = {
-            "model": self.config.effective_model,
+            "model": name,
             "stream": False,
             "options": {
                 "temperature": self.config.temperature,
@@ -206,10 +215,7 @@ class OllamaClient:
             response = httpx.post(url, json=payload, timeout=self.config.timeout_seconds)
             response.raise_for_status()
         except httpx.TimeoutException as exc:
-            raise LLMError(
-                f"модель {self.config.effective_model} не ответила за "
-                f"{self.config.timeout_seconds} с"
-            ) from exc
+            raise LLMError(f"модель {name} не ответила за {self.config.timeout_seconds} с") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"не удалось обратиться к модели: {exc}") from exc
 
@@ -219,7 +225,7 @@ class OllamaClient:
             prompt_tokens=int(data.get("prompt_eval_count", 0)),
             completion_tokens=int(data.get("eval_count", 0)),
             duration_ms=int(data.get("total_duration", 0) / 1_000_000),
-            model=self.config.effective_model,
+            model=name,
             # Окно запоминается в расходе: по нему видно, упёрся ли промпт
             # в предел. Без этого «модель ответила» не отличить от
             # «модель видела весь контекст».
@@ -234,12 +240,13 @@ class OpenAICompatibleClient:
     def __init__(self, config: Settings | None = None) -> None:
         self.config = config or settings
 
-    def complete(self, system: str, user: str) -> LLMResponse:
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
         """Выполнить запрос к API с ключом.
 
         Args:
             system: Системная инструкция.
             user: Текст задачи.
+            model: Модель для этого вызова; пусто — модель по умолчанию.
 
         Returns:
             Ответ модели с расходом.
@@ -255,8 +262,9 @@ class OpenAICompatibleClient:
             )
 
         url = f"{self.config.effective_base_url.rstrip('/')}/chat/completions"
+        name = model or self.config.effective_model
         payload = {
-            "model": self.config.effective_model,
+            "model": name,
             "temperature": self.config.temperature,
             "max_tokens": self.config.effective_max_tokens,
             "messages": [
@@ -289,7 +297,7 @@ class OpenAICompatibleClient:
             prompt_tokens=int(usage_data.get("prompt_tokens", 0)),
             completion_tokens=int(usage_data.get("completion_tokens", 0)),
             duration_ms=0,
-            model=self.config.effective_model,
+            model=name,
         )
         return LLMResponse(content=content, usage=usage)
 
@@ -306,12 +314,13 @@ class ResilientClient:
         self.inner = inner
         self.max_attempts = max_attempts
 
-    def complete(self, system: str, user: str) -> LLMResponse:
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
         """Выполнить запрос с повторами.
 
         Args:
             system: Системная инструкция.
             user: Текст задачи.
+            model: Модель для этого вызова; передаётся внутреннему клиенту.
 
         Returns:
             Ответ модели с расходом.
@@ -326,7 +335,7 @@ class ResilientClient:
         for attempt in range(1, self.max_attempts + 1):
             attempts = attempt
             try:
-                response = self.inner.complete(system, current_user)
+                response = self.inner.complete(system, current_user, model=model)
                 if attempt > 1:
                     response.attempts = attempts
                 return response

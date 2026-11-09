@@ -45,7 +45,7 @@ class _Client:
         """
         self.usage = usage
 
-    def complete(self, system: str, user: str) -> LLMResponse:
+    def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
         """Ответить заготовкой интика.
 
         Args:

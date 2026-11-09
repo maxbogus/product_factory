@@ -23,7 +23,7 @@ class StubClient:
     def __init__(self, answers: dict[str, Any]) -> None:
         self.answers = answers
 
-    def complete(self, system: str, user: str) -> Any:
+    def complete(self, system: str, user: str, *, model: str = "") -> Any:
         from pf.llm import LLMResponse, LLMUsage
 
         role = "unknown"

@@ -42,7 +42,7 @@ class _StubClient:
         self.answers = answers
         self.calls: list[tuple[str, str]] = []
 
-    def complete(self, system: str, user: str) -> Any:
+    def complete(self, system: str, user: str, *, model: str = "") -> Any:
         from pf.llm import LLMResponse, LLMUsage
 
         role = "collector" if "сборщик" in system else "unknown"

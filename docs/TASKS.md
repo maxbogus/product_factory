@@ -110,12 +110,12 @@
 | T-60a | 1 | Канал основания: `basis_kind` в `SourceRef` — факт, ввод пользователя со стадией, решение, гипотеза | 1 | 18.0 | ✅ | T-59 | `uv run pytest tests/test_basis_channel.py -k basis_kind -q` |
 | T-60b | 1 | Отчёт называет опоры на ввод пользователя отдельно от оснований; ввод не поднимает статус вывода | 1 | 8.1 | ✅ | T-60a | `uv run pytest tests/test_basis_channel.py -k human_input_does_not_raise_status -q` |
 | T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 6.5 | ✅ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
-| T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 6.0 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
+| T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 6.0 | ✅ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
 | T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ✅ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
 | T-65 | 1 | Противоречия источников по осям: скил и хук (не агент), ось названа, раздел отчёта | 2 | 7.0 | ✅ | T-59 | `uv run pytest tests/test_contradictions.py tests/test_report_conclusion.py -k contradiction -q` |
 | T-67 | 1 | Имена субъектов и доменные термины — данные (`knowledge/domain/`), а не код: гейт «ни одного имени в `src/`» | 3 | 9.0 | ✅ | — | `uv run pytest tests/test_no_entity_names.py -k entity_names -q` |
 | T-68 | 3 | Второй демо-проект на незнакомом домене: переносимость доказана, а не обещана | 3 | 8.0 | ✅ | T-67 | `uv run pytest tests/test_portability.py -k second_project -q` |
-| T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ⬜ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
+| T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ✅ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
 | T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
 | T-71 | 2 | Дедуп и группировка отказов в документе демонстрации: `_group_repeats` вместо плоского списка; группировка по виду причины, а не по тексту | 2 | 1.8 | ⬜ | T-59 | `uv run pytest tests/test_demo_doc_generated.py -k rejection_grouping -q` |
 | T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ⬜ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |

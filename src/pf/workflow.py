@@ -459,6 +459,25 @@ _MAGNITUDE = re.compile(
 #: показателем, у которого случайно совпало служебное слово.
 _CALC_ANCHOR = re.compile(r"\[(?P<path>[^\[\]]+?)#row(?P<row>\d+)\]")
 
+#: Слова, которыми называют готовый агрегат. Если они есть в тексте числа,
+#: подтверждать его строкой таблицы нельзя: строку нельзя назвать «средним».
+#: Агрегат и его первая строка делят якорь, и без этой развилки значение
+#: строки подтверждало сводку, которую посчитал код (`T-62`).
+_AGGREGATE_MARKERS: tuple[str, ...] = ("средн", "медиан", "размах")
+
+
+def _wants_aggregate(text: str) -> bool:
+    """Называет ли текст готовый агрегат (среднее, медиану, размах).
+
+    Args:
+        text: Текст плана, критерия или обязательства.
+
+    Returns:
+        ``True``, если число относится к сводке, а не к строке таблицы.
+    """
+    lowered = text.lower()
+    return any(marker in lowered for marker in _AGGREGATE_MARKERS)
+
 
 @dataclass(slots=True)
 class _Calculation:
@@ -466,16 +485,19 @@ class _Calculation:
 
     Attributes:
         indicator: Показатель — из строки источника, если расчёт на неё
-            ссылается, иначе из имени метрики.
+            ссылается, иначе из имени метрики. У агрегата — полное имя:
+            сводку нельзя потерять, иначе строка подтверждает «среднее».
         stems: Основы слов показателя без служебных.
         numbers: Числа расчёта: значение и входы агрегата.
         citation: Ссылка на строку источника (``путь#rowN``) либо пусто.
+        is_aggregate: Сводка ли это (среднее, медиана, размах, изменение).
     """
 
     indicator: str
     stems: set[str]
     numbers: list[float]
     citation: str
+    is_aggregate: bool = False
 
 
 #: Величина взята из утверждения о мире — с неё можно спрашивать расчёт.
@@ -596,11 +618,13 @@ class Workflow:
         """
         system = roles.load_prompt(role_name)
         user = self._build_user(payload, context, role_name, extras=extras)
+        # Модель выбирается по роли: извлечение — дешёвая, синтез — сильная.
+        model = roles.model_for(role_name, self.config)
 
         last_error = ""
         attempts = 3
         for _attempt in range(1, attempts + 1):
-            response = self.client.complete(system, user)
+            response = self.client.complete(system, user, model=model)
 
             try:
                 raw = extract_json(response.content)
@@ -1121,7 +1145,14 @@ class Workflow:
 
         pool: list[_Calculation] = []
         for metric in metrics:
-            indicator = indicator_of_citation(metric.citation, materials) or metric.name
+            aggregate = metric.is_aggregate
+            # У агрегата показатель — полное имя со сводкой: «среднее» должно
+            # остаться в основах, иначе строка таблицы подтверждает сводку.
+            indicator = (
+                metric.name
+                if aggregate
+                else indicator_of_citation(metric.citation, materials) or metric.name
+            )
             if not indicator:
                 continue
             numbers = [float(metric.value)]
@@ -1136,6 +1167,7 @@ class Workflow:
                     stems=indicator_stems(indicator),
                     numbers=numbers,
                     citation=metric.citation,
+                    is_aggregate=aggregate,
                 )
             )
         return pool
@@ -1291,6 +1323,11 @@ class Workflow:
             same = [calc for calc in pool if calc.stems & text_stems]
             others = [calc for calc in pool if not calc.stems & text_stems]
             anchored = Workflow._anchored_calculations(text, pool)
+            if _wants_aggregate(text):
+                # Готовый агрегат подтверждает только расчёт-сводка: значение
+                # строки с тем же якорем — это арифметика модели (`T-62`).
+                same = [calc for calc in same if calc.is_aggregate]
+                anchored = [calc for calc in anchored if calc.is_aggregate]
             for value, unit in Workflow._magnitudes(text):
                 shown = f"{value:g} {unit}".strip()
                 magnitude = (value, unit)

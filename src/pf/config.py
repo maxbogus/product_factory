@@ -116,6 +116,19 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    # ── Модель по роли ──────────────────────────────────────────────────────
+    #: Модель для извлечения (intake, collector, analyst, router, keeper).
+    #: Пусто — модель по умолчанию (``effective_model``). Разные модели дают
+    #: экономию: дешёвая на извлечении, средняя на плане, сильная на синтезе.
+    #: Имена моделей задаёт человек: агент не знает, что скачано в Ollama.
+    role_model_extraction: str = ""
+
+    #: Модель для плана и противоречий (planner, redteam).
+    role_model_planning: str = ""
+
+    #: Модель для синтеза (options, strategy).
+    role_model_synthesis: str = ""
+
     # ── Параметры генерации ─────────────────────────────────────────────────
     temperature: float = 0.2
     max_tokens: int = 3200

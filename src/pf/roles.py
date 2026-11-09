@@ -28,7 +28,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from pf.config import settings
+from pf.config import Settings, settings
 from pf.schemas import (
     Analysis,
     DecisionRecord,
@@ -116,6 +116,60 @@ ROLES: dict[str, Role] = {
         title_ru="Маршрутизация",
     ),
 }
+
+
+#: Ярус роли: от него зависит модель. Извлечение (intake, collector, analyst,
+#: router, keeper) не требует сильной модели; план и противоречия (planner,
+#: redteam) — средняя; синтез (options, strategy) — сильная. Это политика, а
+#: не настройка: настройка — имя модели, потому что агент не знает, какие
+#: модели скачаны в Ollama.
+ROLE_TIERS: dict[str, str] = {
+    "intake": "extraction",
+    "collector": "extraction",
+    "analyst": "extraction",
+    "router": "extraction",
+    "keeper": "extraction",
+    "planner": "planning",
+    "redteam": "planning",
+    "options": "synthesis",
+    "strategy": "synthesis",
+}
+
+
+def tier_of(role_name: str) -> str:
+    """Ярус роли: от него зависит модель.
+
+    Args:
+        role_name: Идентификатор роли.
+
+    Returns:
+        ``extraction``, ``planning`` или ``synthesis``; неизвестная роль
+        считается извлечением — дешёвый ярус безопасен по умолчанию.
+    """
+    return ROLE_TIERS.get(role_name, "extraction")
+
+
+def model_for(role_name: str, config: Settings | None = None) -> str:
+    """Модель для роли.
+
+    Пустое значение яруса в настройках означает «модель по умолчанию»
+    (``effective_model``). Так поведение без настройки не меняется, а
+    экономия включается, когда человек задал имена моделей.
+
+    Args:
+        role_name: Идентификатор роли.
+        config: Настройки. По умолчанию — из окружения.
+
+    Returns:
+        Имя модели провайдера для этой роли.
+    """
+    cfg = config or settings
+    overrides = {
+        "extraction": cfg.role_model_extraction,
+        "planning": cfg.role_model_planning,
+        "synthesis": cfg.role_model_synthesis,
+    }
+    return overrides.get(tier_of(role_name), "") or cfg.effective_model
 
 
 #: Как роли называют себя в ответе. Модель отвечает по-русски и в
