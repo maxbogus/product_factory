@@ -56,20 +56,20 @@
 | T-03 | 1 | «Подкреплено» считается по уникальным источникам, а не по записям | 2 | 7.6 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k unique -q` |
 | T-04 | 1 | Числа в документах совпадают с каноном | 1 | 8.1 | ✅ | T-00 | `make docs-check` |
 | T-05 | 1 | Согласованность заявлений: README-цикл, `demo/BRIEF.md` про веб, оговорка про `--extra documents`, `.env.example` ↔ умолчания | 2 | 4.1 | ✅ | T-04 | `uv run pytest tests/test_documents_consistency.py -q` |
-| T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 3.7 | ⬜ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
-| T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 3.7 | ⬜ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
+| T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 8.0 | ⬜ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
+| T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 7.5 | ⬜ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
 | T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ✅ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
 | T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
 | T-10a | 1 | Покрытие сценариев: `workflow` feature-файл (фазы, роутер, остановка) и eval-кейс на автомат; карточка — `docs/tasks/T-10.md` | 1 | 4.0 | ⬜ | T-02 | `uv run pytest tests/test_scenario_coverage.py -k workflow_features -q` |
-| T-10b | 1 | Покрытие сценариев: `sources` feature-файл (отбор строки по полям, агрегат по имени расчёта) | 1 | 4.0 | ⬜ | T-10a | `uv run pytest tests/test_scenario_coverage.py -k sources_features -q` |
-| T-10c | 1 | Покрытие сценариев: `strategy` feature-файл (полюса вариантов, числа плана, допущения вывода) | 1 | 4.0 | ⬜ | T-10b | `uv run pytest tests/test_scenario_coverage.py -k strategy_features -q` |
-| T-10d | 1 | Покрытие сценариев: `data` feature-файл (метрика, период, шкала) и новые eval-кейсы | 1 | 4.0 | ⬜ | T-10c | `uv run pytest tests/test_scenario_coverage.py -k data_features -q` |
+| T-10b | 1 | Покрытие сценариев: `sources` feature-файл (отбор строки по полям, агрегат по имени расчёта) · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10a | `uv run pytest tests/test_scenario_coverage.py -k sources_features -q` |
+| T-10c | 1 | Покрытие сценариев: `strategy` feature-файл (полюса вариантов, числа плана, допущения вывода) · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10b | `uv run pytest tests/test_scenario_coverage.py -k strategy_features -q` |
+| T-10d | 1 | Покрытие сценариев: `data` feature-файл (метрика, период, шкала) и новые eval-кейсы · отложена: гигиена гейта; достаточно T-10a| 1 | 4.0 | ⏸ | T-10c | `uv run pytest tests/test_scenario_coverage.py -k data_features -q` |
 | T-11 | 3 | Данные: отток, ARPU, тарифы конкурентов, переносы номеров, один PDF | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_demo_data.py -q` |
 | T-12 | 4 | `pf review`: пересмотр выводов по изменившимся хешам данных | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_review.py -q` |
-| T-13 | 4 | Шаг интервью и модельных респондентов с маркировкой синтетики | 5 | 1.4 | ⬜ | T-07 | `uv run pytest tests/test_interviews.py -q` |
-| T-14a | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой; карточка — `docs/tasks/T-14.md` | 1 | 2.7 | ⬜ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation_in_verdict -q` |
-| T-14b | 2 | Переразметка кейсов: у каждого `expected` — проверяемая подстрока ответа | 2 | 2.7 | ⬜ | T-14a | `uv run pytest tests/test_eval_cases.py -k expectations_labeled -q` |
+| T-13 | 4 | Шаг интервью и модельных респондентов с маркировкой синтетики · отложена: синтетика не доказывает спрос; 5 SP| 5 | 1.4 | ⏸ | T-07 | `uv run pytest tests/test_interviews.py -q` |
+| T-14a | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой; карточка — `docs/tasks/T-14.md` | 1 | 5.0 | ⬜ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation_in_verdict -q` |
+| T-14b | 2 | Переразметка кейсов: у каждого `expected` — проверяемая подстрока ответа · отложена: бухгалтерия замера; содержательное — T-14a| 2 | 2.7 | ⏸ | T-14a | `uv run pytest tests/test_eval_cases.py -k expectations_labeled -q` |
 | T-15 | 1 | Строка таблицы подтверждает только свой показатель: сверка показателя и словоформ, а не одного числа | 2 | 8.1 | ✅ | — | `uv run pytest tests/test_sources.py -k indicator -q` |
 | T-16 | 2 | Контекст модели не вытесняется таблицей: не больше двух абзацев от источника, остальное — корпус | 2 | 6.4 | ✅ | — | `uv run pytest tests/test_retrieval.py -k context -q` |
 | T-17 | 2 | Числа плана и обязательств сверяются с расчётами, а не только по основе слова | 2 | 4.9 | ✅ | T-15 | `uv run pytest tests/test_success_criteria.py -k numbers -q` |
@@ -77,8 +77,8 @@
 | T-25 | 2 | Строка таблицы отбирается по показателю, а не по совпадению слов | 2 | 5.6 | ✅ | T-16 | `uv run pytest tests/test_retrieval.py -k row_filter -q` |
 | T-26 | 2 | arXiv как канал источников: препринты с пометкой «не рецензирован» | 2 | 0.7 | ✅ | T-27 | `uv run pytest tests/test_arxiv.py -k atom -q` |
 | T-27 | 2 | Перевод en→ru как слой: кэш переводов, сохранность чисел, `pf translate` | 3 | 2.0 | ✅ | — | `uv run pytest tests/test_translate.py -k numbers_preserved -q` |
-| T-28 | 2 | Перевод в поиске и отборе: запрос RU→EN для английских каналов, `text_ru` для релевантности | 3 | 1.2 | ⬜ | T-26, T-27 | `uv run pytest tests/test_retrieval.py -k translated_relevant -q` |
-| T-29 | 2 | Перевод в проверке и анализе: ветка «другой язык» усилена, числа сверяются с оригиналом | 3 | 3.0 | ⬜ | T-27, T-28 | `uv run pytest tests/test_ground.py -k translated_quote -q` |
+| T-28 | 2 | Перевод в поиске и отборе: запрос RU→EN для английских каналов, `text_ru` для релевантности · отложена: слой перевода закрыт T-27; доверию не даёт| 3 | 1.2 | ⏸ | T-26, T-27 | `uv run pytest tests/test_retrieval.py -k translated_relevant -q` |
+| T-29 | 2 | Перевод в проверке и анализе: ветка «другой язык» усилена, числа сверяются с оригиналом · отложена: слой перевода закрыт T-27; доверию не даёт| 3 | 3.0 | ⏸ | T-27, T-28 | `uv run pytest tests/test_ground.py -k translated_quote -q` |
 | T-30 | 2 | Агрегат в выводе сверяется по имени метрики, а не со строкой источника | 2 | 2.1 | ✅ | — | `uv run pytest tests/test_sources.py -k aggregate_by_name -q` |
 | T-31 | 1 | Период-квартал не ломает порядок ряда: `analysis._period_key` читает квартал как часть года | 2 | 5.4 | ✅ | — | `uv run pytest tests/test_analysis.py -k period_order -q` |
 | T-32 | 1 | Журнал не принимает второй шаг с тем же номером: двойной запуск виден, а не тонет | 2 | 3.2 | ✅ | — | `uv run pytest tests/test_state_journal.py -k duplicate_ordinal -q` |
@@ -89,13 +89,13 @@
 | T-42 | 2 | Чистка для сравнения: url, имена колонок, разметка, колонтитулы — один слой для лексики и эмбеддингов | 2 | 4.25 | ✅ | T-37 | `uv run pytest tests/test_sanitize.py -k sanitize -q` |
 | T-43 | 2 | Слова-числа и единицы → величина: «почти сорок миллионов» как число в базовой шкале; цифры в пропись не переводятся | 2 | 3.5 | ✅ | T-42 | `uv run pytest tests/test_quantities.py -k quantities -q` |
 | T-44 | 2 | Каноническое сравнение по полям: понятия, числа, период как ключ, термины, отрицание вместо одного порога покрытия | 5 | 2.5 | ✅ | T-43 | `uv run pytest tests/test_canonical.py -k fields -q` |
-| T-45 | 2 | Предлагатель понятий **без эмбеддингов**: TF-IDF и леммы по корпусу ставят кандидата в очередь OOV (`proposed`), подтверждает человек; `D-09`/`D-37` в силе | 2 | 1.4 | ⬜ | T-43 | `uv run pytest tests/test_proposer.py -k propose -q` |
-| T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 2.3 | ⬜ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
+| T-45 | 2 | Предлагатель понятий **без эмбеддингов**: TF-IDF и леммы по корпусу ставят кандидата в очередь OOV (`proposed`), подтверждает человек; `D-09`/`D-37` в силе · отложена: очередь OOV закрывается вручную| 2 | 1.4 | ⏸ | T-43 | `uv run pytest tests/test_proposer.py -k propose -q` |
+| T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 8.0 | ⬜ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
 | T-47 | 1 | Унаследованный журнал не выдаёт статус снятого правила за текущий: отчёт говорит, каким правилом считали | 2 | 15.2 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k stale_rule -q` |
 | T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ✅ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
 | T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ✅ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |
 | T-49 | 2 | Показатель подтверждённого основания сверяется с показателем вывода; потолок статуса — «подкреплено частично» | 3 | 4.2 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k indicator -q` |
-| T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 1.8 | ⬜ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |
+| T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 7.0 | ⬜ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |
 | T-51 | 2 | Блок «что должно быть верно, чтобы вывод работал»: допущения вывода рядом с выводом | 2 | 2.4 | ✅ | T-49 | `uv run pytest tests/test_schemas.py -k assumptions -q` |
 | T-52 | 1 | Отчёт: дедуп отклонений с числом повторов, честная подпись доли, «не даёт решения», владельцы обязательств | 2 | 1.7 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k unfit -q` |
 | T-53 | 1 | Число плана сверяется со своим расчётом или со своей ссылкой на строку, а не с расчётом по похожему слову | 2 | 8.6 | ✅ | — | `uv run pytest tests/test_success_criteria.py -k foreign_indicator -q` |
@@ -103,15 +103,20 @@
 | T-55 | 1 | Цитата не переключает правило проверки: термины одним правилом, недословная и короткая цитата откатываются в проверку полями | 1 | 12.8 | ✅ | — | `uv run pytest tests/test_ground.py -k quote_kinds -q` |
 | T-56 | 1 | Отказ называет настоящую причину: «источника нет» не выдаётся за «источник не по теме», ввод человека — отдельный класс | 1 | 7.2 | ✅ | T-55 | `uv run pytest tests/test_rejection_reasons.py -q` |
 | T-57 | 1 | Основание вывода отвечает на вопрос: основание не про показатель вывода не считается подтверждённым | 2 | 9.45 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k off_topic_demotes -q` |
-| T-58 | 1 | Тождество сущностей: прочтения аббревиатуры из снимка страницы значений, пересечение как число, «требует проверки» со ссылкой | 2 | 4.2 | ✅ | T-55 | `uv run pytest tests/test_entities.py -q` |
-| T-58b | 1 | Вес основания вместо `is_usable`: вклад неоднозначного основания в вывод, `GroundTally` с весами, статус вывода числом | 3 | 6.5 | ⬜ | T-58 | `uv run pytest tests/test_ground.py -k contribution -q` |
-| T-58c | 1 | Решение человека о прочтении: `pf decide`, прочтения сужаются, статус «опирается на решение пользователя» | 2 | 5.0 | ⬜ | T-58 | `uv run pytest tests/test_entities.py -k decision -q` |
+| T-58 | 1 | Тождество сущностей: прочтения аббревиатуры из снимка страницы значений, пересечение как число, «требует проверки» со ссылкой · отложена: модель неверна: «МТС Беларусь» — part-of, а не тёзка| 2 | 4.2 | ⏸ | T-55 | `uv run pytest tests/test_entities.py -q` |
+| T-58b | 1 | Вес основания вместо `is_usable`: вклад неоднозначного основания в вывод, `GroundTally` с весами, статус вывода числом | 3 | 3.5 | ⬜ | T-58 | `uv run pytest tests/test_ground.py -k contribution -q` |
+| T-58c | 1 | Решение человека о прочтении: `pf decide`, прочтения сужаются, статус «опирается на решение пользователя» · отложена: зависит от приостановленной T-58| 2 | 5.0 | ⏸ | T-58 | `uv run pytest tests/test_entities.py -k decision -q` |
 | T-59 | 1 | Вид отказа хранится в журнале, а класс считается по нему: таблица видов, подпись и владелец исправления | 1 | 8.1 | ✅ | — | `uv run pytest tests/test_verdict_kinds.py -k known_details -q` |
 | T-60a | 1 | Канал основания: `basis_kind` в `SourceRef` — факт, ввод пользователя со стадией, решение, гипотеза | 1 | 18.0 | ✅ | T-59 | `uv run pytest tests/test_basis_channel.py -k basis_kind -q` |
 | T-60b | 1 | Отчёт называет опоры на ввод пользователя отдельно от оснований; ввод не поднимает статус вывода | 1 | 8.1 | ✅ | T-60a | `uv run pytest tests/test_basis_channel.py -k human_input_does_not_raise_status -q` |
-| T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 2.8 | ⬜ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
-| T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 3.4 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
+| T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 6.5 | ⬜ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
+| T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 6.0 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
 | T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ✅ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
+| T-65 | 1 | Противоречия источников по осям: скил и хук (не агент), ось названа, раздел отчёта | 2 | 7.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k contradiction_axes -q` |
+| T-67 | 1 | Имена субъектов и доменные термины — данные (`knowledge/domain/`), а не код: гейт «ни одного имени в `src/`» | 3 | 9.0 | ⬜ | — | `uv run pytest tests/test_no_entity_names.py -k no_names_in_code -q` |
+| T-68 | 3 | Второй демо-проект на незнакомом домене: переносимость доказана, а не обещана | 3 | 8.0 | ⬜ | T-67 | `uv run pytest tests/test_portability.py -k second_project -q` |
+| T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ⬜ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
+| T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена
@@ -162,6 +167,22 @@
   Их не переписывают руками — `demo/RESULT.md` собирается из журнала
   (`make demo-doc SESSION=...`), и правка числа в тексте сразу расходится
   с прогоном (`tests/test_demo_doc_generated.py`).
+
+- **синтетические респонденты как доказательство спроса** — только гипотезы:
+  скил `skills/mock-respondents.md` есть, шаг интервью отложен (`T-13`,
+  `docs/tasks/DEFERRED.md`);
+- **рейтинг доверия вместо следа утверждения** — доверие даёт цепочка
+  «источник → фрагмент → версия/время», а не оценка (`D-52`);
+- **«радар» мониторинга конкурентов** — commoditized (Klue/Crayon): не
+  соревнуемся в объёме сигналов, а отбираем те, что меняют решение;
+- **multi-agent там, где декомпозиция не даёт выигрыша** — разрешение
+  сущностей, извлечение, форматирование, маршрутизация остаются одним вызовом
+  (`D-52`);
+- **имена сущностей в коде как правило** — доменный словарь живёт в
+  `knowledge/domain/` (`T-67`); пример в промпте допустим и помечается словом
+  «пример»;
+- **перевод в поиске и проверке** (`T-28`, `T-29`) и **предлагатель понятий**
+  (`T-45`) — отложены: слой закрыт, доверию не дают (`DEFERRED.md`).
 
 ## 6. Как закрыть задачу
 
