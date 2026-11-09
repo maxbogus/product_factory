@@ -268,7 +268,7 @@ def test_replay_reports_plan_number_cap(_isolated: Path) -> None:
     assert payload["plan_numbers"]["unsupported"] == 1
 
 
-def test_replay_plan_goal_is_not_counted(_isolated: Path) -> None:
+def test_replay_plan_number_goal_is_not_counted(_isolated: Path) -> None:
     """Цель плана попадает в замечания, но не в понижающие величины.
 
     Args:
