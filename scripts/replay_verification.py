@@ -257,6 +257,10 @@ def replay_session(session_id: str) -> dict[str, Any] | None:
         "skipped": [],
         "kinds": {},
         "verdicts": [],
+        # Замер `T-48b`: сколько величин-фактов плана осталось без своего
+        # расчёта и что из-за них стало со статусом вывода. Без блока
+        # «статус стал частичным» не отвечает, за что именно.
+        "plan_numbers": {"roles": {}, "unsupported": 0, "kinds": {}},
     }
 
     for role, phase in _PHASE_BY_ROLE.items():
@@ -269,19 +273,38 @@ def replay_session(session_id: str) -> dict[str, Any] | None:
             payload["skipped"].append(f"{role}: {exc}")
             continue
 
+        plan_numbers = (
+            Workflow._check_plan_numbers(data) if role in ("strategy", "keeper") else None
+        )
         grounding = Workflow._verify_claims(
             data,
             bundle,
             state=state,
             role_name=role,
             session_id=session_id,
+            unsupported_numbers=0 if plan_numbers is None else plan_numbers.unsupported,
         )
         payload["roles"][role] = {
             "confirmed": len(grounding.citations),
             "rejected": grounding.rejected,
             "needs_review": len(grounding.needs_review),
             "claims": len(grounding.verdicts),
+            "conclusion_status": (grounding.conclusion or {}).get("status", ""),
         }
+        if plan_numbers is not None:
+            kinds: dict[str, int] = {}
+            for note in plan_numbers.notes:
+                kinds[note.kind] = kinds.get(note.kind, 0) + 1
+                payload["plan_numbers"]["kinds"][note.kind] = (
+                    payload["plan_numbers"]["kinds"].get(note.kind, 0) + 1
+                )
+            payload["plan_numbers"]["roles"][role] = {
+                "notes": len(plan_numbers.notes),
+                "unsupported": plan_numbers.unsupported,
+                "kinds": kinds,
+                "status": (grounding.conclusion or {}).get("status", ""),
+            }
+            payload["plan_numbers"]["unsupported"] += plan_numbers.unsupported
         for verdict in grounding.verdicts:
             payload["verdicts"].append(
                 {
@@ -344,6 +367,11 @@ def _totals(sessions: list[dict[str, Any]]) -> dict[str, int]:
                 continue
             totals[kind] = totals.get(kind, 0) + count
     totals["всего оснований"] = sum(len(payload["verdicts"]) for payload in sessions)
+    # Величины-факты плана без своего расчёта: мера того, сколько раз статус
+    # вывода понижен числом, а не основанием (`T-48b`).
+    totals["величин-фактов без расчёта"] = sum(
+        int((payload.get("plan_numbers") or {}).get("unsupported") or 0) for payload in sessions
+    )
     return totals
 
 
@@ -568,6 +596,24 @@ def main(argv: list[str] | None = None) -> int:
             f"отклонено {counts['отклонено']:>4}  "
             f"ждёт проверки {counts['требует проверки']:>3}"
         )
+    print()
+
+    # Замер `T-48b`: величина-факт без своего расчёта понижает статус вывода.
+    # Печатается отдельно от исходов проверки оснований: это другой вопрос —
+    # не «нашлась ли цитата», а «из чего следует число в плане».
+    print("Числа плана (величина-факт без расчёта понижает статус):")
+    for payload in snapshots:
+        block = payload.get("plan_numbers") or {}
+        for role, counts in (block.get("roles") or {}).items():
+            status = counts.get("status") or "—"
+            print(
+                f"  {payload['session_id']:<22} {role:<9} замечаний {counts['notes']:>2}  "
+                f"величин-фактов без расчёта {counts['unsupported']:>2}  статус {status}"
+            )
+    total_unsupported = sum(
+        int((payload.get("plan_numbers") or {}).get("unsupported") or 0) for payload in snapshots
+    )
+    print(f"  всего величин-фактов без расчёта: {total_unsupported}")
     print()
 
     kinds: dict[str, int] = {}

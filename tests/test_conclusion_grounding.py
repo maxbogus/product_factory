@@ -304,9 +304,24 @@ def test_conclusion_rule_is_named_in_journal(
     assert list(CONCLUSION_RULE_PARTS) == [
         "unique-grounds",
         "calc-line-demotion",
-        "indicator-cap",
+        "indicator-demotion",
         "unsupported-number-cap",
     ]
+
+
+def test_off_topic_demotes_status() -> None:
+    """Чужое основание понижается счётом, а не отдельным признаком статуса.
+
+    Раньше `conclusion_status` держал вход `off_topic`, и статус считался
+    дважды: в рабочем процессе и в отчёте. Второй вход разошёлся бы с первым
+    на первом же прогоне, где понижено не всё основание, а одно из двух
+    (`D-46`). Теперь чужое основание понижается там, где собираются вердикты,
+    и статус остаётся функцией трёх чисел.
+    """
+    assert conclusion_status(1, 0, 1) == "неподкреплено"
+    assert conclusion_status(2, 1, 1) == "подкреплено частично"
+    with pytest.raises(TypeError):
+        conclusion_status(1, 1, 0, off_topic=True)  # type: ignore[call-arg]
 
 
 def test_unsupported_number_caps_status() -> None:
@@ -535,14 +550,16 @@ def _indicator_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Source
     return collect("абоненты оператора связи тарифы удержание")
 
 
-def test_ground_about_other_indicator_weakens_conclusion(
+def test_off_topic_demotes_confirmed_ground(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Подтверждённое основание про другой показатель не даёт «подкреплено».
+    """Основание про другой показатель не считается подтверждённым.
 
     Вывод обещает изменение удержания, а основание подтверждает абонентскую
-    базу. Цитата дословна — и всё равно вывод не подкреплён: подтверждён не
-    тот показатель.
+    базу. Цитата дословна — и всё равно она не основание вывода: подтверждён
+    не тот показатель. Потолка «подкреплено частично» мало: при единственном
+    основании статус обязан быть «неподкреплено», иначе счётчик подтверждённых
+    выдаёт чужое основание за опору (`T-57`).
 
     Args:
         tmp_path: Временный каталог материалов.
@@ -557,11 +574,51 @@ def test_ground_about_other_indicator_weakens_conclusion(
     grounding = Workflow._verify_claims(strategy, bundle)
 
     assert grounding.conclusion is not None
-    assert grounding.conclusion["confirmed"] == 1
-    assert grounding.conclusion["status"] == "подкреплено частично"
+    assert grounding.conclusion["confirmed"] == 0
+    assert grounding.conclusion["rejected"] == 1
+    assert grounding.conclusion["status"] == "неподкреплено"
+    assert grounding.conclusion["grounds"]["confirmed"] == []
+    assert grounding.conclusion["grounds"]["rejected"] == ["project/base.csv#row0"]
     off_topic = grounding.conclusion["off_topic"]
     assert off_topic["grounds"] == ["абонентская база"]
     assert any("удержание" in item for item in off_topic["conclusion"])
+
+
+def test_off_topic_demotes_only_foreign_ground(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Понижается только чужое основание, а своё остаётся подтверждённым.
+
+    Правило «всё или ничего» ошибалось в обе стороны: одно основание про
+    удержание и другое про абонентскую базу давали молчание, хотя половина
+    опоры вывода не про то. Понижение считается по каждому основанию.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _indicator_bundle(tmp_path, monkeypatch)
+    strategy = _strategy(
+        [
+            SourceRef(source_id="project/base.csv#row0", quote=BASE_ROW_QUOTE),
+            SourceRef(source_id="project/retention.csv#row0", quote=RETENTION_ROW_QUOTE),
+        ],
+        # Утверждение называет оба показателя: иначе проверка цитаты отклонит
+        # основание до правила о показателе, и чужое основание не дойдёт до
+        # понижения. Показатель вывода берётся из ожидаемого изменения.
+        direction="абонентская база и удержание клиентов вырастут",
+    )
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["checked"] == 2
+    assert grounding.conclusion["confirmed"] == 1
+    assert grounding.conclusion["rejected"] == 1
+    assert grounding.conclusion["status"] == "подкреплено частично"
+    assert grounding.conclusion["grounds"]["confirmed"] == ["project/retention.csv#row0"]
+    assert grounding.conclusion["grounds"]["rejected"] == ["project/base.csv#row0"]
+    assert grounding.conclusion["off_topic"]["grounds"] == ["абонентская база"]
 
 
 def test_ground_about_same_indicator_keeps_conclusion(
@@ -608,7 +665,8 @@ def test_ground_anchor_from_paragraph_is_used(
     grounding = Workflow._verify_claims(strategy, bundle)
 
     assert grounding.conclusion is not None
-    assert grounding.conclusion["status"] == "подкреплено частично"
+    assert grounding.conclusion["confirmed"] == 0
+    assert grounding.conclusion["status"] == "неподкреплено"
     assert grounding.conclusion["off_topic"]["grounds"] == ["абонентская база"]
 
 

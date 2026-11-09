@@ -110,6 +110,8 @@ class ConclusionRecord:
         off_topic_grounds: Показатели подтверждённых оснований, когда они не
             совпали с показателем вывода.
         off_topic_conclusion: Показатель, который обещает изменить вывод.
+        unsupported_numbers: Сколько величин-фактов плана осталось без своего
+            расчёта. Понижает статус, поэтому называется рядом с ним.
         unique: Посчитаны ли счётчики по уникальным основаниям. Журнал до
             этого правила называет только записи; если в нём были отказы,
             распределить их по уникальным ключам нечем, и отчёт говорит
@@ -138,6 +140,7 @@ class ConclusionRecord:
     rejected_grounds: list[str] = field(default_factory=list)
     off_topic_grounds: list[str] = field(default_factory=list)
     off_topic_conclusion: list[str] = field(default_factory=list)
+    unsupported_numbers: int = 0
     unique: bool = True
     rule: str = ""
     contradicted: list[str] = field(default_factory=list)
@@ -661,14 +664,25 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
 
     if conclusion.off_topic_grounds:
         # Дословность цитаты не отвечает на вопрос, тот ли показатель она
-        # подтверждает. Строка нужна, чтобы читатель видел причину потолка
-        # статуса, а не считал её случайной строгостью.
+        # подтверждает. Строка нужна, чтобы читатель видел причину понижения
+        # статуса, а не считал его случайной строгостью.
         promised = _join_names(conclusion.off_topic_conclusion) or "другой показатель"
         confirmed = _join_names(conclusion.off_topic_grounds)
         lines.append(
             f"**Основания не про тот показатель:** вывод обещает изменение по «{promised}», "
-            f"а подтверждённые основания называют «{confirmed}». Дословная цитата здесь "
-            "ничего не доказывает, поэтому статус не выше «подкреплено частично»."
+            f"а основания называют «{confirmed}». Такое основание не считается "
+            "подтверждённым: дословная цитата здесь ничего не доказывает."
+        )
+        lines.append("")
+
+    if conclusion.unsupported_numbers:
+        # Потолок без причины читается как случайная строгость: рядом стоят
+        # «подкреплено частично» и подтверждённые основания, и почему не
+        # «подкреплено» — не видно.
+        lines.append(
+            f"**Число без своего расчёта: {conclusion.unsupported_numbers}** — величина "
+            "названа в плане или обязательстве, а расчёта того же показателя нет. "
+            "Статус не выше «подкреплено частично»."
         )
         lines.append("")
 
@@ -1223,6 +1237,11 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
     commitments = [
         item for item in (keeper_detail.get("commitments") or []) if isinstance(item, dict)
     ]
+    # Замечания о числах живут на шагах, а понижают статус вывода. Складываем
+    # по шагам: одно и то же число в плане и в обязательстве — два места, где
+    # оно названо, и шаг считает свои. Статус от этого не зависит: понижает
+    # любое положительное число (`T-48b`).
+    unsupported_numbers = sum(int(check.get("unsupported_numbers") or 0) for check in checks)
     return ConclusionRecord(
         direction=str(product.get("chosen_direction") or ""),
         value_to_cost=str(product.get("value_to_cost") or ""),
@@ -1239,7 +1258,7 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
             confirmed,
             rejected,
             needs_review,
-            off_topic=bool(off_topic_grounds),
+            unsupported_numbers=unsupported_numbers,
         ),
         checked=checked,
         confirmed=confirmed,
@@ -1248,6 +1267,7 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         rejected_grounds=rejected_grounds,
         off_topic_grounds=off_topic_grounds,
         off_topic_conclusion=off_topic_conclusion,
+        unsupported_numbers=unsupported_numbers,
         unique=unique,
         rule=rule,
         contradicted=contradicted,

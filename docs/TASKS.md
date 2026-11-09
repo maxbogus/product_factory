@@ -93,7 +93,7 @@
 | T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 2.3 | ⬜ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
 | T-47 | 1 | Унаследованный журнал не выдаёт статус снятого правила за текущий: отчёт говорит, каким правилом считали | 2 | 15.2 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k stale_rule -q` |
 | T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ✅ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
-| T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ⬜ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |
+| T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ✅ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |
 | T-49 | 2 | Показатель подтверждённого основания сверяется с показателем вывода; потолок статуса — «подкреплено частично» | 3 | 4.2 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k indicator -q` |
 | T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 1.8 | ⬜ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |
 | T-51 | 2 | Блок «что должно быть верно, чтобы вывод работал»: допущения вывода рядом с выводом | 2 | 2.4 | ✅ | T-49 | `uv run pytest tests/test_schemas.py -k assumptions -q` |
@@ -102,7 +102,7 @@
 | T-54 | 1 | Согласованность артефакта: шаги по уникальным номерам, набор вариантов с полюсами, двойная запись журнала названа | 3 | 2.0 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k steps_by_ordinal -q` |
 | T-55 | 1 | Цитата не переключает правило проверки: термины одним правилом, недословная и короткая цитата откатываются в проверку полями | 1 | 12.8 | ✅ | — | `uv run pytest tests/test_ground.py -k quote_kinds -q` |
 | T-56 | 1 | Отказ называет настоящую причину: «источника нет» не выдаётся за «источник не по теме», ввод человека — отдельный класс | 1 | 7.2 | ✅ | T-55 | `uv run pytest tests/test_rejection_reasons.py -q` |
-| T-57 | 1 | Основание вывода отвечает на вопрос: основание не про показатель вывода не считается подтверждённым | 2 | 9.45 | ⬜ | — | `uv run pytest tests/test_conclusion_grounding.py -k off_topic_demotes -q` |
+| T-57 | 1 | Основание вывода отвечает на вопрос: основание не про показатель вывода не считается подтверждённым | 2 | 9.45 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k off_topic_demotes -q` |
 | T-58 | 1 | Тождество сущностей слоями: словарь алиасов решает, нечёткое сходство только предлагает кандидата | 2 | 4.2 | ⬜ | T-55 | `uv run pytest tests/test_entities.py -k identity -q` |
 <!-- tasks:end -->
 

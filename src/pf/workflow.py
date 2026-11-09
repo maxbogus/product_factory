@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -401,7 +401,13 @@ _PERIOD_COLUMNS: frozenset[str] = frozenset(
 #: Величина с единицей измерения. Счётчик, год и срок величиной не
 #: считаются: «3 месяца» — это горизонт проверки, а не измеренное
 #: значение, и требовать для него расчёта было бы шумом.
+#:
+#: Lookbehind от цифры и знаков числа: дефис в диапазоне «5-10 %» — не минус.
+#: Без него проверка читала «−10 %», и замечание называло число, которого в
+#: ответе нет: в `demo-v10` и `demo-v12` так появлялись «-7 %» и «-10 %»,
+#: хотя план говорил «5-7 %» и «5-10 %».
 _MAGNITUDE = re.compile(
+    r"(?<![\d,.])"
     r"(?P<value>-?\d+(?:[.,]\d+)?)\s*"
     r"(?P<unit>%|процент\w*|п\.\s?п\.|млн|млрд|тыс\.?|руб\w*)",
     re.IGNORECASE,
@@ -430,6 +436,62 @@ class _Calculation:
     stems: set[str]
     numbers: list[float]
     citation: str
+
+
+#: Величина взята из утверждения о мире — с неё можно спрашивать расчёт.
+PLAN_NUMBER_FACT = "факт"
+#: Величина — выбранная цель («вырастет на 5 %»). Цель не утверждение о
+#: мире: требовать для неё расчёт значило бы понижать каждый вывод с планом.
+PLAN_NUMBER_GOAL = "цель"
+
+#: Число расчёта того же показателя есть, а этого числа в нём нет.
+NUMBER_MISMATCH = "number_mismatch"
+#: Число есть, но в расчёте другого показателя — подмена.
+NUMBER_FOREIGN = "foreign_indicator"
+#: Расчёта с таким показателем нет вовсе.
+NUMBER_WITHOUT_CALC = "no_calculation"
+
+
+@dataclass(frozen=True, slots=True)
+class PlanNumberNote:
+    """Одно замечание к числу плана или обязательства.
+
+    Attributes:
+        text: Строка для журнала — что и почему не сошлось.
+        kind: Вид расхождения (``NUMBER_MISMATCH``, ``NUMBER_FOREIGN``,
+            ``NUMBER_WITHOUT_CALC``) — по нему считается замер, а не по
+            русскому тексту.
+        basis: ``PLAN_NUMBER_FACT`` или ``PLAN_NUMBER_GOAL``. Статус вывода
+            понижает только факт: цель — выбранное число.
+        magnitude: Пара «значение, единица» — по ней замечания разных текстов
+            об одной величине считаются одним.
+    """
+
+    text: str
+    kind: str
+    basis: str
+    magnitude: tuple[float, str]
+
+
+@dataclass(frozen=True, slots=True)
+class PlanNumberCheck:
+    """Итог сверки чисел плана и обязательств.
+
+    Attributes:
+        notes: Замечания для журнала — все, включая цели.
+    """
+
+    notes: tuple[PlanNumberNote, ...] = ()
+
+    @property
+    def unsupported(self) -> int:
+        """Сколько величин-фактов осталось без расчёта своего показателя.
+
+        Считаются уникальные величины: одно и то же число в плане и в
+        обязательстве — одно утверждение. Цели сюда не входят — иначе
+        «вырастет на 5 %» понижало бы каждый вывод с планом.
+        """
+        return len({note.magnitude for note in self.notes if note.basis == PLAN_NUMBER_FACT})
 
 
 #: Фазы, которым нужны собранные источники. Для остальных набор не
@@ -1071,33 +1133,40 @@ class Workflow:
         return found
 
     @staticmethod
-    def _plan_number_texts(data: Any) -> list[tuple[str, str]]:
+    def _plan_number_texts(data: Any) -> list[tuple[str, str, str]]:
         """Тексты, в которых число — утверждение, а не оформление.
 
-        План проверки называет базу сравнения и критерии, решение —
+        План проверки называет базу сравнения и цели, решение —
         обязательства. Сроки (``observation_period``, ``review_by``) сюда
         не входят: это календарь, а не измерение.
+
+        Вид текста решает, что делать с неподтверждённым числом. База
+        сравнения — утверждение о мире («удержание на уровне 87 %»), и без
+        расчёта она ни из чего не следует. Ожидаемое изменение, критерий,
+        обязательство и условие пересмотра называют **цель**: «вырастет на
+        5 %» — выбранное число, а не измеренное. Замечание о цели остаётся
+        для человека, но статус вывода не понижает (`D-47`).
 
         Args:
             data: Результат роли стратегии или решения.
 
         Returns:
-            Пары «что это за текст — сам текст».
+            Тройки «что это за текст — сам текст — факт или цель».
         """
-        pairs: list[tuple[str, str]] = []
+        pairs: list[tuple[str, str, str]] = []
         verification = getattr(data, "verification", None)
         if verification is not None:
-            for label, field_name in (
-                ("ожидаемое изменение", "expected_change"),
-                ("база сравнения", "compare_against"),
+            for label, field_name, basis in (
+                ("ожидаемое изменение", "expected_change", PLAN_NUMBER_GOAL),
+                ("база сравнения", "compare_against", PLAN_NUMBER_FACT),
             ):
                 text = str(getattr(verification, field_name, "") or "").strip()
                 if text:
-                    pairs.append((label, text))
+                    pairs.append((label, text, basis))
             for criterion in getattr(verification, "success_criteria", None) or []:
                 text = str(criterion).strip()
                 if text:
-                    pairs.append(("критерий успеха", text))
+                    pairs.append(("критерий успеха", text, PLAN_NUMBER_GOAL))
         for commitment in getattr(data, "commitments", None) or []:
             for label, field_name in (
                 ("обязательство", "statement"),
@@ -1106,14 +1175,14 @@ class Workflow:
             ):
                 text = str(getattr(commitment, field_name, "") or "").strip()
                 if text:
-                    pairs.append((label, text))
+                    pairs.append((label, text, PLAN_NUMBER_GOAL))
         return pairs
 
     @staticmethod
     def _check_plan_numbers(
         data: Any,
         metrics: Sequence[Metric] | None = None,
-    ) -> list[str]:
+    ) -> PlanNumberCheck:
         """Числа плана и обязательств сверяются с расчётами.
 
         Прежняя проверка сравнивала только основы слов: критерий
@@ -1140,25 +1209,34 @@ class Workflow:
             metrics: Расчёты. По умолчанию — посчитанные по материалам.
 
         Returns:
-            Строки замечаний для журнала.
+            Замечания и их вид. ``unsupported`` считает величины-факты без
+            расчёта своего показателя — это число идёт в статус вывода.
         """
         pool = Workflow._calculation_pool(metrics)
-        notes: list[str] = []
-        for label, text in Workflow._plan_number_texts(data):
+        notes: list[PlanNumberNote] = []
+        for label, text, basis in Workflow._plan_number_texts(data):
             text_stems = indicator_stems(text)
             same = [calc for calc in pool if calc.stems & text_stems]
             others = [calc for calc in pool if not calc.stems & text_stems]
             anchored = Workflow._anchored_calculations(text, pool)
             for value, unit in Workflow._magnitudes(text):
                 shown = f"{value:g} {unit}".strip()
+                magnitude = (value, unit)
                 if any(numbers_match([value], calc.numbers)[0] for calc in same):
                     continue
                 if any(numbers_match([value], calc.numbers)[0] for calc in anchored):
                     continue
                 if same:
                     notes.append(
-                        f"{label} «{text}»: число {shown} не совпадает с расчётом "
-                        f"по показателю «{same[0].indicator}»"
+                        PlanNumberNote(
+                            text=(
+                                f"{label} «{text}»: число {shown} не совпадает с расчётом "
+                                f"по показателю «{same[0].indicator}»"
+                            ),
+                            kind=NUMBER_MISMATCH,
+                            basis=basis,
+                            magnitude=magnitude,
+                        )
                     )
                     continue
                 foreign = next(
@@ -1167,15 +1245,29 @@ class Workflow:
                 )
                 if foreign:
                     notes.append(
-                        f"{label} «{text}»: число {shown} взято из расчёта «{foreign}» — "
-                        "другой показатель"
+                        PlanNumberNote(
+                            text=(
+                                f"{label} «{text}»: число {shown} взято из расчёта «{foreign}» — "
+                                "другой показатель"
+                            ),
+                            kind=NUMBER_FOREIGN,
+                            basis=basis,
+                            magnitude=magnitude,
+                        )
                     )
                     continue
                 notes.append(
-                    f"{label} «{text}»: число {shown} ничем не подтверждено — "
-                    "расчёта с таким показателем нет"
+                    PlanNumberNote(
+                        text=(
+                            f"{label} «{text}»: число {shown} ничем не подтверждено — "
+                            "расчёта с таким показателем нет"
+                        ),
+                        kind=NUMBER_WITHOUT_CALC,
+                        basis=basis,
+                        magnitude=magnitude,
+                    )
                 )
-        return notes
+        return PlanNumberCheck(notes=tuple(notes))
 
     @staticmethod
     def _sources_of(data: Any) -> list[tuple[str, Any, bool]]:
@@ -1253,32 +1345,36 @@ class Workflow:
         return topic, named
 
     @staticmethod
-    def _ground_indicators(keys: Sequence[str]) -> list[str]:
-        """Показатели подтверждённых оснований вывода.
+    def _ground_indicators(anchors: Mapping[str, str]) -> dict[str, str]:
+        """Показатели подтверждённых оснований вывода: ключ основания → показатель.
 
         Показатель известен только у основания-строки таблицы: у абзаца статьи
         его нет. Такие основания правило не судит — иначе оно срабатывало бы на
         каждом выводе, а не на подмене показателя.
 
+        Словарь, а не список названий: понижение считается по каждому
+        основанию отдельно. Список отвечал только «все чужие или нет» и
+        молчал, когда из двух оснований чужое было одно.
+
         Args:
-            keys: Ключи оснований вывода (``путь#якорь``).
+            anchors: Ключи оснований вывода и их якоря (``путь#якорь``).
 
         Returns:
-            Названия показателей без повторов.
+            Словарь «ключ основания — название показателя»; пустых нет.
         """
-        indicators: list[str] = []
+        indicators: dict[str, str] = {}
         materials = None
-        for key in keys:
-            clean, row = split_source_id(key)
+        for key, anchor in anchors.items():
+            clean, row = split_source_id(anchor)
             if row is None or not clean:
                 continue
             if materials is None:
                 from pf.materials import load_materials
 
                 materials = load_materials()
-            indicator = indicator_of_citation(key, materials)
-            if indicator and indicator not in indicators:
-                indicators.append(indicator)
+            indicator = indicator_of_citation(anchor, materials)
+            if indicator:
+                indicators[key] = indicator
         return indicators
 
     @staticmethod
@@ -1322,7 +1418,6 @@ class Workflow:
             tally.confirmed,
             tally.rejected,
             tally.needs_review,
-            off_topic=off_topic is not None,
             unsupported_numbers=unsupported_numbers,
         )
         payload: dict[str, Any] = {
@@ -1440,6 +1535,7 @@ class Workflow:
         state: SessionState | None = None,
         role_name: str = "",
         session_id: str = "",
+        unsupported_numbers: int = 0,
     ) -> GroundingResult:
         """Проверить основания в результате роли.
 
@@ -1458,6 +1554,11 @@ class Workflow:
             state: Состояние сессии — нужно для доступа к внешним страницам.
             role_name: Роль шага — попадает в очередь распознания.
             session_id: Идентификатор сессии — попадает туда же.
+            unsupported_numbers: Сколько величин-фактов плана осталось без
+                расчёта своего показателя. Считается до проверки оснований:
+                статус вывода зависит от чисел, и считать его дважды
+                (сначала без чисел, потом с ними) значило бы иметь два
+                статуса одного шага (`T-48b`).
 
         Returns:
             Подтверждённые ссылки, отказы, пояснения, ожидающие проверки
@@ -1616,20 +1717,36 @@ class Workflow:
         # Правило узкое: судит только те основания, у которых показатель
         # назван (строка таблицы с колонкой «показатель»); про абзацы статей
         # молчит.
+        #
+        # Понижается каждое чужое основание отдельно, а не «все или ничего»:
+        # в `demo-v10` одно основание из одного было про ARPU, и потолок
+        # «подкреплено частично» оставлял его в подтверждённых. Дословная
+        # цитата про другую величину вывод не подтверждает — счётчик
+        # подтверждённых не должен её считать (`T-57`, `D-46`).
         off_topic: dict[str, list[str]] | None = None
         if conclusion_verdicts:
             topic, named = Workflow._conclusion_topic(data)
             confirmed_keys = {
                 key for key, status in conclusion_verdicts if status is SupportStatus.CONFIRMED
             }
-            anchors = [conclusion_anchors.get(key, key) for key in confirmed_keys]
+            anchors = {key: conclusion_anchors.get(key, key) for key in confirmed_keys}
             indicators = Workflow._ground_indicators(anchors)
-            if (
-                topic
-                and indicators
-                and not any(indicator_stems(item) & topic for item in indicators)
-            ):
-                off_topic = {"conclusion": named[:3], "grounds": indicators[:5]}
+            foreign: dict[str, str] = {}
+            if topic:
+                foreign = {
+                    key: indicator
+                    for key, indicator in indicators.items()
+                    if indicator_stems(indicator) and not indicator_stems(indicator) & topic
+                }
+            if foreign:
+                off_topic = {
+                    "conclusion": named[:3],
+                    "grounds": list(dict.fromkeys(foreign.values()))[:5],
+                }
+                conclusion_verdicts = [
+                    (key, SupportStatus.NO_DATA if key in foreign else status)
+                    for key, status in conclusion_verdicts
+                ]
 
         Workflow._queue_oov(oov, context=oov_context, role=role_name, session=session_id)
 
@@ -1641,6 +1758,7 @@ class Workflow:
                 tally_grounds(conclusion_verdicts),
                 ground_buckets(conclusion_verdicts),
                 off_topic,
+                unsupported_numbers,
             ),
             needs_review=needs_review,
             needs_review_details=needs_review_details,
@@ -1910,12 +2028,22 @@ class Workflow:
             context,
             extras=self._prompt_extras(state),
         )
+        # Числа плана и обязательств — тоже утверждения. Раньше они проходили
+        # по совпадению основы слова: «удержание на уровне 87 %» не
+        # отличалось от «удержание вырастет», хотя 87 — абонентская база.
+        # Считаются **до** проверки оснований: статус вывода зависит от
+        # неподтверждённых величин, и второй проход дал бы два статуса
+        # одного шага (`T-48b`).
+        plan_numbers = PlanNumberCheck()
+        if phase in (Phase.STRATEGY, Phase.KEEPER):
+            plan_numbers = self._check_plan_numbers(data)
         grounding = self._verify_claims(
             data,
             bundle,
             state=state,
             role_name=role_name,
             session_id=state.session_id,
+            unsupported_numbers=plan_numbers.unsupported,
         )
         if phase is Phase.ANALYZING:
             # Вердикт гипотезам ставится здесь, до сериализации шага: иначе
@@ -1928,12 +2056,7 @@ class Workflow:
         criteria_notes: list[str] = []
         if phase is Phase.STRATEGY:
             criteria_notes.extend(self._check_success_criteria(data))
-        if phase in (Phase.STRATEGY, Phase.KEEPER):
-            # Числа плана и обязательств — тоже утверждения. Раньше они
-            # проходили по совпадению основы слова: «удержание на уровне
-            # 87 %» не отличалось от «удержание вырастет», хотя 87 —
-            # абонентская база.
-            criteria_notes.extend(self._check_plan_numbers(data))
+        criteria_notes.extend(note.text for note in plan_numbers.notes)
         if bundle is None and phase in (Phase.ANALYZING, Phase.STRATEGY):
             # Роутер может повести вперёд, перескочив сбор источников.
             # Тогда проверять основания нечем, и шаг обязан сказать это

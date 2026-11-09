@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from pf.analysis import Metric
+from pf.ground import GroundTally
 from pf.schemas import (
     Commitment,
     CommunicationStrategy,
@@ -145,11 +146,13 @@ def test_criterion_numbers_must_come_from_calculations() -> None:
     """
     strategy = _strategy(["Увеличение удержания на 5%"], "Повышение удержания клиентов")
 
-    notes = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
+    check = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
 
-    assert notes, "число без расчёта должно давать замечание"
-    assert "5" in notes[0]
-    assert "расчёта" in notes[0]
+    assert check.notes, "число без расчёта должно давать замечание"
+    assert "5" in check.notes[0].text
+    assert "расчёта" in check.notes[0].text
+    # Цель плана — не утверждение о мире: замечание есть, статус она не понижает.
+    assert check.unsupported == 0
 
 
 def test_baseline_numbers_of_other_indicator_are_rejected() -> None:
@@ -164,11 +167,14 @@ def test_baseline_numbers_of_other_indicator_are_rejected() -> None:
         compare_against="Удержание на уровне 87%",
     )
 
-    notes = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
+    check = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
 
-    assert notes
-    assert "87" in notes[0]
-    assert "другой показатель" in notes[0]
+    assert check.notes
+    assert "87" in check.notes[0].text
+    assert "другой показатель" in check.notes[0].text
+    # База сравнения — утверждение о текущем уровне, а не цель: 87 % ни из
+    # чего не следует, значит статус вывода обязан это знать.
+    assert check.unsupported == 1
 
 
 def test_criterion_numbers_matching_calculation_pass() -> None:
@@ -176,7 +182,10 @@ def test_criterion_numbers_matching_calculation_pass() -> None:
     strategy = _strategy(["Удержание клиентов не ниже 87 %"], "Повышение удержания клиентов")
     metrics = [_metric("Удержание клиентов", 87.0, "%")]
 
-    assert Workflow._check_plan_numbers(strategy, metrics=metrics) == []
+    check = Workflow._check_plan_numbers(strategy, metrics=metrics)
+
+    assert check.notes == ()
+    assert check.unsupported == 0
 
 
 def test_commitment_numbers_must_come_from_calculations() -> None:
@@ -197,10 +206,10 @@ def test_commitment_numbers_must_come_from_calculations() -> None:
         ],
     )
 
-    notes = Workflow._check_plan_numbers(record, metrics=_base_metrics())
+    check = Workflow._check_plan_numbers(record, metrics=_base_metrics())
 
-    assert notes
-    assert "5" in notes[0]
+    assert check.notes
+    assert "5" in check.notes[0].text
 
 
 def test_plan_without_numbers_has_no_notes() -> None:
@@ -211,7 +220,10 @@ def test_plan_without_numbers_has_no_notes() -> None:
     """
     strategy = _strategy(["Увеличение удержания клиентов"], "Повышение удержания клиентов")
 
-    assert Workflow._check_plan_numbers(strategy, metrics=_base_metrics()) == []
+    check = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
+
+    assert check.notes == ()
+    assert check.unsupported == 0
 
 
 # ── Тот ли показатель сравнивается ───────────────────────────────────────────
@@ -290,9 +302,9 @@ def test_numbers_are_not_compared_with_foreign_indicator() -> None:
         compare_against=MARKET_BASE,
     )
 
-    notes = Workflow._check_plan_numbers(strategy, metrics=[*_market_metrics(), _rate_metric()])
+    check = Workflow._check_plan_numbers(strategy, metrics=[*_market_metrics(), _rate_metric()])
 
-    assert notes == [], f"верные числа отклонены: {notes}"
+    assert check.notes == (), f"верные числа отклонены: {[note.text for note in check.notes]}"
 
 
 def test_service_word_does_not_make_calculation_same_indicator() -> None:
@@ -302,11 +314,11 @@ def test_service_word_does_not_make_calculation_same_indicator() -> None:
         "Измерение удержания клиентов",
     )
 
-    notes = Workflow._check_plan_numbers(strategy, metrics=[_rate_metric()])
+    check = Workflow._check_plan_numbers(strategy, metrics=[_rate_metric()])
 
-    assert notes, "число без расчёта должно давать замечание"
-    assert "ничем не подтверждено" in notes[0]
-    assert "Ключевая ставка" not in notes[0]
+    assert check.notes, "число без расчёта должно давать замечание"
+    assert "ничем не подтверждено" in check.notes[0].text
+    assert "Ключевая ставка" not in check.notes[0].text
 
 
 def test_number_missing_in_same_indicator_is_mismatch() -> None:
@@ -317,8 +329,71 @@ def test_number_missing_in_same_indicator_is_mismatch() -> None:
     )
     metrics = [_metric("Удержание клиентов", 87.0, "%")]
 
-    notes = Workflow._check_plan_numbers(strategy, metrics=metrics)
+    check = Workflow._check_plan_numbers(strategy, metrics=metrics)
 
-    assert notes
-    assert "не совпадает" in notes[0]
-    assert "95" in notes[0]
+    assert check.notes
+    assert "не совпадает" in check.notes[0].text
+    assert "95" in check.notes[0].text
+
+
+# ── Связка с статусом вывода ─────────────────────────────────────────────────
+#
+# Замечание проверки само по себе статус не меняло: в `demo-v9` «удержание на
+# уровне 87 %» стояло в `rejected_details`, а рядом — «подкреплено». Замер на
+# пяти журналах (T-48b) показал, что понижать статус должна не любая величина:
+# цель плана — выбранное число, а не утверждение о мире. Иначе «вырастет на
+# 5 %» понижало бы каждый вывод, где есть план.
+
+
+def test_unsupported_number_demotes_status() -> None:
+    """Число базы сравнения без своего расчёта понижает статус вывода.
+
+    База сравнения — утверждение о текущем уровне («удержание на уровне
+    87 %»), и 87 в материалах — абонентская база. Вывод не может быть
+    «подкреплено», пока это число ни из чего не следует.
+    """
+    strategy = _strategy(
+        ["Увеличение удержания клиентов"],
+        "Повышение удержания клиентов",
+        compare_against="Удержание на уровне 87%",
+    )
+
+    check = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
+
+    assert check.unsupported == 1
+    tally = GroundTally(checked=2, confirmed=2, rejected=0, needs_review=0)
+    verdict = Workflow._conclusion_verdict(tally, {}, unsupported_numbers=check.unsupported)
+
+    assert verdict is not None
+    assert verdict["status"] == "подкреплено частично"
+    assert verdict["unsupported_numbers"] == 1
+
+
+def test_plan_goal_numbers_are_not_facts() -> None:
+    """Цель «на 5 %» остаётся замечанием, но статус не понижает.
+
+    Требовать расчёт для выбранной цели значило бы понижать каждый вывод, у
+    которого есть план: цель не утверждение о мире. В `demo-v12` так были бы
+    понижены оба шага, где нет ни одного неподтверждённого факта.
+    """
+    strategy = _strategy(["Увеличение удержания на 5%"], "Повышение удержания клиентов")
+
+    check = Workflow._check_plan_numbers(strategy, metrics=_base_metrics())
+
+    assert check.notes, "цель с числом — всё ещё замечание для человека"
+    assert check.unsupported == 0
+
+
+def test_number_range_is_not_negative() -> None:
+    """Диапазон «5-10 %» не превращается в −10 %.
+
+    Знак минус в диапазоне — дефис, а не отрицательная величина. Пока это
+    было замечанием в `rejected_details`, ошибка не влияла на статус; после
+    связки выдуманный минус понижал бы вывод.
+    """
+    hyphen = [value for value, _ in Workflow._magnitudes("Удержание вырастет на 5-10%")]
+    dash = [value for value, _ in Workflow._magnitudes("Удержание вырастет на 5–10%")]
+
+    assert hyphen == [10.0]
+    assert dash == [10.0]
+    assert all(value > 0 for value in [*hyphen, *dash])

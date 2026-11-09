@@ -282,14 +282,14 @@ def tally_grounds(verdicts: Iterable[tuple[str, SupportStatus]]) -> GroundTally:
 #:   добавляет основания (`D-21`);
 #: * ``calc-line-demotion`` — посчитанное значение в строке расчёта не
 #:   считается цитатой (`D-36`);
-#: * ``indicator-cap`` — основание не про тот показатель не даёт
-#:   «подкреплено» (`D-41`);
+#: * ``indicator-demotion`` — основание не про показатель вывода не считается
+#:   подтверждённым (`D-41`, `D-46`);
 #: * ``unsupported-number-cap`` — число плана без расчёта того же показателя
 #:   не даёт «подкреплено» (`D-40`, следствие для вывода).
 CONCLUSION_RULE_PARTS: tuple[str, ...] = (
     "unique-grounds",
     "calc-line-demotion",
-    "indicator-cap",
+    "indicator-demotion",
     "unsupported-number-cap",
 )
 
@@ -303,7 +303,6 @@ def conclusion_status(
     rejected: int,
     needs_review: int = 0,
     *,
-    off_topic: bool = False,
     unsupported_numbers: int = 0,
 ) -> str:
     """Статус оснований вывода — единственное место с этим правилом.
@@ -320,8 +319,11 @@ def conclusion_status(
 
     Подтверждённые основания могут быть не про тот показатель, о котором
     вывод: дословная цитата про абонентскую базу не подкрепляет изменение
-    удержания. Такой вывод не бывает «подкреплено» — потолок «подкреплено
-    частично» (`off_topic`).
+    удержания. Такое основание сюда приходит **отклонённым**: понижение
+    считается там, где собираются вердикты (`indicator-demotion`), а не
+    отдельным признаком. Признак пришлось бы считать дважды — здесь и в
+    отчёте, — и на выводе, где понижено одно основание из двух, два счёта
+    разошлись бы (`D-46`).
 
     Число, названное в плане или обязательстве, тоже утверждение: если
     расчёта того же показателя нет, величина ни из чего не следует, и
@@ -337,7 +339,6 @@ def conclusion_status(
         confirmed: Сколько подтверждено.
         rejected: Сколько отклонено.
         needs_review: Сколько ждёт проверки человеком.
-        off_topic: Подтверждённые основания называют другой показатель.
         unsupported_numbers: Сколько величин плана осталось без своего
             расчёта.
 
@@ -350,7 +351,7 @@ def conclusion_status(
         return "ждёт проверки"
     if confirmed <= 0:
         return "неподкреплено"
-    if rejected > 0 or needs_review > 0 or off_topic or unsupported_numbers > 0:
+    if rejected > 0 or needs_review > 0 or unsupported_numbers > 0:
         return "подкреплено частично"
     return "подкреплено"
 

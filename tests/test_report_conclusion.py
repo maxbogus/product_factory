@@ -32,6 +32,7 @@ def _strategy_record(
     rule: str | None = None,
     rejected_details: list[str] | None = None,
     assumptions: list[str] | None = None,
+    unsupported_numbers: int | None = None,
 ) -> StepRecord:
     """Запись шага стратегии.
 
@@ -46,6 +47,7 @@ def _strategy_record(
         rule: Имя правила счёта. Не задано — как в унаследованном журнале.
         rejected_details: Строки отказов шага; по ним отчёт видит противоречие.
         assumptions: Что должно быть верно, чтобы вывод работал.
+        unsupported_numbers: Сколько величин плана осталось без своего расчёта.
 
     Returns:
         Запись журнала.
@@ -62,6 +64,8 @@ def _strategy_record(
         check["off_topic"] = off_topic
     if rule is not None:
         check["rule"] = rule
+    if unsupported_numbers is not None:
+        check["unsupported_numbers"] = unsupported_numbers
     product: dict[str, Any] = {
         "audience": "клиенты мобильного тарифа",
         "alternatives": ["Оставить как есть", "Закрыть направление"],
@@ -233,15 +237,12 @@ def test_report_names_off_topic_grounds(tmp_path: Path, monkeypatch: pytest.Monk
     assert "удержание клиентов" in text
 
 
-def test_off_topic_grounds_cap_status_at_partial(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Без отказов, но с чужим показателем вывод не бывает «подкреплено».
+def test_off_topic_grounds_demote_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Основание про чужой показатель не считается подтверждённым и в отчёте.
 
-    Счётчики говорят «1 из 1 подтверждено», и прежнее правило объявило бы
-    вывод подкреплённым. Показатель у основания другой — значит потолок
-    «подкреплено частично», и это решает одно правило на весь репозиторий
-    (`pf.ground.conclusion_status`), а не два разных расчёта.
+    Счётчики нового журнала уже несут понижение: чужое основание попало в
+    отклонённые. Отчёт обязан прийти к тому же статусу, а строку «не про тот
+    показатель» — объяснить это словами, а не оставить читателя с «частично».
 
     Args:
         tmp_path: Временный каталог журналов.
@@ -252,9 +253,10 @@ def test_off_topic_grounds_cap_status_at_partial(
         monkeypatch,
         [
             _strategy_record(
-                status="подкреплено",
-                confirmed=1,
-                rejected=0,
+                status="неподкреплено",
+                confirmed=0,
+                rejected=1,
+                grounds={"confirmed": [], "rejected": [ROW0], "needs_review": []},
                 off_topic={"grounds": ["абонентская база"], "conclusion": ["удержание"]},
             ),
             _keeper_record(),
@@ -264,8 +266,48 @@ def test_off_topic_grounds_cap_status_at_partial(
     report = build_session_report("session-conclusion")
 
     assert report.conclusion is not None
+    assert report.conclusion.status == "неподкреплено"
+    text = report.as_markdown()
+    assert "Основания вывода: вывод не подкреплён" in text
+    assert "не про тот показатель" in text
+    assert "не считается подтверждённым" in text
+
+
+def test_report_names_unsupported_number_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Число без своего расчёта названо причиной понижения статуса.
+
+    Потолок без причины читается как случайная строгость: в журнале рядом
+    стоят «подкреплено частично» и два подтверждённых основания, и почему
+    не «подкреплено» — не видно. Причина едет в журнал вместе со статусом.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    _session(
+        tmp_path,
+        monkeypatch,
+        [
+            _strategy_record(
+                status="подкреплено частично",
+                confirmed=2,
+                rejected=0,
+                evidence=[ROW0, ROW1],
+                unsupported_numbers=1,
+            ),
+            _keeper_record(),
+        ],
+    )
+
+    report = build_session_report("session-conclusion")
+
+    assert report.conclusion is not None
     assert report.conclusion.status == "подкреплено частично"
-    assert "Основания вывода: подкреплено частично" in report.as_markdown()
+    text = report.as_markdown()
+    assert "Число без своего расчёта: 1" in text
+    assert "подкреплено частично" in text
 
 
 def test_report_says_when_there_is_no_conclusion(

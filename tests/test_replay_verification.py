@@ -89,6 +89,14 @@ def _isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "state_dir", tmp_path / "state")
     monkeypatch.setattr(settings, "journal_dir", tmp_path / "journal")
     monkeypatch.setattr(settings, "lexicon_dir", tmp_path / "lexicon")
+    # Материалы проекта — свои: сверка чисел плана считает расчёты по ним, и
+    # замер не должен зависеть от содержимого репозитория.
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "base.csv").write_text(
+        "показатель,значение\nабонентская база,87\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(settings, "project_dir", project)
     article = Article(
         source_id="project/data/base.csv",
         title="base.csv",
@@ -198,3 +206,79 @@ def test_compare_detects_flipped_verdict(_isolated: Path) -> None:
     assert len(changed) == 1
     assert "confirmed" in changed[0]
     assert "no_data" in changed[0]
+
+
+def _save_strategy_session(session_id: str, compare_against: str) -> None:
+    """Сохранить сессию, дошедшую до стратегии.
+
+    Args:
+        session_id: Идентификатор сессии.
+        compare_against: База сравнения плана проверки — текст с числом.
+    """
+    from pf.schemas import CommunicationStrategy, ProductStrategy, Strategy, VerificationPlan
+
+    state = SessionState(
+        session_id=session_id,
+        phase=Phase.DONE,
+        question="Почему падает удержание у мобильного тарифа?",
+    )
+    strategy = Strategy(
+        product=ProductStrategy(
+            audience="клиенты тарифа",
+            chosen_direction="снизить цену",
+            evidence=[{"source_id": "project/data/base.csv", "quote": REAL_QUOTE}],
+        ),
+        communication=CommunicationStrategy(
+            audience="клиенты тарифа",
+            barrier="цена выше альтернатив",
+            key_message="мы держим цену под контролем",
+        ),
+        verification=VerificationPlan(
+            expected_change="Удержание клиентов вырастет на 2 п.п.",
+            compare_against=compare_against,
+            observation_period="3 месяца",
+            adverse_effects=["маржа снизится"],
+            success_criteria=["Удержание клиентов вырастет на 2 п.п."],
+        ),
+    )
+    state.results[Phase.STRATEGY.value] = Workflow._serialize(strategy)
+    save(state)
+
+
+def test_replay_reports_plan_number_cap(_isolated: Path) -> None:
+    """Замер показывает число-факт без расчёта и статус, который оно понизило.
+
+    Без этого блока `T-48b` нечем проверить: «статус стал частичным» ничего не
+    говорит о том, сколько величин его понизили и была ли среди них цель плана.
+
+    Args:
+        _isolated: Изоляция состояния и источников.
+    """
+    _save_strategy_session("replay-cap", "Удержание на уровне 87%")
+
+    payload = _harness().replay_session("replay-cap")
+
+    assert payload is not None
+    counts = payload["plan_numbers"]["roles"]["strategy"]
+    # Три замечания: база сравнения (факт) и две цели — ожидаемое изменение и
+    # критерий. Понижает статус только факт.
+    assert counts["notes"] == 3
+    assert counts["unsupported"] == 1
+    assert counts["kinds"] == {"foreign_indicator": 1, "no_calculation": 2}
+    assert payload["plan_numbers"]["unsupported"] == 1
+
+
+def test_replay_plan_goal_is_not_counted(_isolated: Path) -> None:
+    """Цель плана попадает в замечания, но не в понижающие величины.
+
+    Args:
+        _isolated: Изоляция состояния и источников.
+    """
+    _save_strategy_session("replay-goal", "уровень прошлого квартала")
+
+    payload = _harness().replay_session("replay-goal")
+
+    assert payload is not None
+    counts = payload["plan_numbers"]["roles"]["strategy"]
+    assert counts["notes"] >= 1
+    assert counts["unsupported"] == 0
