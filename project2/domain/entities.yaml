@@ -1,0 +1,55 @@
+# Домен второго проекта: кардиология и профилактика гипертензии.
+#
+# Это данные, а не код: тот же парсер (`pf.domain`), тот же механизм проверки
+# (`pf.canonical`), но ни одного телеком-имени. Обратная сторона гейта
+# `tests/test_no_entity_names.py` (`-k entity_names`): подмена `PF_DOMAIN_DIR`
+# переключает и субъектов, и доменный отбор — без правки `src/`.
+version: 1
+metadata:
+  description: 'Домен второго проекта: кардиология и профилактика гипертензии'
+  domain: cardiology
+  updated: '2026-11-09'
+  subjects: 3
+  terms: 6
+subjects:
+- canonical: артериальная гипертензия
+  kind: category
+- canonical: тонометр
+  kind: category
+- canonical: кардиология
+  kind: category
+terms:
+- word: гипертензия
+  strong: true
+  clean: true
+  domain: true
+- word: давление
+  strong: true
+  clean: true
+  domain: true
+- word: тонометр
+  strong: true
+  clean: false
+  domain: true
+- word: кардиолог
+  strong: false
+  clean: true
+  domain: true
+- word: измерение
+  strong: false
+  clean: false
+  domain: true
+- word: пациент
+  strong: false
+  clean: false
+  domain: true
+search:
+  strong_stems:
+  - гипертен
+  - тономет
+  - давлен
+web:
+  allowed_domains: []
+patterns:
+  operator: []
+  company: []
