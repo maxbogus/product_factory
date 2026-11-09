@@ -61,7 +61,7 @@ from pf.sources import (
     same_material,
 )
 from pf.state import Phase, SessionState, human_inputs, phase_of, save
-from pf.verdicts import Rejection, classify_detail
+from pf.verdicts import COMMITMENT_TEMPLATE, Rejection, classify_detail
 
 if TYPE_CHECKING:
     from pf.analysis import Metric
@@ -1204,15 +1204,51 @@ class Workflow:
                 if text:
                     pairs.append(("критерий успеха", text, PLAN_NUMBER_GOAL))
         for commitment in getattr(data, "commitments", None) or []:
-            for label, field_name in (
-                ("обязательство", "statement"),
-                ("показатель обязательства", "metric"),
-                ("условие пересмотра", "review_condition"),
+            for label, field_name, basis in (
+                ("обязательство", "statement", PLAN_NUMBER_GOAL),
+                ("показатель обязательства", "metric", PLAN_NUMBER_GOAL),
+                # База — утверждение о мире, а не цель: число в ней требует
+                # расчёта, как число в базе сравнения плана (`T-50`, `D-47`).
+                ("база обязательства", "baseline", PLAN_NUMBER_FACT),
+                ("метод измерения", "measurement", PLAN_NUMBER_GOAL),
+                ("контрольная группа", "control_group", PLAN_NUMBER_GOAL),
+                ("условие отката", "rollback", PLAN_NUMBER_GOAL),
+                ("условие пересмотра", "review_condition", PLAN_NUMBER_GOAL),
             ):
                 text = str(getattr(commitment, field_name, "") or "").strip()
                 if text:
-                    pairs.append((label, text, PLAN_NUMBER_GOAL))
+                    pairs.append((label, text, basis))
         return pairs
+
+    @staticmethod
+    def _check_commitment_template(data: Any) -> list[str]:
+        """Замечания «обязательство без базы / без метода».
+
+        Обязательство без базы нельзя ни проверить, ни исполнить: «удержание
+        вырастет на 5 %» не говорит, от чего. Без метода неясно, как считать:
+        «доля уведомлений до списания» считается по доставке, по открытию или
+        по факту оплаты. Поля необязательны в схеме — прогон без них остаётся
+        возможным, но названным (`T-50`). Замечание не останавливает работу:
+        это повод заполнить шаблон, а не отказ.
+
+        Args:
+            data: Результат роли решения.
+
+        Returns:
+            Строки замечаний: одна — на обязательство, одна — на отсутствие
+            базы или метода.
+        """
+        notes: list[str] = []
+        for index, commitment in enumerate(getattr(data, "commitments", None) or [], start=1):
+            statement = str(getattr(commitment, "statement", "") or "").strip()
+            label = f"обязательство {index}" + (f" «{statement}»" if statement else "")
+            baseline = str(getattr(commitment, "baseline", "") or "").strip()
+            measurement = str(getattr(commitment, "measurement", "") or "").strip()
+            if not baseline:
+                notes.append(f"{label}: база сравнения не названа — от чего измеряем, неизвестно")
+            if not measurement:
+                notes.append(f"{label}: метод измерения не назван — как считаем, неизвестно")
+        return notes
 
     @staticmethod
     def _check_plan_numbers(
@@ -2286,6 +2322,12 @@ class Workflow:
             if constraint_check:
                 state.results["constraint_check"] = constraint_check
         criteria_notes.extend(note.text for note in plan_numbers.notes)
+        template_notes: list[str] = []
+        if phase is Phase.KEEPER:
+            # Обязательство без базы или метода — не отказ прогона, а
+            # названное замечание: чинится заполнением шаблона, а не
+            # остановкой (`T-50`).
+            template_notes = self._check_commitment_template(data)
         if bundle is None and phase in (Phase.ANALYZING, Phase.STRATEGY):
             # Роутер может повести вперёд, перескочив сбор источников.
             # Тогда проверять основания нечем, и шаг обязан сказать это
@@ -2316,6 +2358,10 @@ class Workflow:
             for text in criteria_notes
             if text not in plan_texts
         )
+        rejection_items.extend(
+            Rejection(kind=COMMITMENT_TEMPLATE, status="no_data", detail=text)
+            for text in template_notes
+        )
         if grounding.conclusion is not None:
             # Статус оснований вывода — часть того же шага: он попадает
             # в журнал вместе с выводом, а не остаётся в состоянии сессии.
@@ -2330,8 +2376,8 @@ class Workflow:
             phase=phase,
             data=data,
             citations=grounding.citations,
-            rejected=grounding.rejected + len(criteria_notes),
-            rejected_details=[*grounding.details, *criteria_notes],
+            rejected=grounding.rejected + len(criteria_notes) + len(template_notes),
+            rejected_details=[*grounding.details, *criteria_notes, *template_notes],
             rejections=[item.as_dict() for item in rejection_items],
             needs_review=grounding.needs_review,
             needs_review_details=grounding.needs_review_details,

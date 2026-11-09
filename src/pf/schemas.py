@@ -1088,6 +1088,12 @@ class Commitment(BaseModel):
         statement: Что именно решили.
         owner: Кто отвечает.
         metric: Показатель.
+        baseline: Базовая линия — от чего измеряем. Число здесь утверждение о
+            мире, а не цель: без расчёта оно ни из чего не следует (`T-50`).
+        measurement: Метод измерения — как считаем показатель.
+        control_group: Контрольная группа — с чем сравниваем.
+        rollback: Условие отката. Не то же, что условие пересмотра:
+            «пересмотреть» и «откатить» — разные действия.
         review_condition: Условие пересмотра.
         review_by: Когда пересмотреть.
         basis: Основания решения.
@@ -1096,6 +1102,10 @@ class Commitment(BaseModel):
     statement: str = Field(min_length=1)
     owner: str = Field(default="")
     metric: str = Field(default="")
+    baseline: str = Field(default="")
+    measurement: str = Field(default="")
+    control_group: str = Field(default="")
+    rollback: str = Field(default="")
     review_condition: str = Field(default="")
     review_by: str = Field(default="")
     basis: list[SourceRef] = Field(default_factory=list)

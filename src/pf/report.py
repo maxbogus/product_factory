@@ -609,12 +609,19 @@ def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
         lines.append("")
 
     if conclusion.commitments:
-        lines.append("| Обязательство | Владелец | Показатель | Условие пересмотра |")
-        lines.append("|---|---|---|---|")
+        lines.append(
+            "| Обязательство | Владелец | Показатель | База | Метод | "
+            "Контрольная группа | Откат | Условие пересмотра |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|")
         for commitment in conclusion.commitments:
             lines.append(
                 f"| {commitment.get('statement', '—')} | {commitment.get('owner', '—')} | "
                 f"{commitment.get('metric', '—')} | "
+                f"{commitment.get('baseline') or '—'} | "
+                f"{commitment.get('measurement') or '—'} | "
+                f"{commitment.get('control_group') or '—'} | "
+                f"{commitment.get('rollback') or '—'} | "
                 f"{commitment.get('review_condition', '—')} |"
             )
         lines.append("")
@@ -625,6 +632,16 @@ def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
             lines.append(
                 f"**Без владельца: {ownerless} из {len(conclusion.commitments)}.** "
                 "Обязательство без владельца некому исполнить — это риск, а не оформление."
+            )
+            lines.append("")
+        baseline = _baseline_missing(conclusion.commitments)
+        if baseline is not None and baseline[0]:
+            # База — не оформление: без неё «вырастет на 5 %» не говорит,
+            # от чего, и обязательство нельзя проверить (`T-50`).
+            missing, total = baseline
+            lines.append(
+                f"**Без базы: {missing} из {total}.** Обязательство без базовой линии "
+                "нельзя проверить: непонятно, от чего считаем изменение."
             )
             lines.append("")
 
@@ -1049,6 +1066,31 @@ def _ownerless_count(commitments: list[dict[str, Any]]) -> int:
         if owner in _NO_OWNER or owner.startswith("не назначен"):
             count += 1
     return count
+
+
+def _baseline_missing(commitments: list[dict[str, Any]]) -> tuple[int, int] | None:
+    """Сколько обязательств осталось без базы сравнения.
+
+    База — не оформление: без неё «удержание вырастет на 5 %» не говорит,
+    от чего, и обязательство нельзя проверить (`T-50`). Поле появилось
+    позже схемы, поэтому унаследованный журнал не судится: если ни одно
+    обязательство ключа `baseline` не несёт, отчёт молчит — сравнивать
+    нечем, и это не «всё заполнено» (`D-33`).
+
+    Args:
+        commitments: Обязательства из журнала шага решения.
+
+    Returns:
+        Пара «без базы — всего» либо ``None``, если поле не записывалось.
+    """
+    if not commitments:
+        return None
+    if not any("baseline" in commitment for commitment in commitments):
+        return None
+    missing = sum(
+        1 for commitment in commitments if not str(commitment.get("baseline") or "").strip()
+    )
+    return missing, len(commitments)
 
 
 def _group_repeats(items: list[str]) -> list[tuple[str, int]]:

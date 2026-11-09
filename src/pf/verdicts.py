@@ -41,6 +41,8 @@ UNIQUE_GROUNDS = "unique-grounds"
 ENTITY_AMBIGUOUS = "entity-ambiguous"
 #: Прочтения утверждения и источника не пересеклись: другая сущность.
 ENTITY_MISMATCH = "entity-mismatch"
+#: Обязательство не заполнено по шаблону: нет базы или метода измерения (`T-50`).
+COMMITMENT_TEMPLATE = "commitment-template"
 
 #: Виды, которыми проверка **подтверждает** основание. Они не отказы, и
 #: подписи «что чинить» у них нет: чинить нечего.
@@ -92,6 +94,9 @@ KINDS: dict[str, Kind] = {
     # Числа плана и обязательств (`workflow.NUMBER_*`).
     "foreign_indicator": Kind("число из чужого показателя", FIX_CHECK),
     "no_calculation": Kind("число без своего расчёта", FIX_CALC),
+    # Обязательство не заполнено по шаблону (`T-50`): база или метод не
+    # названы. Чинит промпт — поля есть в схеме, их надо заполнить.
+    COMMITMENT_TEMPLATE: Kind("обязательство не по шаблону", FIX_PROMPT),
     # Понижение основания до отклонённого.
     INDICATOR_DEMOTION: Kind("основание про другой показатель", FIX_PROMPT),
     CALC_LINE_DEMOTION: Kind("значение посчитано как цитата", FIX_PROMPT),

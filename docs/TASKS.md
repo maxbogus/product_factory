@@ -95,7 +95,7 @@
 | T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ✅ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
 | T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ✅ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |
 | T-49 | 2 | Показатель подтверждённого основания сверяется с показателем вывода; потолок статуса — «подкреплено частично» | 3 | 4.2 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k indicator -q` |
-| T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 7.0 | ⬜ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |
+| T-50 | 2 | Обязательство по шаблону: базовая линия, метод измерения, контрольная группа, условие отката | 3 | 7.0 | ✅ | T-17 | `uv run pytest tests/test_commitments.py -k template -q` |
 | T-51 | 2 | Блок «что должно быть верно, чтобы вывод работал»: допущения вывода рядом с выводом | 2 | 2.4 | ✅ | T-49 | `uv run pytest tests/test_schemas.py -k assumptions -q` |
 | T-52 | 1 | Отчёт: дедуп отклонений с числом повторов, честная подпись доли, «не даёт решения», владельцы обязательств | 2 | 1.7 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k unfit -q` |
 | T-53 | 1 | Число плана сверяется со своим расчётом или со своей ссылкой на строку, а не с расчётом по похожему слову | 2 | 8.6 | ✅ | — | `uv run pytest tests/test_success_criteria.py -k foreign_indicator -q` |
