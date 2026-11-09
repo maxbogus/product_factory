@@ -105,11 +105,11 @@
 | T-57 | 1 | Основание вывода отвечает на вопрос: основание не про показатель вывода не считается подтверждённым | 2 | 9.45 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k off_topic_demotes -q` |
 | T-58 | 1 | Тождество сущностей слоями: словарь алиасов решает, нечёткое сходство только предлагает кандидата | 2 | 4.2 | ⬜ | T-55 | `uv run pytest tests/test_entities.py -k identity -q` |
 | T-59 | 1 | Вид отказа хранится в журнале, а класс считается по нему: таблица видов, подпись и владелец исправления | 1 | 8.1 | ✅ | — | `uv run pytest tests/test_verdict_kinds.py -k known_details -q` |
-| T-60a | 1 | Канал основания: `basis_kind` в `SourceRef` — факт, ввод человека, решение, гипотеза | 1 | 18.0 | ⬜ | T-59 | `uv run pytest tests/test_basis_channel.py -k basis_kind -q` |
-| T-60b | 1 | Отчёт называет допущения отдельно от оснований; ввод человека не поднимает статус вывода | 1 | 8.1 | ⬜ | T-60a | `uv run pytest tests/test_basis_channel.py -k human_input_does_not_raise_status -q` |
+| T-60a | 1 | Канал основания: `basis_kind` в `SourceRef` — факт, ввод пользователя со стадией, решение, гипотеза | 1 | 18.0 | ✅ | T-59 | `uv run pytest tests/test_basis_channel.py -k basis_kind -q` |
+| T-60b | 1 | Отчёт называет опоры на ввод пользователя отдельно от оснований; ввод не поднимает статус вывода | 1 | 8.1 | ✅ | T-60a | `uv run pytest tests/test_basis_channel.py -k human_input_does_not_raise_status -q` |
 | T-61 | 1 | Доступные источники названы в контексте: ссылка вне среза — пробел, а не основание | 2 | 2.8 | ⬜ | T-59 | `uv run pytest tests/test_sources.py -k available_sources -q` |
 | T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 3.4 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
-| T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ⬜ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
+| T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ✅ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

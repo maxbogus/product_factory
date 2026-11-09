@@ -145,6 +145,10 @@ class ConclusionRecord:
     unique: bool = True
     rule: str = ""
     contradicted: list[str] = field(default_factory=list)
+    #: Опоры вывода на ввод пользователя: стадия и слова. Это не отказ и не
+    #: подтверждение — решение о доверии принимает человек (`D-49`).
+    user_input: int = 0
+    user_input_grounds: list[str] = field(default_factory=list)
 
     @property
     def rule_is_current(self) -> bool:
@@ -220,6 +224,8 @@ class SessionReport:
     collection_not_collectable: list[str] = field(default_factory=list)
     variants: list[dict[str, Any]] = field(default_factory=list)
     duplicate_steps: list[str] = field(default_factory=list)
+    #: Опоры на ввод пользователя по всем шагам (стадия и слова).
+    user_input_grounds: list[str] = field(default_factory=list)
 
     @property
     def collection_candidates(self) -> int:
@@ -280,6 +286,12 @@ class SessionReport:
                 "**Прогон не даёт решения:** основания вывода требуют проверки "
                 "человеком — подтвердить их нечем."
             )
+        if self.conclusion.status == "опирается на ввод пользователя":
+            return (
+                "**Прогон даёт решение с оговоркой:** вывод держится на вводе "
+                "пользователя — это его слова, а не данные. Верить им или нет "
+                "решает он сам."
+            )
         if self.conclusion.off_topic_grounds:
             return (
                 "**Прогон даёт решение с оговоркой:** подтверждённые основания "
@@ -319,6 +331,14 @@ class SessionReport:
             "прогонами локальных моделей велик, поэтому сравнения "
             "считаются по нескольким прогонам.",
         ]
+        # Оговорка об опорах на ввод пользователя появляется только тогда,
+        # когда такие опоры есть: постоянная оговорка перестаёт читаться.
+        if self.user_input_grounds:
+            items.append(
+                "Опоры на ввод пользователя не проверены документом: подтверждено "
+                "только то, что человек это сказал и на названной стадии. Верить "
+                "им или нет — его решение, и замер этого решения не принимает."
+            )
         # Оговорка об окне контекста появляется только тогда, когда обрезка
         # действительно была: постоянная оговорка перестаёт читаться.
         if self.context and int(self.context.get("truncated") or 0) > 0:
@@ -360,6 +380,12 @@ class SessionReport:
         # же строка источника, процитированная двумя ролями, даёт две записи.
         # Прежняя подпись «Доля подтверждённых» читалась как доля оснований.
         lines.append(f"| Доля подтверждённых записей | {self.grounding_rate:.0%} |")
+        if self.user_input_grounds:
+            # Опоры на ввод пользователя стоят отдельной строкой: они не
+            # основания, проверенные документом, и не отказы (`D-49`).
+            lines.append(
+                f"| Опор на ввод пользователя (не основания) | {len(self.user_input_grounds)} |"
+            )
         lines.append("")
 
         readiness = self.readiness()
@@ -624,6 +650,11 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
         )
     elif conclusion.status == "подкреплено частично":
         lines.append(f"**Основания вывода: подкреплено частично{run_rule}** ({numbers}).")
+    elif conclusion.status == "опирается на ввод пользователя":
+        lines.append(
+            f"**Основания вывода: опирается на ввод пользователя{run_rule}** ({numbers}). "
+            "Подтверждённых документов нет: это слова человека, а не данные."
+        )
     elif conclusion.status == "подкреплено":
         lines.append(f"**Основания вывода: подкреплено{run_rule}** ({numbers}).")
     else:
@@ -634,9 +665,23 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
         )
     lines.append("")
 
+    if conclusion.user_input_grounds:
+        # Опоры на ввод пользователя называются рядом со статусом: «верить
+        # или нет» — решение человека, и он должен видеть, на какие именно
+        # свои слова опирается вывод (`D-49`).
+        lines.append(
+            "**Опоры на ввод пользователя** (это не документы: подтверждается "
+            "только то, что человек так сказал):"
+        )
+        lines.append("")
+        for item in conclusion.user_input_grounds:
+            lines.append(f"- {item}")
+        lines.append("")
+
     if not conclusion.rule_is_current and conclusion.status in (
         "подкреплено",
         "подкреплено частично",
+        "опирается на ввод пользователя",
     ):
         # Подпись нужна там, где статус **заявляет опору**. У «неподкреплено»
         # и «ждут проверки» переносить нечего: они и так ничего не обещают,
@@ -1217,6 +1262,22 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
     # оно названо, и шаг считает свои. Статус от этого не зависит: понижает
     # любое положительное число (`T-48b`).
     unsupported_numbers = sum(int(check.get("unsupported_numbers") or 0) for check in checks)
+    # Опоры на ввод пользователя: считаются по журналу шагов, а не по статусу
+    # — иначе «опирается на ввод пользователя» не отличить от «нечем
+    # подтвердить» (`D-49`).
+    user_input = sum(int(check.get("user_input") or 0) for check in checks)
+    user_input_grounds: list[str] = []
+    for record in (strategy, keeper):
+        if record is None:
+            continue
+        for item in getattr(record, "user_input_grounds", []) or []:
+            if not isinstance(item, dict):
+                continue
+            stage = str(item.get("stage") or "").strip()
+            words = str(item.get("quote") or item.get("claim") or "").strip()
+            text = f"{stage}: «{words}»" if stage else f"«{words}»"
+            if text not in user_input_grounds:
+                user_input_grounds.append(text)
     return ConclusionRecord(
         direction=str(product.get("chosen_direction") or ""),
         value_to_cost=str(product.get("value_to_cost") or ""),
@@ -1234,6 +1295,7 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
             rejected,
             needs_review,
             unsupported_numbers=unsupported_numbers,
+            user_input=user_input,
         ),
         checked=checked,
         confirmed=confirmed,
@@ -1246,6 +1308,8 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         unique=unique,
         rule=rule,
         contradicted=contradicted,
+        user_input=user_input,
+        user_input_grounds=user_input_grounds,
     )
 
 
@@ -1458,6 +1522,20 @@ def build_session_report(session_id: str) -> SessionReport:
 
     collection = _collect_collection(records)
 
+    # Опоры на ввод пользователя по всем шагам: считаются отдельно от
+    # оснований и отказов. Это не проверка документа — это слова человека,
+    # и решение о доверии к ним принимает он (`D-49`).
+    user_input_grounds: list[str] = []
+    for record in records:
+        for item in getattr(record, "user_input_grounds", []) or []:
+            if not isinstance(item, dict):
+                continue
+            stage = str(item.get("stage") or "").strip()
+            words = str(item.get("quote") or item.get("claim") or "").strip()
+            text = f"{stage}: «{words}»" if stage else f"«{words}»"
+            if text not in user_input_grounds:
+                user_input_grounds.append(text)
+
     state = load(session_id)
     return SessionReport(
         session_id=session_id,
@@ -1487,6 +1565,7 @@ def build_session_report(session_id: str) -> SessionReport:
         variants=variants,
         duplicate_steps=duplicate_steps,
         needs_review_details=needs_review_details,
+        user_input_grounds=user_input_grounds,
         lexical=(
             {
                 "total": lexical_total,
@@ -1527,6 +1606,7 @@ def report_as_dict(report: SessionReport) -> dict[str, Any]:
         "confirmed_citations": report.confirmed_citations,
         "rejected_citations": report.rejected_citations,
         "needs_review": len(report.needs_review_details),
+        "user_input_grounds": report.user_input_grounds,
         "lexical": report.lexical,
         "context": report.context,
         "grounding_rate": report.grounding_rate,

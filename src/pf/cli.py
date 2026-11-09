@@ -31,7 +31,14 @@ from typing import TYPE_CHECKING
 from pf import __version__
 from pf.config import settings
 from pf.journal import Journal, journal_path
-from pf.state import Phase, SessionState, list_sessions, load, save
+from pf.state import (
+    Phase,
+    SessionState,
+    list_sessions,
+    load,
+    record_human_input,
+    save,
+)
 
 if TYPE_CHECKING:
     from pf.materials import MaterialScan
@@ -315,9 +322,12 @@ def cmd_answer(args: argparse.Namespace) -> int:
         return 1
 
     state.pending_question = ""
-    state.results.setdefault("human_answers", []).append(args.text)
+    # Стадия записывается здесь: ответ дан там, где работа стояла, и это
+    # единственное место, где она ещё известна. Без стадии ссылка на ввод
+    # не проверяется — «где-то в сессии человек что-то сказал» (`D-49`).
+    record_human_input(state, args.text)
     save(state)
-    _out(f"{CHECK} ответ сохранён в сессию {session_id}")
+    _out(f"{CHECK} ответ сохранён в сессию {session_id} (стадия «{state.phase.title_ru}»)")
     _out(f"Продолжить: pf resume --session {session_id}")
     return 0
 
@@ -412,7 +422,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     машинного чтения, с `--save` — файл в каталоге отчётов.
     """
     import json as json_module
+    from dataclasses import asdict
 
+    from pf.artifacts import recheck, recheck_markdown
     from pf.report import build_session_report, report_as_dict
 
     session_id = _session_id(args.session)
@@ -423,10 +435,16 @@ def cmd_report(args: argparse.Namespace) -> int:
     report = build_session_report(session_id)
 
     if args.json:
-        _out(json_module.dumps(report_as_dict(report), ensure_ascii=False, indent=2))
+        payload = report_as_dict(report)
+        if args.recheck:
+            # Перепроверка — отдельный результат: журнал не переписывается.
+            payload["recheck"] = asdict(recheck(session_id))
+        _out(json_module.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     text = report.as_markdown()
+    if args.recheck:
+        text = "\n".join([text.rstrip(), "", "---", "", *recheck_markdown(recheck(session_id))])
     if args.save:
         target = settings.reports_dir / f"session-{session_id}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -949,6 +967,11 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--session", help="идентификатор сессии")
     report.add_argument("--json", action="store_true", help="вывести в JSON")
     report.add_argument("--save", action="store_true", help="сохранить в reports/")
+    report.add_argument(
+        "--recheck",
+        action="store_true",
+        help="перепроверить запись текущим кодом на сохранённых ответах ролей",
+    )
     report.set_defaults(func=cmd_report)
 
     knowledge = subparsers.add_parser(

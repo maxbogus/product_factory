@@ -50,13 +50,8 @@ from typing import Any
 
 from pf.config import settings
 from pf.ground import SupportStatus, verify_claim, verify_quote
-from pf.roles import validate
-from pf.state import list_sessions, load
-from pf.verdicts import classify_detail, label_of
-from pf.workflow import _PHASE_BY_ROLE, Workflow
-
-#: Фаза состояния → роль. Обратная карта к ``Workflow._PHASE_BY_ROLE``.
-ROLE_BY_PHASE: dict[str, str] = {phase.value: role for role, phase in _PHASE_BY_ROLE.items()}
+from pf.replay import replay_session
+from pf.state import list_sessions
 
 #: Прогоны, на которых замер уже делался. Используются по умолчанию, если они
 #: есть: в ``state/`` лежат и сессии бенчмарка, и служебные прогоны тестов.
@@ -235,123 +230,6 @@ def check_probes() -> list[dict[str, Any]]:
     return results
 
 
-def replay_session(session_id: str) -> dict[str, Any] | None:
-    """Проверить основания одного сохранённого прогона.
-
-    Args:
-        session_id: Идентификатор сессии.
-
-    Returns:
-        Снимок по сессии либо ``None``, если состояния нет на диске.
-    """
-    state = load(session_id)
-    if state is None:
-        return None
-
-    bundle = Workflow().collect_sources(state)
-    payload: dict[str, Any] = {
-        "session_id": session_id,
-        "question": state.question,
-        "sources": len(bundle.articles),
-        "roles": {},
-        "skipped": [],
-        "kinds": {},
-        "verdicts": [],
-        # Замер `T-48b`: сколько величин-фактов плана осталось без своего
-        # расчёта и что из-за них стало со статусом вывода. Без блока
-        # «статус стал частичным» не отвечает, за что именно.
-        "plan_numbers": {"roles": {}, "unsupported": 0, "kinds": {}},
-    }
-
-    for role, phase in _PHASE_BY_ROLE.items():
-        raw = state.results.get(phase.value)
-        if not isinstance(raw, dict):
-            continue
-        try:
-            data = validate(role, raw)
-        except Exception as exc:  # схема ответа могла измениться после прогона
-            payload["skipped"].append(f"{role}: {exc}")
-            continue
-
-        plan_numbers = (
-            Workflow._check_plan_numbers(data) if role in ("strategy", "keeper") else None
-        )
-        grounding = Workflow._verify_claims(
-            data,
-            bundle,
-            state=state,
-            role_name=role,
-            session_id=session_id,
-            unsupported_numbers=0 if plan_numbers is None else plan_numbers.unsupported,
-        )
-        payload["roles"][role] = {
-            "confirmed": len(grounding.citations),
-            "rejected": grounding.rejected,
-            "needs_review": len(grounding.needs_review),
-            "claims": len(grounding.verdicts),
-            "conclusion_status": (grounding.conclusion or {}).get("status", ""),
-        }
-        if plan_numbers is not None:
-            kinds: dict[str, int] = {}
-            for note in plan_numbers.notes:
-                kinds[note.kind] = kinds.get(note.kind, 0) + 1
-                payload["plan_numbers"]["kinds"][note.kind] = (
-                    payload["plan_numbers"]["kinds"].get(note.kind, 0) + 1
-                )
-            payload["plan_numbers"]["roles"][role] = {
-                "notes": len(plan_numbers.notes),
-                "unsupported": plan_numbers.unsupported,
-                "kinds": kinds,
-                "status": (grounding.conclusion or {}).get("status", ""),
-            }
-            payload["plan_numbers"]["unsupported"] += plan_numbers.unsupported
-        for verdict in grounding.verdicts:
-            payload["verdicts"].append(
-                {
-                    "session": session_id,
-                    "role": role,
-                    "claim": verdict.claim,
-                    "source_id": verdict.source_id,
-                    "status": verdict.status.value,
-                    "detail": verdict.detail,
-                    "kind": verdict.kind,
-                }
-            )
-            bucket = _bucket(verdict.status, verdict.detail)
-            payload["kinds"][bucket] = payload["kinds"].get(bucket, 0) + 1
-            # Причина называется только у отказа: «требует проверки» — не
-            # отказ, у него своя строка исхода. Иначе одна и та же запись
-            # попадала в две строки, а «нужен взгляд человека» считалось
-            # причиной отказа (`T-59`).
-            if verdict.status is SupportStatus.NO_DATA:
-                kind = verdict.kind or classify_detail(verdict.detail)
-                reason = f"причина: {label_of(kind)}"
-                payload["kinds"][reason] = payload["kinds"].get(reason, 0) + 1
-    return payload
-
-
-def _bucket(status: SupportStatus, detail: str) -> str:
-    """Корзина исхода: подтверждено, нерелевантный источник, нет данных, проверка.
-
-    Нерелевантность отделена намеренно: это не расхождение в словах, а
-    подмена источника, и лечится она контекстом, а не проверкой.
-
-    Args:
-        status: Статус основания.
-        detail: Пояснение проверки (для метрик оно своё).
-
-    Returns:
-        Название корзины.
-    """
-    if status is SupportStatus.CONFIRMED:
-        return "подтверждено"
-    if status is SupportStatus.NEEDS_REVIEW:
-        return "требует проверки"
-    if IRRELEVANT in detail:
-        return "нерелевантный источник"
-    return "нет данных"
-
-
 def _totals(sessions: list[dict[str, Any]]) -> dict[str, int]:
     """Свод по всем сессиям.
 
@@ -363,6 +241,7 @@ def _totals(sessions: list[dict[str, Any]]) -> dict[str, int]:
     """
     totals: dict[str, int] = {
         "подтверждено": 0,
+        "опора на ввод пользователя": 0,
         "нерелевантный источник": 0,
         "нет данных": 0,
         "требует проверки": 0,
@@ -395,11 +274,18 @@ def _role_totals(sessions: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
         for role, counts in payload["roles"].items():
             bucket = roles.setdefault(
                 role,
-                {"подтверждено": 0, "отклонено": 0, "требует проверки": 0, "оснований": 0},
+                {
+                    "подтверждено": 0,
+                    "отклонено": 0,
+                    "требует проверки": 0,
+                    "опора на ввод пользователя": 0,
+                    "оснований": 0,
+                },
             )
             bucket["подтверждено"] += counts["confirmed"]
             bucket["отклонено"] += counts["rejected"]
             bucket["требует проверки"] += counts["needs_review"]
+            bucket["опора на ввод пользователя"] += int(counts.get("user_input") or 0)
             bucket["оснований"] += counts["claims"]
     return dict(sorted(roles.items()))
 

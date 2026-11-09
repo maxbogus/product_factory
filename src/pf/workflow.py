@@ -55,13 +55,13 @@ from pf.schemas import (
     Variants,
 )
 from pf.sources import (
-    HUMAN_INPUT_LABELS,
     SourceBundle,
     collect,
+    human_input_stage,
     indicator_of_citation,
     same_material,
 )
-from pf.state import Phase, SessionState, save
+from pf.state import Phase, SessionState, human_inputs, phase_of, save
 from pf.verdicts import Rejection, classify_detail
 
 if TYPE_CHECKING:
@@ -97,6 +97,28 @@ class ClaimVerdict:
 
 
 @dataclass(frozen=True, slots=True)
+class HumanInputVerdict:
+    """Итог проверки ссылки на ввод пользователя.
+
+    Отличается от `Support` тем, что никогда не бывает подтверждённым:
+    слова человека проверяются на то, что он их сказал, а решение о
+    доверии принимает он сам (`D-49`). Поэтому у вердикта есть стадия —
+    её называют и отчёт, и документ.
+
+    Attributes:
+        status: Итог: опора принята или отказ.
+        detail: Пояснение для человека — что именно не сошлось.
+        kind: Машинный вид (`user_input` или вид отказа).
+        stage: Стадия, к которой отнесена опора.
+    """
+
+    status: SupportStatus
+    detail: str
+    kind: str
+    stage: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class GroundingResult:
     """Итог проверки оснований одного шага.
 
@@ -110,6 +132,11 @@ class GroundingResult:
             или другой язык. Это не отказ — это «ждёт человека», и
             смешивать его с отказом нельзя.
         needs_review_details: Что именно ждёт проверки и почему.
+        user_input: Опоры на ввод пользователя — что сказано и на какой
+            стадии. Не отказ и не подтверждение: доверие к своим словам
+            определяет человек (`D-49`).
+        user_input_grounds: Те же опоры с полями для журнала: стадия, слова,
+            утверждение, пояснение.
         verdicts: Вердикт по каждому основанию — для замера и сверки версий.
     """
 
@@ -119,6 +146,8 @@ class GroundingResult:
     conclusion: dict[str, Any] | None = None
     needs_review: list[str] = field(default_factory=list)
     needs_review_details: list[str] = field(default_factory=list)
+    user_input: list[str] = field(default_factory=list)
+    user_input_grounds: list[dict[str, Any]] = field(default_factory=list)
     verdicts: list[ClaimVerdict] = field(default_factory=list)
 
 
@@ -138,10 +167,10 @@ def _named_source(source_id: str) -> str:
     text = source_id.strip()
     if not text:
         return "источник не назван"
-    if text.lower().replace("ё", "е") in HUMAN_INPUT_LABELS:
-        # Модель видит ввод человека в контексте и ссылается на него как на
-        # документ. Это не «нерелевантный источник»: источника нет вовсе.
-        return "ввод человека"
+    if human_input_stage(text) is not None:
+        # Модель видит ввод пользователя в контексте и ссылается на него.
+        # Это не «нерелевантный источник» и не фантом: канал назван.
+        return "ввод пользователя"
     if "/" in text or "." in text:
         return text
     return f"источник не назван — вместо ссылки указано поле «{text}»"
@@ -356,6 +385,10 @@ class StepResult:
     rejections: list[dict[str, Any]] = field(default_factory=list)
     needs_review: list[str] = field(default_factory=list)
     needs_review_details: list[str] = field(default_factory=list)
+    #: Опоры на ввод пользователя: что сказано и на какой стадии. Это не
+    #: отказ и не подтверждение — решение о доверии принимает человек
+    #: (`D-49`).
+    user_input_grounds: list[dict[str, Any]] = field(default_factory=list)
     lexical: dict[str, Any] | None = None
     cost_units: float = 0.0
     tokens: int = 0
@@ -1387,6 +1420,7 @@ class Workflow:
         grounds: dict[str, list[str]],
         off_topic: dict[str, list[str]] | None = None,
         unsupported_numbers: int = 0,
+        user_input: int = 0,
     ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
@@ -1411,6 +1445,9 @@ class Workflow:
             unsupported_numbers: Сколько величин плана осталось без своего
                 расчёта. Ключ пишется всегда, включая ноль: пропуск
                 читался бы как «не проверяли».
+            user_input: Сколько опор держится на вводе пользователя. Они
+                входят в ``needs_review``, но называются отдельно: доверие
+                к своим словам человек выставляет сам.
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
@@ -1423,6 +1460,7 @@ class Workflow:
             tally.rejected,
             tally.needs_review,
             unsupported_numbers=unsupported_numbers,
+            user_input=user_input,
         )
         payload: dict[str, Any] = {
             "checked": tally.checked,
@@ -1434,6 +1472,10 @@ class Workflow:
             # Число без расчёта понижает статус — причина едет вместе с ним,
             # иначе читатель видит потолок и не знает, за что.
             "unsupported_numbers": unsupported_numbers,
+            # Сколько опор держится на словах человека: статус «опирается на
+            # ввод пользователя» без этого числа не отличить от «нечем
+            # подтвердить».
+            "user_input": user_input,
             # Имя правила едет вместе со статусом. Статус без него читается
             # как текущая оценка, оставаясь записью прогона, — так `demo-v9`
             # печатал «подкреплено» рядом с «отклонено» по тем же строкам.
@@ -1532,6 +1574,121 @@ class Workflow:
         return coverage_report(texts).to_dict()
 
     @staticmethod
+    def _verify_human_input(
+        quote: str,
+        stage: str,
+        state: SessionState | None,
+    ) -> HumanInputVerdict:
+        """Проверить ссылку на ввод пользователя.
+
+        Канал подтверждения у слов человека свой: не «встречается ли цитата в
+        документе», а «говорил ли он это и на той ли стадии». Три отказа
+        различаются, потому что чинятся по-разному: ввода не было вовсе
+        (модель приписала человеку слова), стадия названа не та, слова
+        пересказаны.
+
+        Принятая опора остаётся «требует проверки человеком»: код не имеет
+        права объявить слова пользователя подтверждённым фактом — иначе
+        доверие к ним выставил бы он, а не человек (`D-49`).
+
+        Args:
+            quote: Что модель приписывает пользователю.
+            stage: Стадия из ссылки — может быть пустой у старых записей.
+            state: Состояние сессии с записанными ответами.
+
+        Returns:
+            Вердикт: опора принята либо отказ с видом.
+        """
+        records = human_inputs(state)
+        if not records:
+            return HumanInputVerdict(
+                status=SupportStatus.NO_DATA,
+                detail="в сессии не записано ни одного ответа пользователя — ссылаться не на что",
+                kind="human_input_unrecorded",
+            )
+
+        wanted = phase_of(stage)
+        if wanted is not None:
+            matched = [record for record in records if record.phase == wanted.value]
+            if not matched:
+                return HumanInputVerdict(
+                    status=SupportStatus.NO_DATA,
+                    detail=(
+                        f"на стадии «{wanted.title_ru}» пользователь ничего не вводил — "
+                        "стадия названа не та"
+                    ),
+                    kind="human_input_phase_mismatch",
+                )
+            where = wanted.title_ru
+        elif stage:
+            return HumanInputVerdict(
+                status=SupportStatus.NO_DATA,
+                detail=f"стадия «{stage}» не распознана — проверять ссылку нечем",
+                kind="human_input_phase_mismatch",
+            )
+        elif len(records) == 1:
+            # Один ввод в сессии — стадия неоднозначна, и это сказано. Так
+            # выглядят сохранённые прогоны: ссылка «Ответ человека» без
+            # стадии, а других вводов нет.
+            matched = records
+            where = f"{records[0].phase_title} — единственный ввод в сессии"
+        elif all(not record.phase for record in records):
+            matched = records
+            where = "стадия не записана (сессия до правки)"
+        else:
+            return HumanInputVerdict(
+                status=SupportStatus.NO_DATA,
+                detail=(
+                    f"вводов в сессии несколько ({len(records)}), а стадия не названа — "
+                    "непонятно, на каком из них держится утверждение"
+                ),
+                kind="human_input_phase_mismatch",
+            )
+
+        if quote and not any(Workflow._said_before(quote, record.text) for record in matched):
+            return HumanInputVerdict(
+                status=SupportStatus.NO_DATA,
+                detail=(
+                    "таких слов в записанном вводе пользователя нет: ссылка выдаёт "
+                    "за сказанное то, чего он не говорил"
+                ),
+                kind="human_input_quote_mismatch",
+            )
+        note = (
+            "слова подтверждены записью"
+            if quote
+            else "цитата не приведена — проверено только, что ввод был"
+        )
+        return HumanInputVerdict(
+            status=SupportStatus.NEEDS_REVIEW,
+            detail=(
+                f"ввод пользователя ({where}): {note}; "
+                "верить этим словам или нет — решение пользователя"
+            ),
+            kind="user_input",
+            stage=where,
+        )
+
+    @staticmethod
+    def _said_before(quote: str, said: str) -> bool:
+        """Сказаны ли эти слова в записанном вводе.
+
+        Сравниваются основы слов, а не дословная подстрока: цитата может быть
+        фрагментом ответа в другой словоформе, и это не подмена. Человек — не
+        документ, требовать от него буквального совпадения значило бы
+        отклонять честную ссылку по форме.
+
+        Args:
+            quote: Что модель приписывает пользователю.
+            said: Что он действительно сказал.
+
+        Returns:
+            Все значимые слова цитаты есть в записи.
+        """
+        wanted = stems(quote)
+        return not wanted or wanted <= stems(said)
+
+    @staticmethod
     def _verify_claims(
         data: Any,
         bundle: SourceBundle | None,
@@ -1587,6 +1744,12 @@ class Workflow:
         oov: set[str] = set()
         oov_context = ""
         verdicts: list[ClaimVerdict] = []
+        # Опоры на ввод пользователя: ключи оснований вывода, которые держатся
+        # на словах человека. Считаются отдельно от подтверждённых и
+        # отклонённых: «верить или нет» решает человек, а не проверка.
+        user_input_grounds: list[dict[str, str]] = []
+        user_input_titles: list[str] = []
+        user_input_keys: set[str] = set()
 
         for text, source, is_conclusion in Workflow._sources_of(data):
             named = getattr(source, "source_id", "") or ""
@@ -1601,6 +1764,47 @@ class Workflow:
             # он менять не должен — поэтому якорь живёт отдельной картой.
             paragraph = getattr(source, "paragraph", None)
             anchor = named if "#" in named or paragraph is None else f"{named}#p{paragraph}"
+
+            # Канал «ввод пользователя» проверяется своим правилом: слова
+            # человека подтверждаются записью, а не документом. Проверка идёт
+            # до внешних источников и до причины отказа: ссылка на ввод — не
+            # «фантомный источник» и не «ссылки нет» (`D-49`).
+            stage = human_input_stage(named)
+            if stage is None and getattr(source, "basis_kind", "факт") == "ввод пользователя":
+                stage = str(getattr(source, "basis_phase", "") or "")
+            if stage is not None:
+                input_support = Workflow._verify_human_input(quote, stage, state)
+                verdicts.append(
+                    ClaimVerdict(
+                        claim=text,
+                        source_id=named,
+                        status=input_support.status,
+                        detail=input_support.detail,
+                        is_conclusion=is_conclusion,
+                        kind=input_support.kind,
+                    )
+                )
+                if input_support.status is SupportStatus.NEEDS_REVIEW:
+                    # Опора принята: слова были сказаны. Доверие к ним — не
+                    # дело проверки, поэтому основание ждёт решения человека.
+                    user_input_grounds.append(
+                        {
+                            "stage": input_support.stage,
+                            "quote": quote,
+                            "claim": text,
+                            "source": input_support.detail,
+                        }
+                    )
+                    user_input_titles.append(f"{input_support.stage}: «{quote or text}»")
+                    if is_conclusion:
+                        user_input_keys.add(key)
+                        conclusion_verdicts.append((key, SupportStatus.NEEDS_REVIEW))
+                else:
+                    rejected += 1
+                    details.append(f"{_named_source(named)}: {input_support.detail}")
+                    if is_conclusion:
+                        conclusion_verdicts.append((key, SupportStatus.NO_DATA))
+                continue
 
             external = Workflow._external_text(named, state)
             if external:
@@ -1763,9 +1967,12 @@ class Workflow:
                 ground_buckets(conclusion_verdicts),
                 off_topic,
                 unsupported_numbers,
+                len(user_input_keys),
             ),
             needs_review=needs_review,
             needs_review_details=needs_review_details,
+            user_input=user_input_titles,
+            user_input_grounds=user_input_grounds,
             verdicts=verdicts,
         )
 
@@ -2106,6 +2313,7 @@ class Workflow:
             rejections=[item.as_dict() for item in rejection_items],
             needs_review=grounding.needs_review,
             needs_review_details=grounding.needs_review_details,
+            user_input_grounds=grounding.user_input_grounds,
             lexical=lexical,
             cost_units=usage.cost_units,
             tokens=usage.total_tokens,
@@ -2654,11 +2862,17 @@ class Workflow:
 
     @staticmethod
     def _human_context(state: SessionState) -> str:
-        """Собрать ответы человека для роли.
+        """Собрать ответы пользователя для роли.
 
         Ответ, который человек дал на вопрос агента, должен попасть в
         контекст следующего шага. Иначе агент спрашивает, человек
         отвечает — и ответ теряется: работа продолжается вслепую.
+
+        Подпись называет и стадию, на которой ответ дан, и ключ, которым на
+        него ссылаются. Прежняя формулировка «на него нельзя ссылаться»
+        запрещала ссылку вместо того, чтобы научить правильной: слова
+        человека — законная опора, у них просто другой канал подтверждения
+        (`D-49`).
 
         Args:
             state: Состояние сессии.
@@ -2666,16 +2880,23 @@ class Workflow:
         Returns:
             Текст ответов либо пустая строка.
         """
-        answers = state.results.get("human_answers") or []
-        if not answers:
+        records = human_inputs(state)
+        if not records:
             return ""
-        # Подпись «Ответ человека» читалась моделью как заголовок источника:
-        # в `cloud-deepseek-2` она попала в `source_id` девять раз из
-        # двенадцати отказов. Ввод человека — не документ, и это сказано
-        # прямо там, где модель его видит.
-        lines = [
-            f"Ввод человека (не источник, на него нельзя ссылаться): {text}" for text in answers
-        ]
+        lines: list[str] = []
+        for record in records:
+            stage = phase_of(record.phase)
+            if stage is None:
+                key = "ввод пользователя"
+                where = "стадия не записана"
+            else:
+                key = f"ввод пользователя: {stage.value}"
+                where = f"стадия «{stage.title_ru}»"
+            lines.append(
+                f"Ввод пользователя ({where}) — ссылка «{key}», "
+                f"канал основания — «ввод пользователя». Это не документ: "
+                f"подтверждается только тем, что пользователь это сказал: {record.text}"
+            )
         return "\n".join(lines)
 
     @staticmethod
@@ -2734,6 +2955,7 @@ class Workflow:
             rejected_details=result.rejected_details,
             rejections=result.rejections,
             needs_review_details=result.needs_review_details,
+            user_input_grounds=result.user_input_grounds,
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,
             cost_units=result.cost_units,

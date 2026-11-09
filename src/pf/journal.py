@@ -41,6 +41,9 @@ class StepRecord:
         rejections: Отказы с машинным видом (`kind`): по ним считается класс,
             а не по формулировке. Текст остаётся для чтения, вид — для счёта.
         needs_review_details: Основания, ожидающие проверки человеком.
+        user_input_grounds: Опоры на ввод пользователя: стадия, слова,
+            утверждение. Не отказ и не подтверждение — доверие к своим
+            словам выставляет человек, а не проверка (`D-49`).
         completion_tokens: Токены в ответе.
         cost_units: Стоимость шага в условных единицах.
         duration_ms: Длительность шага.
@@ -56,6 +59,7 @@ class StepRecord:
     rejected_details: list[str] = field(default_factory=list)
     rejections: list[dict[str, Any]] = field(default_factory=list)
     needs_review_details: list[str] = field(default_factory=list)
+    user_input_grounds: list[dict[str, Any]] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_units: float = 0.0

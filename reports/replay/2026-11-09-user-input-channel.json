@@ -1,0 +1,2805 @@
+{
+  "generated_at": "2026-11-09T08:28:39+00:00",
+  "commit": "69e77d4",
+  "settings": {
+    "claim_min_overlap": 0.8,
+    "metric_abs_tolerance": 0.1,
+    "metric_rel_tolerance": 0.0005
+  },
+  "sessions": {
+    "demo-v9": {
+      "session_id": "demo-v9",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 8,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 2,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 2,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 0,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "неподкреплено"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "нет данных": 16,
+        "причина: основание про другой показатель": 12,
+        "подтверждено": 4,
+        "причина: значение не сошлось с источником": 4
+      },
+      "verdicts": [
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Абонентская база МТС в России не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Абонентская база МТС в России не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 1,
+            "kinds": {
+              "foreign_indicator": 1,
+              "no_calculation": 1
+            },
+            "status": "неподкреплено"
+          },
+          "keeper": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "no_calculation": 2
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 1,
+        "kinds": {
+          "foreign_indicator": 1,
+          "no_calculation": 3
+        }
+      }
+    },
+    "demo-v10": {
+      "session_id": "demo-v10",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 11,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 5,
+          "rejected": 1,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 5,
+          "rejected": 1,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 2,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "неподкреплено"
+        },
+        "keeper": {
+          "confirmed": 3,
+          "rejected": 3,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "подтверждено": 15,
+        "нет данных": 7,
+        "причина: источник нерелевантен": 7
+      },
+      "verdicts": [
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "Абонентская база МТС — 82 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "Абонентская база Tele2 — 38,9 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (термин «Tele2» не найден в источнике): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "number_mismatch"
+        },
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России, январь-март 2026: 78.33 %",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "ARPU ВымпелКом (мобильная связь) — 322.2 руб.",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "collector",
+          "claim": "ARPU ВымпелКом (мобильная связь)",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "Абонентская база МТС — 82 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2 — 38,9 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (термин «Tele2» не найден в источнике): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "number_mismatch"
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, январь-март 2026: 78.33 %",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "ARPU ВымпелКом (мобильная связь) — 322.2 руб.",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "analyst",
+          "claim": "ARPU ВымпелКом (мобильная связь)",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "strategy",
+          "claim": "Оптимизация тарифа с ограничениями — внести минимальные изменения в тариф, чтобы повысить удержание",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "strategy",
+          "claim": "Оптимизация тарифа с ограничениями — внести минимальные изменения в тариф, чтобы повысить удержание",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "strategy",
+          "claim": "Мы вносим минимальные изменения в тариф, чтобы сохранить выгоду для вас в условиях роста ключевой ставки",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "strategy",
+          "claim": "Мы вносим минимальные изменения в тариф, чтобы сохранить выгоду для вас в условиях роста ключевой ставки",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Повысить удержание тарифа на 5–7% в течение 3 месяцев",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Повысить удержание тарифа на 5–7% в течение 3 месяцев",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Обеспечить положительную реакцию клиентов на изменения в тарифе",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Обеспечить положительную реакцию клиентов на изменения в тарифе",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Снизить влияние скидок на маржу",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v10",
+          "role": "keeper",
+          "claim": "Снизить влияние скидок на маржу",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+          "kind": ""
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1,
+              "foreign_indicator": 1
+            },
+            "status": "неподкреплено"
+          },
+          "keeper": {
+            "notes": 4,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1,
+              "foreign_indicator": 1,
+              "no_calculation": 2
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "number_mismatch": 2,
+          "foreign_indicator": 2,
+          "no_calculation": 2
+        }
+      }
+    },
+    "demo-v12": {
+      "session_id": "demo-v12",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 11,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 5,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 7,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 5,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 7,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 0,
+          "rejected": 1,
+          "needs_review": 1,
+          "user_input": 0,
+          "claims": 2,
+          "conclusion_status": "ждёт проверки"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 3,
+          "needs_review": 1,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "ждёт проверки"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "подтверждено": 10,
+        "нет данных": 8,
+        "причина: источник нерелевантен": 2,
+        "причина: значение не сошлось с источником": 2,
+        "требует проверки": 2,
+        "причина: основание про другой показатель": 2,
+        "причина: фантомный источник": 2
+      },
+      "verdicts": [
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "Абонентская база МТС в России составляет 82 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (цитата не дословна (покрытие 100%) — это пересказ, а не цитата): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "paraphrase"
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "Абонентская база Tele2 на конец июля 2025 года составляет 38,9 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (цитата короче 12 символов — подтвердить нечего): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "too_short"
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России в январе-марте 2026 года колебалась от 75,92 до 84,84 %",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "ARPU ВымпелКом по мобильной связи варьируется от 302 до 403 рублей в месяц",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 9.1052, а заявлено 84.84 %",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "collector",
+          "claim": "ARPU ВымпелКом по мобильной связи",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "Абонентская база МТС в России составляет 82 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (цитата не дословна (покрытие 100%) — это пересказ, а не цитата): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "paraphrase"
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2 на конец июля 2025 года составляет 38,9 млн человек",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата не годится как доказательство (цитата короче 12 символов — подтвердить нечего): проверено полями — утверждение подтверждено: поддержка 1.00",
+          "kind": "too_short"
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России в январе-марте 2026 года колебалась от 75,92 до 84,84 %",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "источник вне среза задачи",
+          "kind": "outside_slice"
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "ARPU ВымпелКом по мобильной связи варьируется от 302 до 403 рублей в месяц",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 9.1052, а заявлено 84.84 %",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "analyst",
+          "claim": "ARPU ВымпелКом по мобильной связи",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+          "status": "needs_review",
+          "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+          "kind": "exact"
+        },
+        {
+          "session": "demo-v12",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "no_data",
+          "detail": "в строке показатель «ARPU мобильной связи, рублей на абонента в месяц», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+          "status": "needs_review",
+          "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+          "kind": "exact"
+        },
+        {
+          "session": "demo-v12",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "no_data",
+          "detail": "в строке показатель «ARPU мобильной связи, рублей на абонента в месяц», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v12",
+          "role": "keeper",
+          "claim": "Повысить удержание тарифа на 5%",
+          "source_id": "verification",
+          "status": "no_data",
+          "detail": "ссылки нет — цитировать нечего",
+          "kind": "source_not_named"
+        },
+        {
+          "session": "demo-v12",
+          "role": "keeper",
+          "claim": "Повысить удержание тарифа на 5%",
+          "source_id": "verification",
+          "status": "no_data",
+          "detail": "ссылки нет — цитировать нечего",
+          "kind": "source_not_named"
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 3,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1,
+              "foreign_indicator": 1,
+              "no_calculation": 1
+            },
+            "status": "ждёт проверки"
+          },
+          "keeper": {
+            "notes": 5,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 2,
+              "no_calculation": 3
+            },
+            "status": "ждёт проверки"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "number_mismatch": 1,
+          "foreign_indicator": 3,
+          "no_calculation": 4
+        }
+      }
+    },
+    "cloud-deepseek-2": {
+      "session_id": "cloud-deepseek-2",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 10,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 6,
+          "rejected": 1,
+          "needs_review": 1,
+          "user_input": 0,
+          "claims": 8,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 8,
+          "rejected": 0,
+          "needs_review": 1,
+          "user_input": 1,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 2,
+          "rejected": 0,
+          "needs_review": 1,
+          "user_input": 2,
+          "claims": 5,
+          "conclusion_status": "подкреплено частично"
+        },
+        "keeper": {
+          "confirmed": 2,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 5,
+          "claims": 7,
+          "conclusion_status": "подкреплено частично"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "нет данных": 1,
+        "причина: фантомный источник": 1,
+        "подтверждено": 18,
+        "требует проверки": 3,
+        "опора на ввод пользователя": 8
+      },
+      "verdicts": [
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "Внутренней телеметрии по тарифу нет — работа ведётся только на открытых источниках (корпус Википедии и таблицы project/); из действий допустимы изменение условий тарифа и коммуникации, вариант «оставить как есть» также допустим, снижение цены запрещено ограничением по марже",
+          "source_id": "",
+          "status": "no_data",
+          "detail": "ссылки нет — цитировать нечего",
+          "kind": "source_not_named"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "Для мобильного рынка России в открытых источниках фиксируется падение маржинальности классического телеком-бизнеса по мере насыщения рынка, роста конкуренции и появления ОТТ-провайдеров — это внешний контекст, в котором может наблюдаться падение удержания",
+          "source_id": "security/МТС (компания)",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "По ВымпелКому в открытых таблицах есть только помесячный ARPU мобильной связи (302 руб. в 2017-Q1 и 320 руб. в 2017-Q2), то есть показатель выручки на абонента, а не показатель удержания",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "По ВымпелКому в открытых таблицах есть только помесячный ARPU мобильной связи (302 руб. в 2017-Q1 и 320 руб. в 2017-Q2), то есть показатель выручки на абонента, а не показатель удержания",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "В отобранном фрагменте годового отчёта ВымпелКома за 2025 год присутствует только заголовок раздела митигационных мер к риску 4 — сами меры в материале не приведены",
+          "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+          "status": "needs_review",
+          "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за 8 месяцев, млн",
+          "source_id": "project/data/mnp_stats.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за год, млн: изменение за период",
+          "source_id": "project/data/mnp_stats.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "collector",
+          "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц: изменение за период",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "Внутренней телеметрии по тарифу нет: работа ведётся только на открытых источниках (корпус Википедии и таблицы project/); из действий допустимы изменение условий тарифа и коммуникации, вариант «оставить как есть» тоже допустим, а снижение цены запрещено ограничением по марже",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "В открытых метриках МТС есть доля на рынке спутникового ТВ — 6,2 за 3-й квартал 2024; это другой продукт, не мобильный тариф",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "По ВымпелКому в открытой таблице ARPU есть значения 302 руб. за 2017-Q1 и 320 руб. за 2017-Q2 — это выручка на абонента, а не показатель удержания",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "По ВымпелКому в открытой таблице ARPU есть значения 302 руб. за 2017-Q1 и 320 руб. за 2017-Q2 — это выручка на абонента, а не показатель удержания",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "Для российского мобильного рынка в открытом источнике зафиксировано падение маржинальности классического телеком-бизнеса по мере насыщения рынка, роста конкуренции и появления ОТТ-провайдеров",
+          "source_id": "security/МТС (компания)",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "В отобранном фрагменте годового отчёта ВымпелКома за 2025 год есть только заголовок раздела митигационных мер к риску 4 — сами меры не приведены",
+          "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+          "status": "needs_review",
+          "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за 8 месяцев, млн",
+          "source_id": "project/data/mnp_stats.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "Переносы абонентских номеров (MNP) в России, заявки за год, млн: изменение за период",
+          "source_id": "project/data/mnp_stats.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц: изменение за период",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "analyst",
+          "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц (уровень 2017-Q1)",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "strategy",
+          "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "strategy",
+          "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+          "source_id": "security/МТС (компания)",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "strategy",
+          "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+          "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+          "status": "needs_review",
+          "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "strategy",
+          "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "strategy",
+          "claim": "Мы называем сумму и состав продления до списания: цена не станет для вас новостью из счёта.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "До фиксации определения удержания, базового периода и источника замера цена и условия тарифа не меняются: единственное действие — коммуникация в точке продления.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "До ближайшего списания абонент получает уведомление с названной суммой и составом продления и может задать вопрос по конкретной сумме до оплаты, а не после.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "Сумма и состав продления одинаковы во всех каналах (уведомление, страница тарифа, личный кабинет, поддержка); расхождение между каналами недопустимо.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "Эффект измеряется удержанием по зафиксированному определению и выручкой на абонента одновременно, против базового периода того же тарифа и, где удаётся выделить, части потока без уведомления; рыночный фон в эффект не записывается.",
+          "source_id": "project/data/telecom_arpu.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "Эффект измеряется удержанием по зафиксированному определению и выручкой на абонента одновременно, против базового периода того же тарифа и, где удаётся выделить, части потока без уведомления; рыночный фон в эффект не записывается.",
+          "source_id": "security/МТС (компания)",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "Если после уведомлений растёт доля отказов до списания, рассылка на этот сегмент останавливается и меняется формулировка, а не охват.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-2",
+          "role": "keeper",
+          "claim": "Неценовые условия (пауза, отмена автопродления, сохранение условий при возврате), адресная когорта и любые обещания скидки не вводятся: в коммуникации цена не снижается и скидка не обещается.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 0,
+            "unsupported": 0,
+            "kinds": {},
+            "status": "подкреплено частично"
+          },
+          "keeper": {
+            "notes": 0,
+            "unsupported": 0,
+            "kinds": {},
+            "status": "подкреплено частично"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {}
+      }
+    },
+    "cloud-deepseek-baseline-1": {
+      "session_id": "cloud-deepseek-baseline-1",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 11,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 4,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 8,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 4,
+          "rejected": 1,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 5,
+          "conclusion_status": "подкреплено частично"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 5,
+          "claims": 5,
+          "conclusion_status": "опирается на ввод пользователя"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "подтверждено": 16,
+        "нет данных": 3,
+        "причина: значение не сошлось с источником": 2,
+        "причина: цитата не найдена": 1,
+        "опора на ввод пользователя": 5
+      },
+      "verdicts": [
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "collector",
+          "claim": "По открытым данным абонентская база Tele2 растёт: на конец июля 38,9 млн абонентов, +12,1 % к прошлому году. То есть как минимум у одного оператора база привлечения растёт, и «рост базы» сам по себе ещё не означает рост удержания — уровень удержания из этого числа не выводится.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "collector",
+          "claim": "В отобранном абзаце зафиксировано проникновение сотовой связи более 130 % при 11,923 млн абонентов на 1 января 2026 года — рынок насыщен, прирост возможен преимущественно не за счёт новых абонентов, а за счёт удержания существующих. Страна в абзаце не названа, поэтому опора только на сам факт насыщения.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "collector",
+          "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "collector",
+          "claim": "Абонентская база МТС (консолидированная)",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена по материалу",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2 на конец июля — 38,9 млн абонентов, +12,1 % к прошлому году: рост базы привлечения сам по себе не говорит об уровне удержания.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "На 1 января 2026 года в стране 11,923 млн абонентов сотовой связи при проникновении более 130 % — рынок насыщен (страна в абзаце не названа).",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "В отобранной строке по МТС (Беларусь) указана абонентская база 5,7 за 2026 год — это другая страна и другой ряд, к удержанию в рассматриваемом тарифе не относится.",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, изменение за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, среднее за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 71.5235, а заявлено 78.33 процентов",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, медиана за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 54, а заявлено 77.56 процентов",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, размах за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Рост абонентской базы Tele2 год к году",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "analyst",
+          "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "no_data",
+          "detail": "цитата не найдена в источнике дословно",
+          "kind": "fabrication"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "strategy",
+          "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "strategy",
+          "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "keeper",
+          "claim": "До старта пилота письменно зафиксировать определение метрики удержания (горизонты 30 и 90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "keeper",
+          "claim": "В сценарии на выходе запрещены ценовые уступки: разбор причины и решение только в рамках уже оплаченного тарифа.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "keeper",
+          "claim": "Вести сбор причин ухода по закрытому списку (цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое) со счётчиком по каждой причине.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "keeper",
+          "claim": "Не менять наполнение и правила списания для всей базы и не задействовать массовые каналы (SMS/пуш) в ходе пилота.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-baseline-1",
+          "role": "keeper",
+          "claim": "Оценивать эффект по удержанию когорты подавших заявку через 90 дней против исторической контрольной базы; при отсутствии роста сценарий не расширять и не усиливать скидками.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1,
+              "no_calculation": 1
+            },
+            "status": "подкреплено частично"
+          },
+          "keeper": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "no_calculation": 2
+            },
+            "status": "опирается на ввод пользователя"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "number_mismatch": 1,
+          "no_calculation": 3
+        }
+      }
+    }
+  },
+  "totals": {
+    "подтверждено": 63,
+    "опора на ввод пользователя": 13,
+    "нерелевантный источник": 0,
+    "нет данных": 35,
+    "требует проверки": 5,
+    "всего оснований": 116,
+    "величин-фактов без расчёта": 1
+  },
+  "roles": {
+    "analyst": {
+      "подтверждено": 28,
+      "отклонено": 9,
+      "требует проверки": 1,
+      "опора на ввод пользователя": 1,
+      "оснований": 39
+    },
+    "collector": {
+      "подтверждено": 22,
+      "отклонено": 8,
+      "требует проверки": 1,
+      "опора на ввод пользователя": 0,
+      "оснований": 31
+    },
+    "intake": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "keeper": {
+      "подтверждено": 5,
+      "отклонено": 10,
+      "требует проверки": 1,
+      "опора на ввод пользователя": 10,
+      "оснований": 26
+    },
+    "options": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "planner": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "redteam": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "router": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "strategy": {
+      "подтверждено": 8,
+      "отклонено": 8,
+      "требует проверки": 2,
+      "опора на ввод пользователя": 2,
+      "оснований": 20
+    }
+  },
+  "probes": [
+    {
+      "id": "rounded-number",
+      "title": "округление числа: 77,3 против 77,26",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "synonym",
+      "title": "словоформа: «клиентов» против «абонентов»",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "mixed-script",
+      "title": "смешанная раскладка: абонентoв с латинской o",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "brand-substitution",
+      "title": "подмена бренда: МТС вместо МегаФона",
+      "expected": "no_data",
+      "actual": "no_data",
+      "passed": true
+    },
+    {
+      "id": "row-paraphrase",
+      "title": "пересказ строки таблицы: цитата без меток колонок",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "short-quote",
+      "title": "короткая цитата: «38,9» при верном числе",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "foreign-page",
+      "title": "русская цитата на английской странице",
+      "expected": "needs_review",
+      "actual": "needs_review",
+      "passed": true
+    },
+    {
+      "id": "added-negation",
+      "title": "добавленное отрицание: «не обслуживает»",
+      "expected": "no_data",
+      "actual": "no_data",
+      "passed": true
+    }
+  ],
+  "verdicts": [
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Абонентская база МТС в России не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Абонентская база МТС в России не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "Абонентская база МТС — 82 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "Абонентская база Tele2 — 38,9 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (термин «Tele2» не найден в источнике): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "number_mismatch"
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России, январь-март 2026: 78.33 %",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "ARPU ВымпелКом (мобильная связь) — 322.2 руб.",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "collector",
+      "claim": "ARPU ВымпелКом (мобильная связь)",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "Абонентская база МТС — 82 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2 — 38,9 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (термин «Tele2» не найден в источнике): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "number_mismatch"
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, январь-март 2026: 78.33 %",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "ARPU ВымпелКом (мобильная связь) — 322.2 руб.",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "analyst",
+      "claim": "ARPU ВымпелКом (мобильная связь)",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "strategy",
+      "claim": "Оптимизация тарифа с ограничениями — внести минимальные изменения в тариф, чтобы повысить удержание",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "strategy",
+      "claim": "Оптимизация тарифа с ограничениями — внести минимальные изменения в тариф, чтобы повысить удержание",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "strategy",
+      "claim": "Мы вносим минимальные изменения в тариф, чтобы сохранить выгоду для вас в условиях роста ключевой ставки",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "strategy",
+      "claim": "Мы вносим минимальные изменения в тариф, чтобы сохранить выгоду для вас в условиях роста ключевой ставки",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Повысить удержание тарифа на 5–7% в течение 3 месяцев",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Повысить удержание тарифа на 5–7% в течение 3 месяцев",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Обеспечить положительную реакцию клиентов на изменения в тарифе",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Обеспечить положительную реакцию клиентов на изменения в тарифе",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Снизить влияние скидок на маржу",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v10",
+      "role": "keeper",
+      "claim": "Снизить влияние скидок на маржу",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "Абонентская база МТС в России составляет 82 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (цитата не дословна (покрытие 100%) — это пересказ, а не цитата): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "paraphrase"
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "Абонентская база Tele2 на конец июля 2025 года составляет 38,9 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (цитата короче 12 символов — подтвердить нечего): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "too_short"
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России в январе-марте 2026 года колебалась от 75,92 до 84,84 %",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "ARPU ВымпелКом по мобильной связи варьируется от 302 до 403 рублей в месяц",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 9.1052, а заявлено 84.84 %",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "collector",
+      "claim": "ARPU ВымпелКом по мобильной связи",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "Абонентская база МТС в России составляет 82 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (цитата не дословна (покрытие 100%) — это пересказ, а не цитата): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "paraphrase"
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2 на конец июля 2025 года составляет 38,9 млн человек",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата не годится как доказательство (цитата короче 12 символов — подтвердить нечего): проверено полями — утверждение подтверждено: поддержка 1.00",
+      "kind": "too_short"
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России в январе-марте 2026 года колебалась от 75,92 до 84,84 %",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "источник вне среза задачи",
+      "kind": "outside_slice"
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "ARPU ВымпелКом по мобильной связи варьируется от 302 до 403 рублей в месяц",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 9.1052, а заявлено 84.84 %",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "analyst",
+      "claim": "ARPU ВымпелКом по мобильной связи",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+      "status": "needs_review",
+      "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+      "kind": "exact"
+    },
+    {
+      "session": "demo-v12",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "no_data",
+      "detail": "в строке показатель «ARPU мобильной связи, рублей на абонента в месяц», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+      "status": "needs_review",
+      "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+      "kind": "exact"
+    },
+    {
+      "session": "demo-v12",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "no_data",
+      "detail": "в строке показатель «ARPU мобильной связи, рублей на абонента в месяц», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v12",
+      "role": "keeper",
+      "claim": "Повысить удержание тарифа на 5%",
+      "source_id": "verification",
+      "status": "no_data",
+      "detail": "ссылки нет — цитировать нечего",
+      "kind": "source_not_named"
+    },
+    {
+      "session": "demo-v12",
+      "role": "keeper",
+      "claim": "Повысить удержание тарифа на 5%",
+      "source_id": "verification",
+      "status": "no_data",
+      "detail": "ссылки нет — цитировать нечего",
+      "kind": "source_not_named"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "Внутренней телеметрии по тарифу нет — работа ведётся только на открытых источниках (корпус Википедии и таблицы project/); из действий допустимы изменение условий тарифа и коммуникации, вариант «оставить как есть» также допустим, снижение цены запрещено ограничением по марже",
+      "source_id": "",
+      "status": "no_data",
+      "detail": "ссылки нет — цитировать нечего",
+      "kind": "source_not_named"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "Для мобильного рынка России в открытых источниках фиксируется падение маржинальности классического телеком-бизнеса по мере насыщения рынка, роста конкуренции и появления ОТТ-провайдеров — это внешний контекст, в котором может наблюдаться падение удержания",
+      "source_id": "security/МТС (компания)",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "По ВымпелКому в открытых таблицах есть только помесячный ARPU мобильной связи (302 руб. в 2017-Q1 и 320 руб. в 2017-Q2), то есть показатель выручки на абонента, а не показатель удержания",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "По ВымпелКому в открытых таблицах есть только помесячный ARPU мобильной связи (302 руб. в 2017-Q1 и 320 руб. в 2017-Q2), то есть показатель выручки на абонента, а не показатель удержания",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "В отобранном фрагменте годового отчёта ВымпелКома за 2025 год присутствует только заголовок раздела митигационных мер к риску 4 — сами меры в материале не приведены",
+      "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+      "status": "needs_review",
+      "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за 8 месяцев, млн",
+      "source_id": "project/data/mnp_stats.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за год, млн: изменение за период",
+      "source_id": "project/data/mnp_stats.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "collector",
+      "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц: изменение за период",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "Внутренней телеметрии по тарифу нет: работа ведётся только на открытых источниках (корпус Википедии и таблицы project/); из действий допустимы изменение условий тарифа и коммуникации, вариант «оставить как есть» тоже допустим, а снижение цены запрещено ограничением по марже",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "В открытых метриках МТС есть доля на рынке спутникового ТВ — 6,2 за 3-й квартал 2024; это другой продукт, не мобильный тариф",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "По ВымпелКому в открытой таблице ARPU есть значения 302 руб. за 2017-Q1 и 320 руб. за 2017-Q2 — это выручка на абонента, а не показатель удержания",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "По ВымпелКому в открытой таблице ARPU есть значения 302 руб. за 2017-Q1 и 320 руб. за 2017-Q2 — это выручка на абонента, а не показатель удержания",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "Для российского мобильного рынка в открытом источнике зафиксировано падение маржинальности классического телеком-бизнеса по мере насыщения рынка, роста конкуренции и появления ОТТ-провайдеров",
+      "source_id": "security/МТС (компания)",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "В отобранном фрагменте годового отчёта ВымпелКома за 2025 год есть только заголовок раздела митигационных мер к риску 4 — сами меры не приведены",
+      "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+      "status": "needs_review",
+      "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "Переносы абонентских номеров (MNP) в России, заявки на перенос номера за 8 месяцев, млн",
+      "source_id": "project/data/mnp_stats.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "Переносы абонентских номеров (MNP) в России, заявки за год, млн: изменение за период",
+      "source_id": "project/data/mnp_stats.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц: изменение за период",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "analyst",
+      "claim": "ARPU мобильной связи ВымпелКом, рублей на абонента в месяц (уровень 2017-Q1)",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "strategy",
+      "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "strategy",
+      "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+      "source_id": "security/МТС (компания)",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "strategy",
+      "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+      "source_id": "knowledge/raw/2026-11-08/vimpelcom_annual_report_2025_fragment.docx",
+      "status": "needs_review",
+      "detail": "выгрузка из хранилища знаний: цитата найдена дословно, происхождение не проверено — нужен взгляд человека",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "strategy",
+      "claim": "Работаем только коммуникацией в точке продления и параллельно обязательным замером: до списания абонент получает сумму и состав продления, единый текст во всех каналах, вопрос задаётся до оплаты, а не после. Условия тарифа и цену не меняем, пока не зафиксированы определение удержания и базовый период. Коммуникация здесь — не «пересказ условий другими словами», а снятие неожиданности счёта; это единственный рычаг, который не задевает маржу и обратим без публичного отката условий.",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "strategy",
+      "claim": "Мы называем сумму и состав продления до списания: цена не станет для вас новостью из счёта.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "До фиксации определения удержания, базового периода и источника замера цена и условия тарифа не меняются: единственное действие — коммуникация в точке продления.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "До ближайшего списания абонент получает уведомление с названной суммой и составом продления и может задать вопрос по конкретной сумме до оплаты, а не после.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "Сумма и состав продления одинаковы во всех каналах (уведомление, страница тарифа, личный кабинет, поддержка); расхождение между каналами недопустимо.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "Эффект измеряется удержанием по зафиксированному определению и выручкой на абонента одновременно, против базового периода того же тарифа и, где удаётся выделить, части потока без уведомления; рыночный фон в эффект не записывается.",
+      "source_id": "project/data/telecom_arpu.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "Эффект измеряется удержанием по зафиксированному определению и выручкой на абонента одновременно, против базового периода того же тарифа и, где удаётся выделить, части потока без уведомления; рыночный фон в эффект не записывается.",
+      "source_id": "security/МТС (компания)",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "Если после уведомлений растёт доля отказов до списания, рассылка на этот сегмент останавливается и меняется формулировка, а не охват.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-2",
+      "role": "keeper",
+      "claim": "Неценовые условия (пауза, отмена автопродления, сохранение условий при возврате), адресная когорта и любые обещания скидки не вводятся: в коммуникации цена не снижается и скидка не обещается.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "collector",
+      "claim": "По открытым данным абонентская база Tele2 растёт: на конец июля 38,9 млн абонентов, +12,1 % к прошлому году. То есть как минимум у одного оператора база привлечения растёт, и «рост базы» сам по себе ещё не означает рост удержания — уровень удержания из этого числа не выводится.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "collector",
+      "claim": "В отобранном абзаце зафиксировано проникновение сотовой связи более 130 % при 11,923 млн абонентов на 1 января 2026 года — рынок насыщен, прирост возможен преимущественно не за счёт новых абонентов, а за счёт удержания существующих. Страна в абзаце не названа, поэтому опора только на сам факт насыщения.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "collector",
+      "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "collector",
+      "claim": "Абонентская база МТС (консолидированная)",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена по материалу",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2 на конец июля — 38,9 млн абонентов, +12,1 % к прошлому году: рост базы привлечения сам по себе не говорит об уровне удержания.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "На 1 января 2026 года в стране 11,923 млн абонентов сотовой связи при проникновении более 130 % — рынок насыщен (страна в абзаце не названа).",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "В отобранной строке по МТС (Беларусь) указана абонентская база 5,7 за 2026 год — это другая страна и другой ряд, к удержанию в рассматриваемом тарифе не относится.",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, изменение за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, среднее за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 71.5235, а заявлено 78.33 процентов",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, медиана за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 54, а заявлено 77.56 процентов",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, размах за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Рост абонентской базы Tele2 год к году",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "analyst",
+      "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "no_data",
+      "detail": "цитата не найдена в источнике дословно",
+      "kind": "fabrication"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "strategy",
+      "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "strategy",
+      "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "keeper",
+      "claim": "До старта пилота письменно зафиксировать определение метрики удержания (горизонты 30 и 90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "keeper",
+      "claim": "В сценарии на выходе запрещены ценовые уступки: разбор причины и решение только в рамках уже оплаченного тарифа.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "keeper",
+      "claim": "Вести сбор причин ухода по закрытому списку (цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое) со счётчиком по каждой причине.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "keeper",
+      "claim": "Не менять наполнение и правила списания для всей базы и не задействовать массовые каналы (SMS/пуш) в ходе пилота.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-baseline-1",
+      "role": "keeper",
+      "claim": "Оценивать эффект по удержанию когорты подавших заявку через 90 дней против исторической контрольной базы; при отсутствии роста сценарий не расширять и не усиливать скидками.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    }
+  ]
+}

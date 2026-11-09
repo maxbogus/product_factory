@@ -306,6 +306,7 @@ def test_conclusion_rule_is_named_in_journal(
         "calc-line-demotion",
         "indicator-demotion",
         "unsupported-number-cap",
+        "user-input-channel",
     ]
 
 

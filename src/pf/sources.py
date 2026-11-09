@@ -44,10 +44,21 @@ from pf.lexical import significant_words as _significant_words
 from pf.lexical import stems as _stems
 from pf.materials import KNOWLEDGE_SOURCE_PREFIX, Material
 
-#: Подписи, под которыми ввод человека попадает в ответ как «источник».
+#: Подписи, под которыми ввод пользователя попадает в ответ как «источник».
 #: Модель видит его в контексте и ссылается на него наравне с документами.
+#: Это не запрещено: ввод пользователя — законная опора, у неё просто другой
+#: канал подтверждения (`D-49`).
 HUMAN_INPUT_LABELS: frozenset[str] = frozenset(
-    {"ответ человека", "выбор человека", "ввод человека", "решение человека"}
+    {
+        "ответ человека",
+        "выбор человека",
+        "ввод человека",
+        "решение человека",
+        "ответ пользователя",
+        "ввод пользователя",
+        "выбор пользователя",
+        "пользовательский ввод",
+    }
 )
 
 #: Причины, по которым ссылка не годится как основание. Формулировки
@@ -57,6 +68,31 @@ REASON_NO_LINK = "ссылки нет — цитировать нечего"
 REASON_HUMAN_INPUT = "не источник — это ввод человека, а не документ"
 REASON_OUTSIDE_SLICE = "источник вне среза задачи"
 REASON_UNKNOWN_SOURCE = "источник не найден среди материалов"
+
+
+def human_input_stage(source_id: str) -> str | None:
+    """Стадия из ссылки на ввод пользователя.
+
+    Ссылка называет канал и стадию: ``ввод пользователя: analyzing``.
+    Старая форма — просто подпись («Ответ человека») — тоже узнаётся, но
+    стадии в ней нет: пустая строка означает «не названа».
+
+    Args:
+        source_id: Ссылка из ответа модели, возможно с якорем ``#pN``.
+
+    Returns:
+        Название стадии как его написала модель; пустая строка — ссылка на
+        ввод без стадии; ``None`` — ссылка не про ввод пользователя.
+    """
+    clean, _ = split_source_id(source_id)
+    label = clean.strip().lower().replace("ё", "е")
+    if not label:
+        return None
+    head, _, tail = label.partition(":")
+    if head.strip() in HUMAN_INPUT_LABELS:
+        return tail.strip()
+    return None
+
 
 #: Машинные виды отказа: по ним считается корзина в отчёте и замере.
 ABSENCE_KINDS: dict[str, str] = {
@@ -319,7 +355,7 @@ class SourceBundle:
         label = clean.strip().lower().replace("ё", "е")
         if not label:
             return REASON_NO_LINK
-        if label in HUMAN_INPUT_LABELS:
+        if human_input_stage(source_id) is not None:
             return REASON_HUMAN_INPUT
         if "/" not in label and "." not in label:
             # Имя поля ответа («verification», «query») вместо пути.

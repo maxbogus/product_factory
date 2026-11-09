@@ -71,6 +71,176 @@ class Phase(StrEnum):
         return order[order.index(self) + 1]
 
 
+#: Как фазу называют в ответе модели и в ссылке на ввод пользователя.
+#: Ключи — уже приведённые к нижнему регистру без «ё»: «Разбор источников»
+#: должно найтись и по «разбор», и по «analyzing». Одного названия мало:
+#: пока правило было только по `Phase.title_ru`, ссылка «разбор» не узнавалась.
+_PHASE_ALIASES: dict[str, Phase] = {
+    "постановка": Phase.INTAKE,
+    "постановка задачи": Phase.INTAKE,
+    "прием": Phase.INTAKE,
+    "вводный": Phase.INTAKE,
+    "план": Phase.PLANNING,
+    "планирование": Phase.PLANNING,
+    "план исследования": Phase.PLANNING,
+    "маршрут": Phase.ROUTING,
+    "маршрутизация": Phase.ROUTING,
+    "сбор": Phase.COLLECTING,
+    "сбор источников": Phase.COLLECTING,
+    "сбор материала": Phase.COLLECTING,
+    "разбор": Phase.ANALYZING,
+    "разбор источников": Phase.ANALYZING,
+    "анализ": Phase.ANALYZING,
+    "аналитика": Phase.ANALYZING,
+    "варианты": Phase.OPTIONS,
+    "варианты решения": Phase.OPTIONS,
+    "критика": Phase.REDTEAM,
+    "критическая проверка": Phase.REDTEAM,
+    "красная команда": Phase.REDTEAM,
+    "стратегия": Phase.STRATEGY,
+    "разработка стратегии": Phase.STRATEGY,
+    "решение": Phase.KEEPER,
+    "фиксация решения": Phase.KEEPER,
+    "завершено": Phase.DONE,
+}
+
+
+def _plain(text: str) -> str:
+    """Привести название к виду для сравнения: нижний регистр, без «ё».
+
+    Args:
+        text: Название стадии из ответа модели или из ссылки.
+
+    Returns:
+        Приведённый текст.
+    """
+    return " ".join(str(text).lower().replace("ё", "е").split())
+
+
+def phase_of(text: str) -> Phase | None:
+    """Назвать стадию по её названию — по-русски или по-английски.
+
+    Стадия вводится пользователем, и её называют словами: «разбор»,
+    «Анализ», «analyzing», «Разбор источников». Пока правило было одно
+    (только точное имя фазы), ссылка на ввод не узнавалась, и законная
+    опора отклонялась по форме слова.
+
+    Args:
+        text: Название стадии.
+
+    Returns:
+        Фаза либо ``None``, если название не распознано.
+    """
+    key = _plain(text)
+    if not key:
+        return None
+    for phase in Phase:
+        if key == _plain(phase.value) or key == _plain(phase.title_ru):
+            return phase
+    return _PHASE_ALIASES.get(key)
+
+
+@dataclass(frozen=True, slots=True)
+class HumanInput:
+    """Ввод пользователя: что сказано и на какой стадии.
+
+    Ответ человека — не документ, но и не пустая ссылка. Это опора: её
+    называют каналом и стадией, а решение «верить или нет» принимает
+    человек. Стадия обязательна: по ней проверяется ссылка и отчёт говорит,
+    где именно пользователь вмешался.
+
+    Attributes:
+        text: Что сказал пользователь.
+        phase: Фаза, на которой он это сказал (пусто у записей до правки).
+        question: Вопрос, на который он отвечал.
+        at: Когда записано.
+    """
+
+    text: str
+    phase: str = ""
+    question: str = ""
+    at: str = ""
+
+    @property
+    def phase_title(self) -> str:
+        """Название стадии для человека.
+
+        Returns:
+            Название фазы; «стадия не записана» — для записи до правки.
+        """
+        phase = phase_of(self.phase)
+        return phase.title_ru if phase is not None else "стадия не записана"
+
+    def as_dict(self) -> dict[str, str]:
+        """Представить запись словарём — так она лежит в состоянии сессии.
+
+        Returns:
+            Словарь с ключами ``text``, ``phase``, ``question``, ``at``.
+        """
+        return {
+            "text": self.text,
+            "phase": self.phase,
+            "question": self.question,
+            "at": self.at,
+        }
+
+
+def record_human_input(state: SessionState, text: str, question: str = "") -> HumanInput:
+    """Записать ответ пользователя вместе со стадией.
+
+    Стадия берётся из состояния **до** очистки вопроса: ответ дан там, где
+    работа стояла, и это единственное место, где стадия ещё известна.
+
+    Args:
+        state: Состояние сессии.
+        text: Ответ пользователя.
+        question: Вопрос, на который он отвечает.
+
+    Returns:
+        Записанный ввод.
+    """
+    record = HumanInput(
+        text=str(text),
+        phase=state.phase.value,
+        question=str(question or state.pending_question or ""),
+        at=datetime.now(UTC).isoformat(timespec="seconds"),
+    )
+    state.results.setdefault("human_answers", []).append(record.as_dict())
+    return record
+
+
+def human_inputs(state: SessionState | None) -> list[HumanInput]:
+    """Все ответы пользователя в сессии.
+
+    Читаются и старые записи: до появления стадии в состоянии лежали голые
+    строки. Стадию у них не выдумываем — пустая строка означает «не
+    записана».
+
+    Args:
+        state: Состояние сессии либо ``None``.
+
+    Returns:
+        Записи в порядке появления.
+    """
+    if state is None:
+        return []
+    raw = state.results.get("human_answers") or []
+    records: list[HumanInput] = []
+    for item in raw:
+        if isinstance(item, dict):
+            records.append(
+                HumanInput(
+                    text=str(item.get("text") or ""),
+                    phase=str(item.get("phase") or ""),
+                    question=str(item.get("question") or ""),
+                    at=str(item.get("at") or ""),
+                )
+            )
+        else:
+            records.append(HumanInput(text=str(item)))
+    return [record for record in records if record.text.strip()]
+
+
 @dataclass(slots=True)
 class SessionState:
     """Состояние сессии агента.

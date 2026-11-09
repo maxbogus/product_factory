@@ -116,7 +116,13 @@ def test_rejection_reason_unknown_source_is_phantom(bundle: SourceBundle) -> Non
 
 
 def test_verdict_keeps_the_reason_of_the_rejection(bundle: SourceBundle) -> None:
-    """Вердикт несёт машинный вид отказа, а не только текст для человека."""
+    """Вердикт несёт машинный вид отказа, а не только текст для человека.
+
+    Ссылка на ввод пользователя — свой канал: она не «фантомный источник» и
+    не «источник нерелевантен». Но в этой фикстуре ввода в сессии нет вовсе
+    (`state=None`), поэтому вид называется точно: ссылка на ввод, которого не
+    было (`D-49`).
+    """
     analysis = Analysis(
         facts=[
             Claim(
@@ -129,5 +135,5 @@ def test_verdict_keeps_the_reason_of_the_rejection(bundle: SourceBundle) -> None
 
     grounding = Workflow._verify_claims(analysis, bundle)
 
-    assert [verdict.kind for verdict in grounding.verdicts] == ["human_input"]
+    assert [verdict.kind for verdict in grounding.verdicts] == ["human_input_unrecorded"]
     assert grounding.rejected == 1

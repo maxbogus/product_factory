@@ -72,6 +72,12 @@ KINDS: dict[str, Kind] = {
     "source_unknown": Kind("фантомный источник", FIX_PROMPT),
     "human_input": Kind("ссылка на ввод человека", FIX_SCHEMA),
     "outside_slice": Kind("источник нерелевантен", FIX_CONTEXT),
+    # Канал «ввод пользователя»: опора, а не отказ. Ссылка проверяется тем,
+    # что человек это сказал, на той ли стадии и теми ли словами (`D-49`).
+    "user_input": Kind("опора на ввод пользователя", FIX_PROMPT),
+    "human_input_unrecorded": Kind("ссылка на ввод, которого не было", FIX_PROMPT),
+    "human_input_phase_mismatch": Kind("стадия ввода названа не та", FIX_PROMPT),
+    "human_input_quote_mismatch": Kind("ввод пересказан, а не приведён", FIX_CHECK),
     # Числа плана и обязательств (`workflow.NUMBER_*`).
     "foreign_indicator": Kind("число из чужого показателя", FIX_CHECK),
     "no_calculation": Kind("число без своего расчёта", FIX_CALC),
