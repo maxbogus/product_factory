@@ -149,6 +149,9 @@ class ConclusionRecord:
     #: подтверждение — решение о доверии принимает человек (`D-49`).
     user_input: int = 0
     user_input_grounds: list[str] = field(default_factory=list)
+    #: Переданные получателю утверждения: канонические поля и хеш источника
+    #: (`pf.handoff`). Пусто у журнала, который передачу не записывал.
+    transmission: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def rule_is_current(self) -> bool:
@@ -613,7 +616,27 @@ def conclusion_markdown(conclusion: ConclusionRecord | None) -> list[str]:
         lines.append("")
 
     lines.extend(_grounds_markdown(conclusion))
+    lines.extend(_transmission_markdown(conclusion))
     return lines
+
+
+def _transmission_markdown(conclusion: ConclusionRecord) -> list[str]:
+    """Строки раздела «Передача»: поля утверждений и хеш источника.
+
+    Запись передачи — контракт между шагами: получатель сверяет поля, а не
+    прозу. Секция пустая, если журнал передачи не записывал (`T-46`).
+
+    Args:
+        conclusion: Вывод прогона.
+
+    Returns:
+        Строки раздела в markdown.
+    """
+    if not conclusion.transmission:
+        return []
+    from pf.handoff import handoff_markdown
+
+    return handoff_markdown(conclusion.transmission)
 
 
 def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
@@ -1278,6 +1301,14 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
             text = f"{stage}: «{words}»" if stage else f"«{words}»"
             if text not in user_input_grounds:
                 user_input_grounds.append(text)
+    # Передача вывода (`T-46`): канонические поля утверждений и хеш источника.
+    # Берётся из тех же `conclusion_check`, что и статус: получатель сверяет
+    # поля, а не прозу.
+    transmission: list[dict[str, Any]] = []
+    for check in checks:
+        for item in check.get("transmission") or []:
+            if isinstance(item, dict) and item not in transmission:
+                transmission.append(item)
     return ConclusionRecord(
         direction=str(product.get("chosen_direction") or ""),
         value_to_cost=str(product.get("value_to_cost") or ""),
@@ -1310,6 +1341,7 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
         contradicted=contradicted,
         user_input=user_input,
         user_input_grounds=user_input_grounds,
+        transmission=transmission,
     )
 
 

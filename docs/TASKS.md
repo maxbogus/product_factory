@@ -56,7 +56,7 @@
 | T-03 | 1 | «Подкреплено» считается по уникальным источникам, а не по записям | 2 | 7.6 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k unique -q` |
 | T-04 | 1 | Числа в документах совпадают с каноном | 1 | 8.1 | ✅ | T-00 | `make docs-check` |
 | T-05 | 1 | Согласованность заявлений: README-цикл, `demo/BRIEF.md` про веб, оговорка про `--extra documents`, `.env.example` ↔ умолчания | 2 | 4.1 | ✅ | T-04 | `uv run pytest tests/test_documents_consistency.py -q` |
-| T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 8.0 | ⬜ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
+| T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 8.0 | ✅ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
 | T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 7.5 | ⬜ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
 | T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ✅ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
@@ -90,7 +90,7 @@
 | T-43 | 2 | Слова-числа и единицы → величина: «почти сорок миллионов» как число в базовой шкале; цифры в пропись не переводятся | 2 | 3.5 | ✅ | T-42 | `uv run pytest tests/test_quantities.py -k quantities -q` |
 | T-44 | 2 | Каноническое сравнение по полям: понятия, числа, период как ключ, термины, отрицание вместо одного порога покрытия | 5 | 2.5 | ✅ | T-43 | `uv run pytest tests/test_canonical.py -k fields -q` |
 | T-45 | 2 | Предлагатель понятий **без эмбеддингов**: TF-IDF и леммы по корпусу ставят кандидата в очередь OOV (`proposed`), подтверждает человек; `D-09`/`D-37` в силе · отложена: очередь OOV закрывается вручную| 2 | 1.4 | ⏸ | T-43 | `uv run pytest tests/test_proposer.py -k propose -q` |
-| T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 8.0 | ⬜ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
+| T-46 | 3 | Контракт передачи: каноническое утверждение и хеш источника в основании, чтобы получатель сверял поля | 3 | 8.0 | ✅ | T-44 | `uv run pytest tests/test_handoff.py -k handoff -q` |
 | T-47 | 1 | Унаследованный журнал не выдаёт статус снятого правила за текущий: отчёт говорит, каким правилом считали | 2 | 15.2 | ✅ | — | `uv run pytest tests/test_report_conclusion.py -k stale_rule -q` |
 | T-48a | 1 | Потолок статуса в `pf.ground.conclusion_status`: число без своего расчёта понижает вывод до «подкреплено частично» | 1 | 7.7 | ✅ | T-53 | `uv run pytest tests/test_conclusion_grounding.py -k unsupported_number -q` |
 | T-48b | 1 | Замечания `_check_plan_numbers` отдаются структурой и доходят до статуса; замер на пяти журналах — срабатывания и ложные понижения | 1 | 7.7 | ✅ | T-48a | `uv run pytest tests/test_success_criteria.py -k unsupported_number_demotes -q` |

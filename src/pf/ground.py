@@ -108,6 +108,10 @@ class Support:
             ``number_mismatch``, ``fabrication``, ``language``.
         oov: Нераспознанные слова утверждения — их место в очереди
             распознания, а не в подозрениях на выдумку.
+        source_hash: sha256 абзаца источника, на котором проверено
+            утверждение. Пусто у дословной цитаты: там якорь — сама цитата.
+        canonical: Канонические поля утверждения (`pf.handoff.fields_of`) —
+            что передаётся получателю, чтобы он сверял поля, а не прозу.
     """
 
     quote: str
@@ -117,6 +121,12 @@ class Support:
     detail: str = ""
     oov: tuple[str, ...] = ()
     kind: str = ""
+    #: sha256 абзаца источника, на котором проверялось утверждение. Пусто у
+    #: дословной цитаты: там якорь — сама цитата (`T-46`).
+    source_hash: str = ""
+    #: Канонические поля утверждения (`pf.handoff.fields_of`) — что именно
+    #: передаётся получателю, чтобы он сверял поля, а не прозу.
+    canonical: dict[str, object] | None = None
 
     @property
     def is_usable(self) -> bool:
@@ -830,6 +840,13 @@ def _verify_fields(
     # должен импортироваться быстро и без побочных эффектов.
     from pf.canonical import score as canonical_score
 
+    # Контракт передачи (`T-46`): поля утверждения считаются один раз, хеш
+    # абзаца — по тому тексту, на котором проверено.
+    from pf.handoff import fields_of
+    from pf.handoff import source_digest as digest_of
+
+    claim_fields = fields_of(claim_text)
+
     threshold = settings.claim_support_threshold if support_threshold is None else support_threshold
     absolute, relative = _tolerances(abs_tolerance, rel_tolerance)
     groups = _groups()
@@ -858,6 +875,8 @@ def _verify_fields(
             detail=detail,
             oov=tuple(result.oov_tokens),
             kind=kind,
+            source_hash=digest_of(paragraph),
+            canonical=claim_fields,
         )
 
     # Абзац не указан — ищем, в каком абзаце утверждение подтверждается.
@@ -891,6 +910,8 @@ def _verify_fields(
                 detail=detail,
                 oov=tuple(result.oov_tokens),
                 kind=kind,
+                source_hash=digest_of(paragraph),
+                canonical=claim_fields,
             )
 
     if best is None:
@@ -912,6 +933,8 @@ def _verify_fields(
         detail=detail,
         oov=tuple(best.oov_tokens),
         kind=kind,
+        source_hash=digest_of(best_paragraph),
+        canonical=claim_fields,
     )
 
 

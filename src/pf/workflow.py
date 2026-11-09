@@ -149,6 +149,10 @@ class GroundingResult:
     user_input: list[str] = field(default_factory=list)
     user_input_grounds: list[dict[str, Any]] = field(default_factory=list)
     verdicts: list[ClaimVerdict] = field(default_factory=list)
+    #: Записи передачи вывода (`pf.handoff`): поля утверждения и хеш источника.
+    #: Читает их отчёт через `conclusion_check`: получатель сверяет поля, а не
+    #: прозу.
+    handoffs: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _named_source(source_id: str) -> str:
@@ -1750,6 +1754,9 @@ class Workflow:
         user_input_grounds: list[dict[str, str]] = []
         user_input_titles: list[str] = []
         user_input_keys: set[str] = set()
+        # Передача вывода (`T-46`): поля утверждения и хеш источника. Только
+        # для подтверждённых опор вывода — у отклонённого передавать нечего.
+        handoffs: list[dict[str, Any]] = []
 
         for text, source, is_conclusion in Workflow._sources_of(data):
             named = getattr(source, "source_id", "") or ""
@@ -1878,6 +1885,15 @@ class Workflow:
                     conclusion_verdicts.append((key, SupportStatus.CONFIRMED))
                     if anchor and anchor != key:
                         conclusion_anchors[key] = anchor
+                    if support.source_hash and support.canonical is not None:
+                        handoffs.append(
+                            {
+                                "claim": text,
+                                "source_id": support.source_id or named,
+                                "source_hash": support.source_hash,
+                                "fields": dict(support.canonical),
+                            }
+                        )
             elif support.status is SupportStatus.NEEDS_REVIEW:
                 needs_review.append(support.citation)
                 needs_review_details.append(f"{_named_source(named)}: {support.detail}")
@@ -1974,6 +1990,7 @@ class Workflow:
             user_input=user_input_titles,
             user_input_grounds=user_input_grounds,
             verdicts=verdicts,
+            handoffs=handoffs,
         )
 
     @staticmethod
@@ -2301,6 +2318,10 @@ class Workflow:
         if grounding.conclusion is not None:
             # Статус оснований вывода — часть того же шага: он попадает
             # в журнал вместе с выводом, а не остаётся в состоянии сессии.
+            # Передача вывода (`T-46`) едет тем же путём: получатель сверяет
+            # поля утверждения и хеш источника, а не пересказывает прозу.
+            if grounding.handoffs:
+                grounding.conclusion["transmission"] = grounding.handoffs
             state.results["conclusion_check"] = grounding.conclusion
 
         result = StepResult(
