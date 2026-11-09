@@ -298,6 +298,19 @@ class SourceBundle:
         """
         return list(self.source_ids)
 
+    def sources_header(self) -> str:
+        """Правило цитирования и список доступных источников.
+
+        Роли, которым не передаются абзацы окна (``keeper``), всё равно
+        должны видеть, на что можно сослаться: иначе ``basis`` называет
+        источник, которого модель не видела, и проверка находит фантом уже
+        после прогона (`T-77`).
+
+        Returns:
+            Правило и перечень ``source_id``, по одному в строке.
+        """
+        return self._sources_header()
+
     def context(
         self,
         limit: int | None = None,

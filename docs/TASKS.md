@@ -123,7 +123,7 @@
 | T-74 | 1 | Повтор роли называет причину: недостающие поля по имени и просьба сократить обрезанный JSON; карточка — `docs/tasks/T-74.md` | 3 | 3.4 | ✅ | — | `uv run pytest tests/test_transitions.py -k repair_hint -q` |
 | T-75 | 2 | Свип модели и окна по ярусам: кандидаты × `ROLE_TIERS`, ≥3 прогона на клетку, заморозка в D-6x | 3 | 4.5 | ⬜ | — | `uv run pytest tests/test_role_sweep.py -k sweep_decision -q` |
 | T-76 | 1 | Гейт `route_next`: маршрут вперёд через невыполненную `collecting` отклоняется | 2 | 2.7 | ⬜ | — | `uv run pytest tests/test_routing.py -k skip_collecting_rejected -q` |
-| T-77 | 2 | Анти-фантомы: в промпт роли — явный список `source_id`; стратегия обязана нести `evidence`/`promise_grounding` | 2 | 6.0 | ⬜ | — | `uv run pytest tests/test_conclusion_grounding.py -k evidence_required -q` |
+| T-77 | 2 | Анти-фантомы: в промпт роли — явный список `source_id`; стратегия обязана нести `evidence`/`promise_grounding` | 2 | 6.0 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k evidence_required -q` |
 | T-78 | 3 | Пересобрать `demo/RESULT.md` из лучшего прогона (`make demo-doc SESSION=…`) | 1 | 4.5 | ⬜ | — | `uv run pytest tests/test_demo_doc_generated.py -q` |
 | T-79 | 4 | `make bench` на `qwen3:8b` и DeepSeek: агент против обычного чата | 1 | 3.4 | ⬜ | — | `make bench MODELS="qwen3:8b deepseek-flash"` |
 | T-80 | 3 | Обогатить `project/` открытыми данными под слабые вопросы (eSIM, MVNO, тарифы, ставка) | 3 | 3.5 | ⬜ | — | `uv run pytest tests/test_demo_data.py -q` |

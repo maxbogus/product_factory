@@ -1476,6 +1476,10 @@ def _collect_conclusion(records: list[Any]) -> ConclusionRecord | None:
             needs_review,
             unsupported_numbers=unsupported_numbers,
             user_input=user_input,
+            # Вывод в журнале есть: `_collect_conclusion` дошёл до стратегии
+            # или решения. Значит `checked=0` — «оснований не названо», а не
+            # «вывода не было» (`T-77`).
+            declared=True,
         ),
         checked=checked,
         confirmed=confirmed,

@@ -115,6 +115,74 @@ def _decision(basis: list[SourceRef]) -> DecisionRecord:
     )
 
 
+# ── Вывод обязан назвать основания (T-77) ───────────────────────────────────
+#
+# Сессия 31: модель отдавала стратегию с пустым `evidence`, проверка
+# возвращала `conclusion=None`, и отчёт называл прогон «не дошедшим до
+# вывода». Это разные вещи: вывод есть, и он ни на чём не держится.
+# Вторая половина задачи — фантомные `source_id`: роль решения (`keeper`)
+# не получала список доступных источников и могла назвать тот, которого
+# не видела.
+
+
+def test_evidence_required_rule_marks_declared_conclusion_without_grounds() -> None:
+    """`checked=0` у вывода — «неподкреплено», а не «не проверялось».
+
+    «Не проверялось» — это когда вывода нет вовсе. У вывода, который не
+    назвал оснований, проверять было нечего, но опоры нет: молчать нельзя.
+    """
+    assert conclusion_status(0, 0, 0) == "не проверялось"
+    assert conclusion_status(0, 0, 0, declared=True) == "неподкреплено"
+
+
+def test_evidence_required_conclusion_without_grounds_is_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Стратегия без `evidence`/`promise_grounding` не выдаётся за проверенную.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    bundle = _bundle(tmp_path, monkeypatch)
+    strategy = _strategy([])  # ни одного основания
+
+    grounding = Workflow._verify_claims(strategy, bundle)
+
+    assert grounding.conclusion is not None
+    assert grounding.conclusion["status"] == "неподкреплено"
+    assert grounding.conclusion["checked"] == 0
+    assert grounding.conclusion["confirmed"] == 0
+    assert "основани" in grounding.conclusion["reason"]
+    # Отказ назван машинным видом: отчёт знает, что чинить (промпт).
+    assert "missing-evidence" in [verdict.kind for verdict in grounding.verdicts]
+
+
+def test_evidence_required_keeper_prompt_names_available_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Роль решения видит явный список `source_id`, а не только стратегию.
+
+    `keeper` пишет `commitments[].basis` — ссылки на материалы. Без списка
+    доступных источников он может назвать источник, которого не видел, и
+    проверка находит фантом уже после прогона.
+
+    Args:
+        tmp_path: Временный каталог материалов.
+        monkeypatch: Подмена настроек.
+    """
+    from pf.sources import SOURCES_RULE
+
+    bundle = _bundle(tmp_path, monkeypatch)
+    state = SessionState(session_id="keeper-sources", phase=Phase.KEEPER)
+
+    role, _payload, context = Workflow()._phase_inputs(state, bundle)
+
+    assert role == "keeper"
+    assert SOURCES_RULE in context
+    assert "numbers.csv" in context
+
+
 def test_strategy_evidence_is_checked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Основание стратегии проверяется, а не принимается на веру.
 

@@ -61,7 +61,7 @@ from pf.sources import (
     same_material,
 )
 from pf.state import Phase, SessionState, human_inputs, phase_of, save
-from pf.verdicts import COMMITMENT_TEMPLATE, Rejection, classify_detail
+from pf.verdicts import COMMITMENT_TEMPLATE, MISSING_EVIDENCE, Rejection, classify_detail
 
 if TYPE_CHECKING:
     from pf.analysis import Metric
@@ -536,6 +536,12 @@ NUMBER_MISMATCH = "number_mismatch"
 NUMBER_FOREIGN = "foreign_indicator"
 #: Расчёта с таким показателем нет вовсе.
 NUMBER_WITHOUT_CALC = "no_calculation"
+
+#: Причина, по которой вывод без оснований не выдаётся за «не проверялся».
+#: Текст один: его читают тест, журнал шага и отчёт (`T-77`).
+MISSING_EVIDENCE_DETAIL = (
+    "вывод не назвал ни одного основания: evidence, promise_grounding и basis пусты"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1432,6 +1438,23 @@ class Workflow:
         return PlanNumberCheck(notes=tuple(notes))
 
     @staticmethod
+    def _declares_grounds(data: Any) -> bool:
+        """Результат роли — вывод, который обязан назвать основания.
+
+        Стратегия обязана нести ``product.evidence`` и
+        ``communication.promise_grounding``, решение — ``commitments[].basis``.
+        Факты, план и варианты выводом не являются и здесь не судятся: у них
+        нет полей, которые можно оставить пустыми (`T-77`).
+
+        Args:
+            data: Результат роли.
+
+        Returns:
+            ``True``, если результат — стратегия или запись решения.
+        """
+        return getattr(data, "product", None) is not None or hasattr(data, "commitments")
+
+    @staticmethod
     def _sources_of(data: Any) -> list[tuple[str, Any, bool]]:
         """Все основания результата: утверждение, ссылка, это вывод или нет.
 
@@ -1546,6 +1569,7 @@ class Workflow:
         off_topic: dict[str, list[str]] | None = None,
         unsupported_numbers: int = 0,
         user_input: int = 0,
+        declared: bool = False,
     ) -> dict[str, Any] | None:
         """Статус оснований вывода.
 
@@ -1573,11 +1597,14 @@ class Workflow:
             user_input: Сколько опор держится на вводе пользователя. Они
                 входят в ``needs_review``, но называются отдельно: доверие
                 к своим словам человек выставляет сам.
+            declared: Результат — вывод, который мог назвать основания.
+                Тогда ``checked=0`` значит «оснований не названо», и это
+                неподкреплённый вывод, а не отсутствие вывода (`T-77`).
 
         Returns:
             Статус для журнала и отчёта либо ``None``, если вывода нет.
         """
-        if tally.checked <= 0:
+        if tally.checked <= 0 and not declared:
             return None
         status = conclusion_status(
             tally.checked,
@@ -1586,6 +1613,7 @@ class Workflow:
             tally.needs_review,
             unsupported_numbers=unsupported_numbers,
             user_input=user_input,
+            declared=declared,
         )
         payload: dict[str, Any] = {
             "checked": tally.checked,
@@ -2093,19 +2121,43 @@ class Workflow:
                     for key, status in conclusion_verdicts
                 ]
 
+        # Вывод, который не назвал ни одного основания, — не «не проверялся»:
+        # вывод есть, и он ни на чём не держится. Молчание читалось как «до
+        # вывода не дошли» (`report.readiness`), и прогон выглядел
+        # незавершённым, хотя ответ на вопрос получен (`T-77`).
+        declared = Workflow._declares_grounds(data)
+        missing_evidence = declared and not conclusion_verdicts
+        if missing_evidence:
+            verdicts.append(
+                ClaimVerdict(
+                    claim="",
+                    source_id="",
+                    status=SupportStatus.NO_DATA,
+                    detail=MISSING_EVIDENCE_DETAIL,
+                    is_conclusion=True,
+                    kind=MISSING_EVIDENCE,
+                )
+            )
+            rejected += 1
+            details.append(MISSING_EVIDENCE_DETAIL)
+
         Workflow._queue_oov(oov, context=oov_context, role=role_name, session=session_id)
 
+        conclusion = Workflow._conclusion_verdict(
+            tally_grounds(conclusion_verdicts),
+            ground_buckets(conclusion_verdicts),
+            off_topic,
+            unsupported_numbers,
+            len(user_input_keys),
+            declared=declared,
+        )
+        if conclusion is not None and missing_evidence:
+            conclusion["reason"] = MISSING_EVIDENCE_DETAIL
         return GroundingResult(
             citations=confirmed,
             rejected=rejected,
             details=details,
-            conclusion=Workflow._conclusion_verdict(
-                tally_grounds(conclusion_verdicts),
-                ground_buckets(conclusion_verdicts),
-                off_topic,
-                unsupported_numbers,
-                len(user_input_keys),
-            ),
+            conclusion=conclusion,
             needs_review=needs_review,
             needs_review_details=needs_review_details,
             user_input=user_input_titles,
@@ -2800,7 +2852,11 @@ class Workflow:
         if phase is Phase.KEEPER:
             strategy = state.results.get(Phase.STRATEGY.value, {})
             redteam = state.results.get(Phase.REDTEAM.value, {})
-            return "keeper", {"strategy": strategy, "redteam": redteam}, ""
+            # Основание обязательства — ссылка на материал. Список доступных
+            # источников нужен и здесь: без него keeper называет source_id,
+            # которого не видел ни он, ни контекст стратегии (`T-77`).
+            context = bundle.sources_header() if bundle is not None else ""
+            return "keeper", {"strategy": strategy, "redteam": redteam}, context
 
         raise ValueError(f"для фазы «{phase.value}» нет роли")
 
