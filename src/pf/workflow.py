@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from pf import roles
 from pf.config import Settings, settings
+from pf.contradictions import find_contradictions
 from pf.ground import (
     CONCLUSION_RULE,
     GroundTally,
@@ -39,8 +40,6 @@ from pf.ground import (
 from pf.hypotheses import CollectionPlan, plan_collection, verdict_of
 from pf.journal import Journal, StepRecord, journal_path
 from pf.lexical import indicator_stems, numbers_match, stems
-from pf.lexical import polarity as lexical_polarity
-from pf.lexical import topic_words as lexical_topic_words
 from pf.llm import LLMClient, LLMError, build_client, extract_json
 from pf.schemas import (
     CLOSE_DIRECTION_TITLES,
@@ -861,33 +860,10 @@ class Workflow:
         return "\n".join(lines)
 
     # ── Противоречия ────────────────────────────────────────────────────────
-    # Списки слов о направлении живут в `pf.lexical`: то же правило нужно
+    # Ось расхождения вычисляет код (`pf.contradictions`), а не модель: скил
+    # описывает процедуру, хук реагирует на событие. Списки слов о
+    # направлении и предмете живут в `pf.lexical` — то же правило нужно
     # вердикту гипотез (`pf.hypotheses`), и две копии уже расходились.
-
-    @classmethod
-    def _polarity(cls, text: str) -> str | None:
-        """Направление, о котором говорит утверждение.
-
-        Args:
-            text: Текст утверждения.
-
-        Returns:
-            ``decline``, ``stable``, ``growth`` либо ``None``, если
-            направление не названо.
-        """
-        return lexical_polarity(text)
-
-    @classmethod
-    def _topic_words(cls, text: str) -> set[str]:
-        """Слова, которые называют предмет утверждения.
-
-        Args:
-            text: Текст утверждения.
-
-        Returns:
-            Множество значимых слов без служебных.
-        """
-        return lexical_topic_words(text)
 
     @classmethod
     def _find_contradictions(cls, facts: list[Any]) -> list[str]:
@@ -899,32 +875,16 @@ class Workflow:
         дословность, а не на смысл. Молча стоять рядом такие факты не
         должны: вывод, собранный из них, опирается на противоречие.
 
+        Ось расхождения называет :func:`pf.contradictions.find_contradictions`;
+        здесь остаётся только текст пробела для разбора.
+
         Args:
             facts: Проверенные утверждения разбора.
 
         Returns:
-            Пробелы вида «противоречие: …».
+            Пробелы вида «противоречие по оси …».
         """
-        statements: list[tuple[set[str], str, str]] = []
-        for claim in facts:
-            text = str(getattr(claim, "text", "")).strip()
-            polarity = cls._polarity(text)
-            if polarity is None or not text:
-                continue
-            statements.append((cls._topic_words(text), polarity, text))
-
-        gaps: list[str] = []
-        for index, (left_topics, left_polarity, left_text) in enumerate(statements):
-            for right_topics, right_polarity, right_text in statements[index + 1 :]:
-                if left_polarity == right_polarity:
-                    continue
-                if not (left_topics & right_topics):
-                    continue
-                gaps.append(
-                    f"противоречие: «{left_text}» и «{right_text}» говорят разное об "
-                    "одном показателе — какой из фактов верен, из данных не следует"
-                )
-        return gaps
+        return [item.gap() for item in find_contradictions(facts)]
 
     # ── Вердикт гипотез ─────────────────────────────────────────────────────
 
@@ -2469,11 +2429,13 @@ class Workflow:
     def _apply_hooks(self, state: SessionState, result: StepResult) -> None:
         """Применить хуки к результату шага.
 
-        Два хука:
+        Три хука:
 
         - ``sources.collected`` — подтверждённых оснований мало, значит
           вывод пока нечем подкрепить: план расширяется, чтобы поиск шёл
           дальше;
+        - ``facts.contradicted`` — в разборе есть противоречия: раздел
+          «Противоречия» в отчёте называет их число и ось (`T-65`);
         - ``budget.exhausted`` — расход достиг предела: работа
           останавливается, чтобы не жечь токены впустую.
 
@@ -2489,6 +2451,13 @@ class Workflow:
             if added:
                 state.results["plan_expanded"] = added
             self._search_web(state)
+
+        if result.phase is Phase.ANALYZING:
+            gaps = list(getattr(result.data, "gaps", None) or [])
+            count = sum(1 for gap in gaps if "противоречие" in str(gap).lower())
+            contradicted = fire("facts.contradicted", float(count))
+            if contradicted.fired:
+                state.results["contradiction_hook"] = contradicted.detail
 
         limit = self.config.max_cost_units
         if limit <= 0:

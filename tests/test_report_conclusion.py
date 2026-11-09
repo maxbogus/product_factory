@@ -897,3 +897,37 @@ def test_report_shows_considered_variants(tmp_path: Path, monkeypatch: pytest.Mo
     assert "Если падение вызвано условиями, текст не поможет" in text
     assert "оставить как есть" in text.lower()
     assert "закрыть направление" in text.lower()
+
+
+def test_report_names_contradiction_axes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Противоречие — отдельный раздел, и ось расхождения названа.
+
+    «Говорят разное об одном показателе» прятало предмет спора. Раздел
+    обязан называть ось (направление или величину), а не только факт
+    разногласия: иначе читатель не знает, что именно обсуждать.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    record = StepRecord(
+        ordinal=2,
+        role="analyst",
+        phase="analyzing",
+        summary="фактов: 2",
+        detail={
+            "facts": [],
+            "gaps": [
+                "противоречие по оси «направление изменения»: «удержание падает» "
+                "и «удержание не изменилось» говорят разное об одном показателе "
+                "(«удержание») — какой из фактов верен, из данных не следует"
+            ],
+        },
+    )
+    _session(tmp_path, monkeypatch, [record])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "## Противоречия источников" in text
+    assert "ось" in text.lower()
+    assert "направление" in text.lower()
