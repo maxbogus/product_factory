@@ -45,6 +45,7 @@ from pf.lexical import (
     normalize_homoglyphs,
     number_tolerance,
     stems,
+    term_present,
     translit_key,
     words,
 )
@@ -568,7 +569,12 @@ def canonicalize(text: str) -> CanonicalText:
         raw=text,
         declared=declared,
         concepts=_passage_concepts(concept_text),
-        terms=tuple(strict_terms(clean)),
+        # Термины разбираются по **сырому** тексту: чистка приводит к нижнему
+        # регистру, а аббревиатура в нижнем регистре перестаёт быть
+        # аббревиатурой. Пока термины брались после чистки, «МТС» не был
+        # термином вовсе, и подмена бренда держалась только на списке
+        # субъектов (`D-45`).
+        terms=tuple(strict_terms(text)),
         quantities=quantities,
         periods=tuple(unique_periods),
         month_tags=frozenset(months(clean)),
@@ -868,15 +874,14 @@ def _terms_field(claim: CanonicalText, source: CanonicalText) -> FieldResult:
     """
     if not claim.terms:
         return FieldResult(1.0, "точных терминов нет")
-    clean = for_comparison(source.raw).lower().replace("ё", "е")
-    lowered = normalize_homoglyphs(clean)
     source_translit = {translit_key(term) for term in source.terms}
     shares: list[tuple[str, float]] = []
     for term in claim.terms:
-        written = term.lower().replace("ё", "е")
-        # Сравнение идёт и в исходном написании, и после подмены гомоглифов:
-        # «Tele2» латиницей и «Теlе2» с кириллической «е» — одно название.
-        if written in clean or normalize_homoglyphs(written) in lowered:
+        # Одно правило с лексической проверкой (`lexical.term_present`):
+        # целым словом, без учёта регистра, «ё» и гомоглифов. Подстрока
+        # склеивала «МТС» с «МГТС», а чистка перед разбором отключала
+        # аббревиатуры вовсе (`D-45`).
+        if term_present(term, source.raw):
             shares.append((term, 1.0))
         elif translit_key(term) in source_translit:
             shares.append((term, 0.5))

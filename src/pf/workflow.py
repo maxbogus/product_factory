@@ -54,7 +54,13 @@ from pf.schemas import (
     TaskFrame,
     Variants,
 )
-from pf.sources import SourceBundle, collect, indicator_of_citation, same_material
+from pf.sources import (
+    HUMAN_INPUT_LABELS,
+    SourceBundle,
+    collect,
+    indicator_of_citation,
+    same_material,
+)
 from pf.state import Phase, SessionState, save
 
 if TYPE_CHECKING:
@@ -76,6 +82,9 @@ class ClaimVerdict:
         status: Чем кончилась проверка.
         detail: Пояснение для человека.
         is_conclusion: Относится ли основание к выводу, а не к факту.
+        kind: Машинный вид отказа (``pf.sources.ABSENCE_KINDS``) либо вид
+            проверки цитаты (``Support.kind``). Нужен, чтобы отчёт считал
+            корзину по факту, а не по совпадению слов в пояснении.
     """
 
     claim: str
@@ -83,6 +92,7 @@ class ClaimVerdict:
     status: SupportStatus
     detail: str = ""
     is_conclusion: bool = False
+    kind: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,11 +134,16 @@ def _named_source(source_id: str) -> str:
     Returns:
         Подпись для пояснения.
     """
-    if not source_id:
+    text = source_id.strip()
+    if not text:
         return "источник не назван"
-    if "/" in source_id or "." in source_id:
-        return source_id
-    return f"источник не назван — вместо ссылки указано поле «{source_id}»"
+    if text.lower().replace("ё", "е") in HUMAN_INPUT_LABELS:
+        # Модель видит ввод человека в контексте и ссылается на него как на
+        # документ. Это не «нерелевантный источник»: источника нет вовсе.
+        return "ввод человека"
+    if "/" in text or "." in text:
+        return text
+    return f"источник не назван — вместо ссылки указано поле «{text}»"
 
 
 def _metric_line(metric: Any) -> str:
@@ -1508,6 +1523,27 @@ class Workflow:
                         conclusion_verdicts.append((key, SupportStatus.NO_DATA))
                 continue
 
+            # Причина отказа проверяется **до** сверки: если ссылки нет, то
+            # и сверять нечего, а прежняя формулировка «источник не относится
+            # к задаче» называла чужим отказ, которого не было (`D-45`).
+            absence = bundle.absence_reason(named)
+            if absence:
+                rejected += 1
+                details.append(f"{_named_source(named)}: {absence}")
+                verdicts.append(
+                    ClaimVerdict(
+                        claim=text,
+                        source_id=named,
+                        status=SupportStatus.NO_DATA,
+                        detail=absence,
+                        is_conclusion=is_conclusion,
+                        kind=bundle.absence_kind(named),
+                    )
+                )
+                if is_conclusion:
+                    conclusion_verdicts.append((key, SupportStatus.NO_DATA))
+                continue
+
             support = bundle.verify_claim(
                 text,
                 source_id=named,
@@ -1517,21 +1553,6 @@ class Workflow:
             if support.oov:
                 oov.update(support.oov)
                 oov_context = oov_context or text
-            if not bundle.is_relevant(named):
-                rejected += 1
-                details.append(f"{_named_source(named)}: источник не относится к задаче")
-                verdicts.append(
-                    ClaimVerdict(
-                        claim=text,
-                        source_id=named,
-                        status=SupportStatus.NO_DATA,
-                        detail="источник не относится к задаче",
-                        is_conclusion=is_conclusion,
-                    )
-                )
-                if is_conclusion:
-                    conclusion_verdicts.append((key, SupportStatus.NO_DATA))
-                continue
             verdicts.append(
                 ClaimVerdict(
                     claim=text,
@@ -1539,6 +1560,7 @@ class Workflow:
                     status=support.status,
                     detail=support.detail,
                     is_conclusion=is_conclusion,
+                    kind=support.kind,
                 )
             )
             if support.is_usable:
@@ -1709,14 +1731,16 @@ class Workflow:
                 quote=quote,
             )
             named = source_id or "источник не назван"
-            if not bundle.is_relevant(named):
+            absence = bundle.absence_reason(named)
+            if absence:
                 from pf.ground import Support, SupportStatus
 
                 return Support(
                     quote=quote,
                     source_id=source_id,
                     status=SupportStatus.NO_DATA,
-                    detail="источник не относится к задаче",
+                    detail=absence,
+                    kind=bundle.absence_kind(named),
                 )
             return support
 
@@ -2494,7 +2518,13 @@ class Workflow:
         answers = state.results.get("human_answers") or []
         if not answers:
             return ""
-        lines = [f"Ответ человека: {text}" for text in answers]
+        # Подпись «Ответ человека» читалась моделью как заголовок источника:
+        # в `cloud-deepseek-2` она попала в `source_id` девять раз из
+        # двенадцати отказов. Ввод человека — не документ, и это сказано
+        # прямо там, где модель его видит.
+        lines = [
+            f"Ввод человека (не источник, на него нельзя ссылаться): {text}" for text in answers
+        ]
         return "\n".join(lines)
 
     @staticmethod

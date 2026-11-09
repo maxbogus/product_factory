@@ -28,6 +28,8 @@ from pf.config import settings
 from pf.lexical import (
     Overlap,
     language,
+    mask_numbers,
+    normalize_homoglyphs,
     numbers_in,
     numbers_match,
     shares_words,
@@ -45,6 +47,22 @@ if TYPE_CHECKING:
 #: в нижнем регистре.
 _WHITESPACE = re.compile(r"\s+")
 _HYPHEN = re.compile(r"[-‐‑‒–—―]")
+#: Слово целиком: гомоглифы заменяются внутри слова, а не в тексте —
+#: иначе латинское «opex» в русской фразе стало бы «орех».
+_WORD = re.compile(r"\S+")
+
+#: Кавычки — оформление цитаты, а не её содержание: «МТС» и МТС — одно слово.
+#: Запятые и точки не снимаются: «82,5» после чистки стало бы «82 5».
+_QUOTES = str.maketrans("", "", "«»„“”‚‘’" + chr(34) + chr(39))
+
+#: Доля покрытия, выше которой недословная цитата считается пересказом, а не
+#: выдумкой. Замер на `demo-v12`: пересказ строки таблицы — 1.00, выдуманная
+#: цитата — 0.00. Порог посередине, чтобы решение не зависело от округления.
+PARAPHRASE_COVERAGE = 0.6
+
+#: Виды отказа цитаты, после которых утверждение проверяется полями. Выдумки
+#: здесь нет: иначе выдуманная цитата стала бы способом пройти проверку.
+QUOTE_FALLBACK_KINDS = frozenset({"too_short", "paraphrase", "number_mismatch"})
 
 
 class SupportStatus(StrEnum):
@@ -81,6 +99,10 @@ class Support:
         paragraph_index: Номер абзаца в источнике, если найден.
         status: Статус подтверждения.
         detail: Пояснение для человека — что именно не сошлось.
+        kind: Вид проверки или отказа — машинное имя, по которому отчёт
+            группирует причины, не разбирая русский текст: ``exact``,
+            ``number_tolerance``, ``too_short``, ``paraphrase``,
+            ``number_mismatch``, ``fabrication``, ``language``.
         oov: Нераспознанные слова утверждения — их место в очереди
             распознания, а не в подозрениях на выдумку.
     """
@@ -91,6 +113,7 @@ class Support:
     paragraph_index: int | None = None
     detail: str = ""
     oov: tuple[str, ...] = ()
+    kind: str = ""
 
     @property
     def is_usable(self) -> bool:
@@ -430,11 +453,16 @@ def normalize(text: str) -> str:
 
     Returns:
         Нормализованный текст: нижний регистр, единые пробелы, без мягких
-        переносов и тире.
+        переносов, тире, кавычек и различия «ё»/«е».
     """
-    normalized = unicodedata.normalize("NFC", text).lower()
+    normalized = unicodedata.normalize("NFC", text).lower().translate(_QUOTES)
+    normalized = normalized.replace("ё", "е")
     normalized = _HYPHEN.sub("-", normalized)
     normalized = _WHITESPACE.sub(" ", normalized)
+    # Смешанная раскладка — то же слово: «абонентoв» с латинской «o» должно
+    # найтись в источнике с «абонентов». Замена идёт по словам, поэтому
+    # чистая латиница («opex») остаётся как есть.
+    normalized = _WORD.sub(lambda match: normalize_homoglyphs(match.group(0)), normalized)
     return normalized.strip()
 
 
@@ -606,6 +634,13 @@ def verify_claim(
        степень становится подтверждением, — настройка
        (`claim_support_threshold`), а не константа: он подбирается на замере.
 
+    Цитата — не способ обойти проверку и не повод выбросить верное
+    утверждение. Если она не годится как доказательство (короче порога,
+    пересказ, другое число), утверждение проверяется полями — тем же
+    правилом, что и без цитаты, — а вид отказа остаётся в ``kind`` и
+    называется в пояснении. Выдумка в этот список не входит: там поля и так
+    не сходятся (`D-02`).
+
     Args:
         source_text: Полный текст источника.
         claim_text: Текст утверждения.
@@ -619,15 +654,70 @@ def verify_claim(
     Returns:
         Основание со статусом подтверждения.
     """
-    if quote.strip():
-        return verify_quote(
+    if not quote.strip():
+        return _verify_fields(
             source_text,
-            quote,
+            claim_text,
             source_id,
+            paragraph_index,
+            support_threshold=support_threshold,
             abs_tolerance=abs_tolerance,
             rel_tolerance=rel_tolerance,
         )
 
+    support = verify_quote(
+        source_text,
+        quote,
+        source_id,
+        abs_tolerance=abs_tolerance,
+        rel_tolerance=rel_tolerance,
+    )
+    if support.status is not SupportStatus.NO_DATA or support.kind not in QUOTE_FALLBACK_KINDS:
+        return support
+
+    fields = _verify_fields(
+        source_text,
+        claim_text,
+        source_id,
+        paragraph_index,
+        support_threshold=support_threshold,
+        abs_tolerance=abs_tolerance,
+        rel_tolerance=rel_tolerance,
+    )
+    return replace(
+        fields,
+        kind=support.kind,
+        detail=(
+            f"цитата не годится как доказательство ({support.detail}): "
+            f"проверено полями — {fields.detail}"
+        ),
+    )
+
+
+def _verify_fields(
+    source_text: str,
+    claim_text: str,
+    source_id: str,
+    paragraph_index: int | None = None,
+    *,
+    support_threshold: float | None = None,
+    abs_tolerance: float | None = None,
+    rel_tolerance: float | None = None,
+) -> Support:
+    """Проверить утверждение по полям: цитаты нет либо она не годится.
+
+    Args:
+        source_text: Полный текст источника.
+        claim_text: Текст утверждения.
+        source_id: Идентификатор источника.
+        paragraph_index: Номер абзаца, если указан.
+        support_threshold: Порог степени поддержки. По умолчанию — из настроек.
+        abs_tolerance: Абсолютный допуск чисел. По умолчанию — из настроек.
+        rel_tolerance: Относительный допуск чисел.
+
+    Returns:
+        Основание со статусом подтверждения.
+    """
     # Импорт ленивый: `pf.canonical` читает словарь и чистку, а `pf.ground`
     # должен импортироваться быстро и без побочных эффектов.
     from pf.canonical import score as canonical_score
@@ -757,6 +847,7 @@ def verify_quote(
             source_id=source_id,
             status=SupportStatus.NO_DATA,
             detail=f"цитата короче {min_length} символов — подтвердить нечего",
+            kind="too_short",
         )
 
     found, paragraph_index = find_quote(source_text, stripped)
@@ -767,6 +858,7 @@ def verify_quote(
             status=SupportStatus.CONFIRMED,
             paragraph_index=paragraph_index,
             detail="цитата найдена в источнике",
+            kind="exact",
         )
 
     absolute, relative = _tolerances(abs_tolerance, rel_tolerance)
@@ -789,6 +881,7 @@ def verify_quote(
                 source_id=source_id,
                 status=SupportStatus.NO_DATA,
                 detail=numbers_detail,
+                kind="language",
             )
         return Support(
             quote=stripped,
@@ -798,22 +891,39 @@ def verify_quote(
                 "иностранный источник: дословный перевод не проверяется, "
                 "сверены только числа — нужен взгляд человека"
             ),
+            kind="language",
         )
 
-    # Округление: цитата может отличаться от источника точностью записи
-    # числа. Проверяем числа с допуском и слова по леммам.
-    if not numbers_in(stripped):
-        return Support(
-            quote=stripped,
-            source_id=source_id,
-            status=SupportStatus.NO_DATA,
-            detail="цитата не найдена в источнике дословно",
-        )
+    # Округление — это различие **только** в записи числа. Маска числа
+    # отделяет округление от пересказа: пересказ строки таблицы сохраняет
+    # слова, но теряет метки колонок, и совпадения масок не будет.
+    quote_numbers = numbers_in(stripped)
+    if quote_numbers:
+        masked = mask_numbers(normalize(stripped))
+        for index, paragraph in enumerate(source_text.split("\n")):
+            # Нужны оба условия: числа совпали **с допуском** и различие в
+            # тексте только в их записи. Маска без сверки чисел подтверждала
+            # бы любое другое число: «99,99» и «77,26» после маски совпадают.
+            numbers_ok, _ = numbers_match(
+                quote_numbers,
+                numbers_in(paragraph),
+                abs_tolerance=absolute,
+                rel_tolerance=relative,
+            )
+            if numbers_ok and masked in mask_numbers(normalize(paragraph)):
+                return Support(
+                    quote=stripped,
+                    source_id=source_id,
+                    status=SupportStatus.CONFIRMED,
+                    paragraph_index=index,
+                    detail="цитата совпала с источником с точностью до допуска чисел",
+                    kind="number_tolerance",
+                )
 
     groups = _groups()
     quote_numbers = numbers_in(stripped)
     best: Overlap | None = None
-    for index, paragraph in enumerate(source_text.split("\n")):
+    for paragraph in source_text.split("\n"):
         # Абзац, где не нашлось ни одного числа цитаты и ни одного общего
         # слова, не может быть её источником — не тратим на него разбор.
         paragraph_numbers_ok, _ = numbers_match(
@@ -834,28 +944,37 @@ def verify_quote(
         )
         if best is None or result.coverage > best.coverage:
             best = result
-        if result.matched:
-            return Support(
-                quote=stripped,
-                source_id=source_id,
-                status=SupportStatus.CONFIRMED,
-                paragraph_index=index,
-                detail="цитата совпала с источником с точностью до допуска чисел",
-                oov=tuple(result.oov_tokens),
-            )
 
-    detail = "цитата не найдена в источнике дословно"
-    if best is not None and best.coverage >= settings.claim_min_overlap:
-        # Слова совпали, а цитата всё равно не подтвердилась — значит,
-        # расхождение в числе или термине. Назвать это точнее полезнее:
-        # «не найдена» читается как выдумка, хотя это округление или
-        # подмена термина.
-        detail = _overlap_reason(best, settings.claim_min_overlap)
+    if best is not None and best.coverage >= settings.claim_min_overlap and not best.numbers_ok:
+        # Слова совпали, а число нет: это не пересказ и не выдумка, а другое
+        # число. «Не найдена» читалось бы как выдумка.
+        return Support(
+            quote=stripped,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail=_overlap_reason(best, settings.claim_min_overlap),
+            oov=tuple(best.oov_tokens),
+            kind="number_mismatch",
+        )
+    if best is not None and best.coverage >= PARAPHRASE_COVERAGE:
+        # Пересказ — не выдумка: слова и числа источника на месте, но
+        # цитаты как таковой нет. Это отдельный вид, и он проверяется полями.
+        return Support(
+            quote=stripped,
+            source_id=source_id,
+            status=SupportStatus.NO_DATA,
+            detail=(
+                f"цитата не дословна (покрытие {best.coverage:.0%}) — это пересказ, а не цитата"
+            ),
+            oov=tuple(best.oov_tokens),
+            kind="paraphrase",
+        )
     return Support(
         quote=stripped,
         source_id=source_id,
         status=SupportStatus.NO_DATA,
-        detail=detail,
+        detail="цитата не найдена в источнике дословно",
+        kind="fabrication",
     )
 
 

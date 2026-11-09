@@ -44,6 +44,28 @@ from pf.lexical import significant_words as _significant_words
 from pf.lexical import stems as _stems
 from pf.materials import KNOWLEDGE_SOURCE_PREFIX, Material
 
+#: Подписи, под которыми ввод человека попадает в ответ как «источник».
+#: Модель видит его в контексте и ссылается на него наравне с документами.
+HUMAN_INPUT_LABELS: frozenset[str] = frozenset(
+    {"ответ человека", "выбор человека", "ввод человека", "решение человека"}
+)
+
+#: Причины, по которым ссылка не годится как основание. Формулировки
+#: стабильны: по ним `pf.report.rejection_kind` считает класс отказа, а
+#: человек видит, что именно случилось, а не «похоже на другое».
+REASON_NO_LINK = "ссылки нет — цитировать нечего"
+REASON_HUMAN_INPUT = "не источник — это ввод человека, а не документ"
+REASON_OUTSIDE_SLICE = "источник вне среза задачи"
+REASON_UNKNOWN_SOURCE = "источник не найден среди материалов"
+
+#: Машинные виды отказа: по ним считается корзина в отчёте и замере.
+ABSENCE_KINDS: dict[str, str] = {
+    REASON_NO_LINK: "source_not_named",
+    REASON_HUMAN_INPUT: "human_input",
+    REASON_OUTSIDE_SLICE: "outside_slice",
+    REASON_UNKNOWN_SOURCE: "source_unknown",
+}
+
 #: Минимальная длина абзаца, пригодного для цитирования.
 MIN_PARAGRAPH_CHARS = 60
 
@@ -277,6 +299,75 @@ class SourceBundle:
                 if passage not in chosen:
                     chosen.append(passage)
         return chosen
+
+    def absence_reason(self, source_id: str) -> str:
+        """Почему ссылка не годится как основание — словами.
+
+        Три разных случая различаются, потому что чинятся по-разному: ссылки
+        нет вовсе (промпт и схема ответа), указан ввод человека (промпт),
+        источник есть, но не попал в срез задачи (поиск и контекст).
+        Прежняя формулировка «источник не относится к задаче» говорила за
+        читателя, что мы проверили тему источника, — а мы её не проверяли.
+
+        Args:
+            source_id: Ссылка из ответа модели, возможно с якорем ``#pN``.
+
+        Returns:
+            Причина словами; пустая строка — ссылка годится.
+        """
+        clean, _ = split_source_id(source_id)
+        label = clean.strip().lower().replace("ё", "е")
+        if not label:
+            return REASON_NO_LINK
+        if label in HUMAN_INPUT_LABELS:
+            return REASON_HUMAN_INPUT
+        if "/" not in label and "." not in label:
+            # Имя поля ответа («verification», «query») вместо пути.
+            return REASON_NO_LINK
+        if self.is_relevant(clean):
+            return ""
+        if self._resolve(clean) or self._in_project(clean):
+            return REASON_OUTSIDE_SLICE
+        return REASON_UNKNOWN_SOURCE
+
+    def absence_kind(self, source_id: str) -> str:
+        """Машинный вид отказа — для отчёта и замера.
+
+        Args:
+            source_id: Ссылка из ответа модели.
+
+        Returns:
+            ``source_not_named`` / ``human_input`` / ``outside_slice`` /
+            ``source_unknown`` либо пустая строка, если ссылка годится.
+        """
+        return ABSENCE_KINDS.get(self.absence_reason(source_id), "")
+
+    @staticmethod
+    def _in_project(clean_id: str) -> bool:
+        """Есть ли такой материал в проекте — пусть и вне среза задачи.
+
+        Читается только для ссылок, которых нет ни в срезе, ни в корпусе:
+        на обычном пути эта ветка не выполняется.
+
+        Args:
+            clean_id: Идентификатор без якоря.
+
+        Returns:
+            Материал существует в проекте.
+        """
+        from pf.materials import load_materials
+
+        tail = clean_id.rsplit("/", 1)[-1]
+        stem = tail.rsplit(".", 1)[0]
+        for material in load_materials():
+            item_tail = material.source_id.rsplit("/", 1)[-1]
+            if (
+                material.source_id == clean_id
+                or item_tail == tail
+                or item_tail.rsplit(".", 1)[0] == stem
+            ):
+                return True
+        return False
 
     def is_relevant(self, source_id: str) -> bool:
         """Относится ли источник к текущей задаче.

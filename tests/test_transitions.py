@@ -379,7 +379,9 @@ def test_human_answer_reaches_role_context() -> None:
     _role, _payload, context = workflow._step_inputs(state, bundle)
 
     assert "цену снижать нельзя" in context
-    assert "Ответ человека" in context
+    # Подпись говорит модели, что это не документ: прежнее «Ответ человека»
+    # читалось как заголовок источника (`D-45`).
+    assert "Ввод человека (не источник" in context
 
 
 def test_web_context_reaches_role_context() -> None:

@@ -289,3 +289,106 @@ def test_grounds_awaiting_review_are_counted_separately() -> None:
     assert tally.confirmed == 1
     assert tally.needs_review == 1
     assert tally.rejected == 0
+
+
+# ── Виды цитаты: отказ не сваливается в одно ведро ──────────────────────────
+
+#: Строка таблицы, как её видит проверка: метки колонок на месте.
+MTS_ROW = (
+    "оператор: МТС, показатель: абонентская база в России, значение: 82, "
+    "период: конец 3-го квартала 2024"
+)
+#: Утверждение, которое этой строкой подтверждается.
+MTS_CLAIM = "Абонентская база МТС в России составляет 82 млн человек"
+
+
+def test_quote_kinds_punctuation_and_yo_are_confirmed() -> None:
+    """Кавычки и «ё» — оформление, а не расхождение с источником.
+
+    Раньше цитата ««Компания еще обслуживает…»» не находилась в источнике с
+    «ещё», и верное основание отклонялось как выдумка: различие было только в
+    записи.
+    """
+    source = "Компания ещё обслуживает абонентов связи."
+    support = verify_claim(
+        source,
+        "Компания еще обслуживает абонентов связи",
+        "test/источник",
+        paragraph_index=0,
+        quote="«Компания еще обслуживает абонентов связи»",
+    )
+    assert support.status is SupportStatus.CONFIRMED
+    assert support.kind == "exact"
+
+
+def test_quote_kinds_row_paraphrase_falls_back_to_fields() -> None:
+    """Пересказ строки таблицы — не цитата: проверяются поля, причина названа.
+
+    В `demo-v12` модель прислала «МТС, абонентская база в России: 82» вместо
+    строки с метками колонок. Цитата не дословна, и утверждение отклонялось
+    словами «термин „МТС“ не найден», хотя строка начинается с «оператор:
+    МТС», а число 82 в ней есть. Цитата — не способ обойти проверку, но и не
+    повод выбросить верное утверждение: проверяются те же поля, что без
+    цитаты, а вид отказа называется.
+    """
+    support = verify_claim(
+        MTS_ROW,
+        MTS_CLAIM,
+        "project/data/x.csv",
+        paragraph_index=0,
+        quote="МТС, абонентская база в России: 82",
+    )
+    assert support.status is SupportStatus.CONFIRMED
+    assert support.kind == "paraphrase"
+    assert "цитата" in support.detail
+    assert "полями" in support.detail
+
+
+def test_quote_kinds_short_quote_falls_back_to_fields() -> None:
+    """Короткая цитата доказательством не является, но и число не отменяет.
+
+    «38,9» короче порога в 12 символов: такое совпадение нашлось бы почти в
+    любом тексте. Отказ проверки цитаты не должен превращаться в отказ
+    утверждения — 38,9 в строке есть, и это проверяется полями.
+    """
+    row = "оператор: Tele2, показатель: абонентская база, значение: 38.9, период: конец июля"
+    support = verify_claim(
+        row,
+        "Абонентская база Tele2 составляет 38,9 млн человек",
+        "project/data/y.csv",
+        paragraph_index=0,
+        quote="38,9",
+    )
+    assert support.status is SupportStatus.CONFIRMED
+    assert support.kind == "too_short"
+    assert "12" in support.detail
+
+
+def test_quote_kinds_fabrication_is_never_confirmed() -> None:
+    """Выдуманная цитата не спасается откатом: поля тоже не сходятся.
+
+    Откат в поля — не амнистия. Если утверждение не подтверждается ни
+    цитатой, ни полями, статус остаётся «нет данных» — иначе выдуманная
+    цитата стала бы способом пройти проверку (`D-02`).
+    """
+    support = verify_claim(
+        SOURCE,
+        "Удержание упало на 12 процентных пунктов из-за ценовой политики",
+        "test/источник",
+        paragraph_index=1,
+        quote="удержание упало на 12 процентных пунктов из-за ценовой политики",
+    )
+    assert support.status is SupportStatus.NO_DATA
+    assert support.kind == "fabrication"
+
+
+def test_quote_kinds_foreign_quote_needs_review() -> None:
+    """Иностранная цитата ждёт человека и в поля не откатывается."""
+    support = verify_claim(
+        "Megafon served 77.26 million subscribers in June 2024.",
+        "МегаФон обслужил 77,26 миллиона абонентов",
+        "web/Новости",
+        quote="МегаФон обслужил 77,26 миллиона абонентов",
+    )
+    assert support.status is SupportStatus.NEEDS_REVIEW
+    assert support.kind == "language"

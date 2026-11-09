@@ -107,7 +107,13 @@ def test_demo_document_lists_only_confirmed_grounds() -> None:
     records = _journal_records(_session_id(text))
     assert records, "журнал демо-прогона не найден"
 
-    source_rejections = ("не относится к задаче", "не найден среди материалов")
+    source_rejections = (
+        "не относится к задаче",
+        "не найден среди материалов",
+        "вне среза задачи",
+        "цитировать нечего",
+        "ввод человека",
+    )
     rejected: set[str] = set()
     for record in records:
         for line in record.get("rejected_details", []):

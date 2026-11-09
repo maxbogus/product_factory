@@ -21,10 +21,10 @@
     (cd /tmp/old && uv run python scripts/replay_verification.py --json /tmp/base.json)
     uv run python scripts/replay_verification.py --json /tmp/new.json --compare /tmp/base.json
 
-Контрольные пробы (``--probes``, включены по умолчанию) — шесть известных
+Контрольные пробы (``--probes``, включены по умолчанию) — восемь известных
 расхождений, на которых проверка когда-то ошибалась: округление числа,
 словоформа, смешанная раскладка, подмена бренда, иностранная страница,
-добавленное отрицание. Они не зависят от журналов и ловят регресс сразу, без
+добавленное отрицание, пересказ строки таблицы и короткая цитата. Они не зависят от журналов и ловят регресс сразу, без
 живого прогона.
 
 Важно: ``state/`` и ``journal/`` в ``.gitignore``. На чистом клоне журналов
@@ -78,6 +78,8 @@ class Probe:
         claim: Утверждение или цитата из ответа модели.
         expected: Ожидаемый статус.
         via_claim: Проверять покрытием абзаца (как факт), а не цитатой.
+        quote: Цитата из ответа модели, если она есть. Недословная цитата не
+            отменяет проверку полями — это и держат пробы ниже.
     """
 
     id: str
@@ -86,6 +88,7 @@ class Probe:
     claim: str
     expected: SupportStatus
     via_claim: bool = False
+    quote: str = ""
 
 
 #: Шесть расхождений, которые проверка когда-то путала. Две последние строки —
@@ -121,6 +124,29 @@ PROBES: tuple[Probe, ...] = (
         claim="МТС — российская телекоммуникационная компания",
         expected=SupportStatus.NO_DATA,
         via_claim=True,
+    ),
+    Probe(
+        id="row-paraphrase",
+        title="пересказ строки таблицы: цитата без меток колонок",
+        source=(
+            "оператор: МТС, показатель: абонентская база в России, значение: 82, "
+            "период: конец 3-го квартала 2024"
+        ),
+        claim="Абонентская база МТС в России составляет 82 млн человек",
+        expected=SupportStatus.CONFIRMED,
+        via_claim=True,
+        quote="МТС, абонентская база в России: 82",
+    ),
+    Probe(
+        id="short-quote",
+        title="короткая цитата: «38,9» при верном числе",
+        source=(
+            "оператор: Tele2, показатель: абонентская база, значение: 38.9, период: конец июля"
+        ),
+        claim="Абонентская база Tele2 составляет 38,9 млн человек",
+        expected=SupportStatus.CONFIRMED,
+        via_claim=True,
+        quote="38,9",
     ),
     Probe(
         id="foreign-page",
@@ -176,7 +202,13 @@ def run_probe(probe: Probe) -> SupportStatus:
         Фактический статус проверки.
     """
     if probe.via_claim:
-        support = verify_claim(probe.source, probe.claim, "probe/source", paragraph_index=0)
+        support = verify_claim(
+            probe.source,
+            probe.claim,
+            "probe/source",
+            paragraph_index=0,
+            quote=probe.quote,
+        )
     else:
         support = verify_quote(probe.source, probe.claim, "probe/source")
     return support.status

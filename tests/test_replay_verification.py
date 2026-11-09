@@ -52,7 +52,7 @@ def test_probes_match_expectations() -> None:
     """Каждая контрольная проба даёт ожидаемый вердикт."""
     results = _harness().check_probes()
 
-    assert len(results) == 6
+    assert len(results) == 8
     failed = [item for item in results if not item["passed"]]
     assert failed == [], f"пробы не сошлись: {failed}"
 

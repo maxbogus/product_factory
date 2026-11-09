@@ -39,6 +39,9 @@ from pf.corpus import lemmatize, tokenize
 
 #: Слово: буквы и цифры, без служебных символов.
 _WORD = re.compile(r"[а-яёa-z0-9]+", re.IGNORECASE)
+#: Границы слова для термина: буквы, цифры и подчёркивание не дают
+#: термину совпасть с частью другого слова («МТС» внутри «МГТС»).
+_TERM_WORD = "0-9a-zа-яё_"
 #: Число: запятая или точка как разделитель, пробелы в разрядах.
 #: Границы обязательны: иначе «5G» даст число 5, а «2024-й» — 2024.
 _NUMBER = re.compile(
@@ -527,6 +530,22 @@ def numbers_in(text: str) -> list[float]:
     return found
 
 
+def mask_numbers(text: str) -> str:
+    """Заменить числа одинаковой меткой.
+
+    Нужно, чтобы отличить округление от пересказа: если две записи
+    различаются **только** записью числа, после маски они совпадают, а
+    выпавшие метки колонок или слова — нет.
+
+    Args:
+        text: Исходный текст.
+
+    Returns:
+        Текст, в котором каждое число заменено на ``#``.
+    """
+    return _NUMBER.sub("#", text)
+
+
 def number_tolerance(
     value: float,
     *,
@@ -787,6 +806,36 @@ def shares_words(claim: str, paragraph: str) -> bool:
     return bool(set(tokenize(claim)) & set(tokenize(paragraph)))
 
 
+def term_present(term: str, paragraph: str) -> bool:
+    """Есть ли термин в тексте целым словом.
+
+    Одно правило на всю проверку. Мешок слов терминов короче четырёх букв не
+    видит вовсе (`corpus._TOKEN_PATTERN` — `[а-яёa-z]{4,}`), поэтому «МТС» не
+    находился никогда, даже когда строка начиналась с «оператор: МТС». А
+    подстрочное сравнение ошибается в другую сторону: склеивает «МТС» с
+    «МГТС» и с «МТС Беларусь». Здесь термин ищется по тексту с границами
+    слова, без учёта регистра, «ё» и гомоглифов.
+
+    Args:
+        term: Термин в том написании, в котором пришёл.
+        paragraph: Текст источника.
+
+    Returns:
+        Термин найден целым словом.
+    """
+    cleaned = term.strip().lower().replace("ё", "е")
+    if not cleaned:
+        return True
+    text = paragraph.lower().replace("ё", "е")
+    # Смешанная раскладка («Теlе2» с кириллическими буквами) — тоже написание
+    # того же термина, поэтому проверяются оба варианта.
+    for candidate in {cleaned, normalize_homoglyphs(cleaned)}:
+        pattern = rf"(?<![{_TERM_WORD}]){re.escape(candidate)}(?![{_TERM_WORD}])"
+        if re.search(pattern, text):
+            return True
+    return False
+
+
 def exact_terms_in(text: str, groups: Mapping[str, str] | None = None) -> list[str]:
     """Точные термины текста, которые обязаны найтись в источнике.
 
@@ -813,18 +862,24 @@ def exact_terms_in(text: str, groups: Mapping[str, str] | None = None) -> list[s
 
 def _term_present(
     term: str,
-    paragraph_lemmas: set[str],
+    paragraph: str,
     paragraph_canonical: set[str],
     groups: Mapping[str, str],
 ) -> bool:
     """Есть ли точный термин в абзаце.
+
+    Точный термин ищется по тексту целым словом (`term_present`): в мешке
+    лемм аббревиатур короче четырёх букв нет вовсе, поэтому «МТС» не
+    находился никогда — даже когда строка начиналась с «оператор: МТС».
+    Сильные доменные основы («абонентский») остаются на леммах: они
+    связывают словоформы текста, а термин — нет.
 
     Синонимы здесь не помогают: точный термин обязан совпасть понятием
     буквально, иначе «МТС» подменится «МегаФоном».
 
     Args:
         term: Точный термин.
-        paragraph_lemmas: Леммы слов абзаца (посчитаны заранее).
+        paragraph: Текст абзаца источника.
         paragraph_canonical: Канонические леммы абзаца.
         groups: Отображение синонимов — нужен, чтобы не считать термином
             слово, у которого есть синоним.
@@ -832,11 +887,11 @@ def _term_present(
     Returns:
         Термин найден в абзаце.
     """
+    if is_exact_term(term, groups):
+        return term_present(term, paragraph)
     target = lemma(term)
     if not target:
         return True
-    if is_exact_term(term, groups):
-        return target in paragraph_lemmas
     canonical = groups.get(target, target)
     return canonical in paragraph_canonical
 
@@ -877,7 +932,7 @@ def overlap(
     missing_terms = [
         term
         for term in exact_terms_in(claim, table)
-        if not _term_present(term, paragraph_lemmas, paragraph_words, table)
+        if not _term_present(term, paragraph, paragraph_words, table)
     ]
     # Распознавание слов утверждения — источник очереди распознания.
     # Разбираем только утверждение: слова источника не нужно «понимать»,
