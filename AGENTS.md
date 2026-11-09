@@ -603,6 +603,14 @@ uv run pf lexicon approve <слово>    # подтвердить запись 
   подтверждено); `signal_noise_line` печатают и `report.as_markdown`, и
   `artifacts._render`. Меняете правило — `make demo-doc SESSION=demo-v12`,
   иначе `test_document_matches_its_journal` краснеет (`D-62`).
+- **Отклонения в документе группируются по виду, а не по тексту.**
+  `report.rejection_groups(records)` даёт пары «вид → [(текст, повторы)]»:
+  вид из `StepRecord.rejections` (разбор текста — только старому журналу),
+  одинаковые тексты схлопнуты `_group_repeats`. Счёт (раздел 4) и список
+  (раздел 5) идут одной функцией `_record_rejection_pairs`, поэтому числа
+  сходятся. `needs_review` в `rejections` не попадает в «Отклонённые» —
+  «требует проверки» не отказ. Меняете правило — `make demo-doc SESSION=...`,
+  иначе `test_document_matches_its_journal` краснеет (`D-63`).
 
 
 ## Как ведётся работа

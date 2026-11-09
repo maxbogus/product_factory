@@ -1575,6 +1575,41 @@ def _collect_collection(records: list[Any]) -> dict[str, Any]:
     }
 
 
+def _record_rejection_pairs(record: Any) -> list[tuple[str, str]]:
+    """Пары «вид — текст» отклонений одного шага.
+
+    Записанный вид сильнее разбора текста: у нового журнала вид лежит в
+    ``record.rejections``, у старого выводится из формулировки
+    ``record.rejected_details``. В ``rejections`` попадают и основания,
+    ожидающие проверки человеком (``needs_review``); раздел «Отклонённые»
+    их не показывает — «требует проверки» не отказ (`D-49`, `D-63`).
+
+    Args:
+        record: Запись шага из журнала.
+
+    Returns:
+        Пары «подпись вида — текст причины» в порядке появления.
+    """
+    recorded = [
+        item for item in getattr(record, "rejections", None) or [] if isinstance(item, dict)
+    ]
+    if recorded:
+        pairs: list[tuple[str, str]] = []
+        for item in recorded:
+            # Основание, ожидающее проверки, — не отказ: в счёт «Отклонено»
+            # и в раздел «Отклонённые основания» оно не идёт.
+            if str(item.get("status") or "") not in ("", "no_data"):
+                continue
+            kind = str(item.get("kind") or "")
+            detail = str(item.get("detail") or "")
+            pairs.append((label_of(kind) if kind else rejection_kind(detail), detail))
+        return pairs
+    return [
+        (rejection_kind(str(line)), str(line))
+        for line in getattr(record, "rejected_details", None) or []
+    ]
+
+
 def _record_rejection_kinds(record: Any) -> dict[str, int]:
     """Классы отказов одного шага: записанный вид сильнее разбора текста.
 
@@ -1589,19 +1624,40 @@ def _record_rejection_kinds(record: Any) -> dict[str, int]:
         Счёт по подписям классов.
     """
     kinds: dict[str, int] = {}
-    recorded = [
-        item for item in getattr(record, "rejections", None) or [] if isinstance(item, dict)
-    ]
-    if recorded:
-        for item in recorded:
-            kind = str(item.get("kind") or "")
-            label = label_of(kind) if kind else rejection_kind(str(item.get("detail") or ""))
-            kinds[label] = kinds.get(label, 0) + 1
-        return kinds
-    for line in getattr(record, "rejected_details", None) or []:
-        label = rejection_kind(str(line))
+    for label, _ in _record_rejection_pairs(record):
         kinds[label] = kinds.get(label, 0) + 1
     return kinds
+
+
+def rejection_groups(records: list[Any]) -> list[tuple[str, list[tuple[str, int]]]]:
+    """Отклонения по видам причины — для раздела документа демонстрации.
+
+    Плоский список читался как много разных отказов, хотя отказ один: одна и
+    та же строка приходит с нескольких шагов. Здесь отказы сгруппированы по
+    виду причины (записанному в журнале), а одинаковые тексты внутри вида
+    схлопнуты с числом повторов (`_group_repeats`).
+
+    Args:
+        records: Записи журнала.
+
+    Returns:
+        Пары «подпись вида — [(текст, повторы), ...]», виды по убыванию
+        числа отказов, затем по названию — как в «Контроле качества».
+    """
+    by_kind: dict[str, list[str]] = {}
+    order: list[str] = []
+    for record in records:
+        for label, detail in _record_rejection_pairs(record):
+            if not detail:
+                continue
+            if label not in by_kind:
+                by_kind[label] = []
+                order.append(label)
+            by_kind[label].append(detail)
+    return [
+        (label, _group_repeats(by_kind[label]))
+        for label in sorted(order, key=lambda name: (-len(by_kind[name]), name))
+    ]
 
 
 def build_session_report(session_id: str) -> SessionReport:

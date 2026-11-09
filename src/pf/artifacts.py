@@ -29,7 +29,12 @@ from pf.config import settings
 from pf.ground import CONCLUSION_RULE
 from pf.journal import Journal, StepRecord, journal_path
 from pf.replay import replay_session
-from pf.report import SessionReport, build_session_report, conclusion_markdown
+from pf.report import (
+    SessionReport,
+    build_session_report,
+    conclusion_markdown,
+    rejection_groups,
+)
 from pf.verdicts import label_of
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -530,9 +535,16 @@ def _render(report: SessionReport, records: list[StepRecord], origin: Provenance
         lines.append("Что проверка не приняла и почему. Отклонение — это результат,")
         lines.append("а не сбой: лучше видимый отказ, чем правдоподобное число.")
         lines.append("")
-        for detail in report.rejected_details:
-            lines.append(f"- {detail}")
-        lines.append("")
+        # Групп по виду причины, а не плоский список: одинаковые отказы
+        # схлопываются с «(×N)», а разные отказы одного вида встают вместе.
+        for label, items in rejection_groups(records):
+            total = sum(count for _, count in items)
+            lines.append(f"**{label}** ({total})")
+            lines.append("")
+            for detail, count in items:
+                suffix = f" (×{count})" if count > 1 else ""
+                lines.append(f"- {detail}{suffix}")
+            lines.append("")
         lines.append("---")
         lines.append("")
 

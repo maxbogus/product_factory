@@ -284,6 +284,8 @@ def test_document_says_when_there_is_no_conclusion(
 
     assert "Вывод не получен" in document
 
+
+def test_metric_without_formula_is_marked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Расчёт без формулы помечен: пересчитать его нечем.
 
     Args:
@@ -330,3 +332,96 @@ def test_document_says_when_there_is_no_conclusion(
     without_formula = next(row for row in rows if "Доля оттока" in row)
     assert "значение из колонки" in with_formula
     assert "формула не указана" in without_formula
+
+
+def test_rejection_grouping_dedups_repeats_and_groups_by_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Отклонения в документе: группа по виду причины, повторы схлопнуты.
+
+    Плоский список читался как много разных отказов, хотя отказ один: одна
+    и та же строка приходит с разных шагов. Документ обязан сгруппировать
+    отказы по виду причины (а не по тексту) и схлопнуть повторы с «(×N)».
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    repeated = "project/data/numbers.csv#row0: цитата не найдена"
+    other = "project/data/numbers.csv#row1: число 5 не совпадает с источником"
+
+    _write_session(
+        "demo-rejection-grouping",
+        [
+            StepRecord(
+                ordinal=0,
+                role="analyst",
+                phase="analyzing",
+                summary="разбор",
+                rejected_details=[repeated, other],
+            ),
+            StepRecord(
+                ordinal=1,
+                role="strategy",
+                phase="strategy",
+                summary="стратегия",
+                rejected_details=[repeated],
+            ),
+        ],
+    )
+
+    document = _generator().build_document("demo-rejection-grouping")
+    section = _section(document, "## 5.")
+
+    # Разные отказы одного вида стоят под общим заголовком вида.
+    assert "**цитата не найдена** (2)" in section
+    assert "**значение не сошлось с источником** (1)" in section
+    assert repeated in section
+    # Повтор двух шагов схлопнут в одну строку со счётчиком.
+    assert section.count(repeated) == 1
+    assert f"- {repeated} (×2)" in section
+
+
+def test_rejection_grouping_prefers_recorded_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Документ группирует по записанному виду, а не по разбору текста.
+
+    Журнал append-only: новый отказ `indicator-demotion` хранит вид в поле
+    `rejections`. Если документ угадывает класс по формулировке, отказ
+    попадает в «прочее» — как это было до `D-48`.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    monkeypatch.setattr("pf.config.settings.journal_dir", tmp_path)
+    detail = "формулировка, которой нет в таблице текстов"
+
+    _write_session(
+        "demo-rejection-kind",
+        [
+            StepRecord(
+                ordinal=0,
+                role="strategy",
+                phase="strategy",
+                summary="стратегия",
+                rejected_details=[detail],
+                rejections=[
+                    {
+                        "kind": "indicator-demotion",
+                        "status": "no_data",
+                        "detail": detail,
+                        "claim": "вывод",
+                    }
+                ],
+            )
+        ],
+    )
+
+    document = _generator().build_document("demo-rejection-kind")
+    section = _section(document, "## 5.")
+
+    assert "**основание про другой показатель**" in section
+    assert "**прочее**" not in section
