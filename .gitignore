@@ -16,6 +16,7 @@ __pycache__/
 # Артефакты работы агента (воспроизводимы, но не часть поставки)
 state/
 journal/
+logs/
 !state/.gitkeep
 !journal/.gitkeep
 
