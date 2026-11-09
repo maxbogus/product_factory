@@ -102,10 +102,11 @@ def test_case_d15_ungrounded_conclusion_is_rejected() -> None:
     Вывод опирается на файл, которого нет в материалах: статус оснований
     вывода обязан быть «неподкреплено», а не «подтверждено».
     """
-    from pf.evalrun import _d15_conclusion_cites_existing_source
+    from pf.evalrun import Expectation, _d15_conclusion_cites_existing_source
 
-    result = _d15_conclusion_cites_existing_source()
+    outcome, result = _d15_conclusion_cites_existing_source()
 
+    assert outcome is Expectation.REJECT
     assert "неподкреплено" in result
     assert "подтверждено" not in result
 
@@ -119,10 +120,11 @@ def test_case_d15_ungrounded_conclusion_is_rejected() -> None:
 
 def test_case_d05_text_comes_from_schema_rejection() -> None:
     """Кейс D-05: текст результата — сообщение схемы, а не подставленная строка."""
-    from pf.evalrun import _d05_keep_current_required
+    from pf.evalrun import Expectation, _d05_keep_current_required
 
-    result = _d05_keep_current_required()
+    outcome, result = _d05_keep_current_required()
 
+    assert outcome is Expectation.REJECT
     # Проверяется, какой именно полюс отсутствует: общий текст отказа
     # называет оба, и широкая подстрока прошла бы на чужом отказе.
     assert "нет полюса «оставить как есть»" in result
@@ -130,10 +132,11 @@ def test_case_d05_text_comes_from_schema_rejection() -> None:
 
 def test_case_d06_text_comes_from_schema_rejection() -> None:
     """Кейс D-06: без «закрыть направление» набор отклоняется схемой."""
-    from pf.evalrun import _d06_close_direction_required
+    from pf.evalrun import Expectation, _d06_close_direction_required
 
-    result = _d06_close_direction_required()
+    outcome, result = _d06_close_direction_required()
 
+    assert outcome is Expectation.REJECT
     assert "нет полюса «закрыть направление»" in result
 
 
@@ -143,10 +146,11 @@ def test_case_d09_word_gap_comes_from_schema() -> None:
     Если `Analysis` начнёт принимать пустой разбор, кейс покраснеет: текст
     обработчика в этом случае не содержит слова «пробел».
     """
-    from pf.evalrun import _d09_gaps_declared
+    from pf.evalrun import Expectation, _d09_gaps_declared
 
-    result = _d09_gaps_declared()
+    outcome, result = _d09_gaps_declared()
 
+    assert outcome is Expectation.PASS
     assert "пробел" in result
 
 
@@ -236,3 +240,70 @@ def test_case_d31_goes_red_without_hash_check(monkeypatch: pytest.MonkeyPatch) -
     results = {result.case_id: result for result in run_all()}
 
     assert not results["D-31-review-on-changed-data"].passed
+
+
+# ── Заявленный исход участвует в вердикте ───────────────────────────────────
+# Колонка `expected` разбиралась, но не сверялась: кейс, помеченный REJECT,
+# проходил, если обработчик вернул нужную подстроку. Теперь обработчик
+# возвращает пару «исход + текст», а раннер сверяет исход отдельно от слов.
+
+
+def test_expectation_in_verdict() -> None:
+    """Подменённый `expected` делает кейс красным.
+
+    Если `D-02` (выдуманная цитата, REJECT) пометить PASS, кейс обязан
+    покраснеть: сегодня он зелёный, потому что исход не проверяется.
+    """
+    from pf.evalrun import Case, Expectation, _run_case, load_cases
+
+    case = next(c for c in load_cases() if c.id == "D-02-fabricated-quote")
+    flipped = Case(
+        id=case.id,
+        title=case.title,
+        expectation=Expectation.PASS,
+        must_contain=case.must_contain,
+        must_not_contain=case.must_not_contain,
+        notes=case.notes,
+    )
+
+    result = _run_case(flipped)
+
+    assert not result.passed
+    assert "исход" in result.detail
+
+
+def test_expectation_in_verdict_distinguishes_outcome_and_text() -> None:
+    """Расхождение исхода и расхождение подстроки — разные сообщения.
+
+    Иначе не видно, что именно разошлось: поведение или слово.
+    """
+    from pf.evalrun import Case, Expectation, _run_case, load_cases
+
+    base = next(c for c in load_cases() if c.id == "D-02-fabricated-quote")
+
+    # (а) исход сходится, подстрока — нет
+    wrong_text = Case(
+        id=base.id,
+        title=base.title,
+        expectation=Expectation.REJECT,
+        must_contain=("подтверждено",),
+        must_not_contain=(),
+        notes="",
+    )
+    text_result = _run_case(wrong_text)
+    assert not text_result.passed
+    assert "исход" not in text_result.detail
+    assert "подтверждено" in text_result.detail
+
+    # (б) подстрока сходится, исход — нет
+    wrong_outcome = Case(
+        id=base.id,
+        title=base.title,
+        expectation=Expectation.PASS,
+        must_contain=base.must_contain,
+        must_not_contain=base.must_not_contain,
+        notes="",
+    )
+    outcome_result = _run_case(wrong_outcome)
+    assert not outcome_result.passed
+    assert "исход" in outcome_result.detail

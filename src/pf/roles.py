@@ -52,12 +52,16 @@ class Role:
         prompt_file: Имя файла промпта в ``prompts/roles/``.
         schema: Схема вывода роли.
         title_ru: Человекочитаемое название роли.
+        purpose: Что роль даёт конвейеру — одна строка для отчёта. Стоимость
+            шага без этого описания не говорит, оправдан ли расход
+            (`T-70`).
     """
 
     name: str
     prompt_file: str
     schema: type[BaseModel]
     title_ru: str
+    purpose: str
 
 
 ROLES: dict[str, Role] = {
@@ -66,54 +70,63 @@ ROLES: dict[str, Role] = {
         prompt_file="intake.md",
         schema=TaskFrame,
         title_ru="Постановка задачи",
+        purpose="что именно нужно понять",
     ),
     "planner": Role(
         name="planner",
         prompt_file="planner.md",
         schema=ResearchPlan,
         title_ru="План исследования",
+        purpose="какие вопросы могут изменить решение",
     ),
     "collector": Role(
         name="collector",
         prompt_file="collector.md",
         schema=Analysis,
         title_ru="Сбор источников",
+        purpose="на какие источники опираться",
     ),
     "analyst": Role(
         name="analyst",
         prompt_file="analyst.md",
         schema=Analysis,
         title_ru="Разбор источников",
+        purpose="что известно, что предположено, чего мы не знаем",
     ),
     "options": Role(
         name="options",
         prompt_file="options.md",
         schema=Variants,
         title_ru="Варианты решения",
+        purpose="какие есть содержательно разные пути",
     ),
     "redteam": Role(
         name="redteam",
         prompt_file="redteam.md",
         schema=RedTeamReport,
         title_ru="Критическая проверка",
+        purpose="что не так с каждым вариантом",
     ),
     "strategy": Role(
         name="strategy",
         prompt_file="strategy.md",
         schema=Strategy,
         title_ru="Разработка стратегии",
+        purpose="что делаем и как это проверим",
     ),
     "keeper": Role(
         name="keeper",
         prompt_file="keeper.md",
         schema=DecisionRecord,
         title_ru="Фиксация решения",
+        purpose="что зафиксировали и когда пересмотрим",
     ),
     "router": Role(
         name="router",
         prompt_file="router.md",
         schema=NextStep,
         title_ru="Маршрутизация",
+        purpose="что делать дальше",
     ),
 }
 

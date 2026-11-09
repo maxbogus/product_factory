@@ -68,7 +68,7 @@
 | T-11 | 3 | Данные: отток, ARPU, тарифы конкурентов, переносы номеров, один PDF | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_demo_data.py -q` |
 | T-12 | 4 | `pf review`: пересмотр выводов по изменившимся хешам данных | 3 | 4.8 | ✅ | T-09 | `uv run pytest tests/test_review.py -q` |
 | T-13 | 4 | Шаг интервью и модельных респондентов с маркировкой синтетики · отложена: синтетика не доказывает спрос; 5 SP| 5 | 1.4 | ⏸ | T-07 | `uv run pytest tests/test_interviews.py -q` |
-| T-14a | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой; карточка — `docs/tasks/T-14.md` | 1 | 5.0 | ⬜ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation_in_verdict -q` |
+| T-14a | 1 | `expected` в eval-наборе участвует в вердикте, а не лежит колонкой; карточка — `docs/tasks/T-14.md` | 1 | 5.0 | ✅ | T-02 | `uv run pytest tests/test_eval_cases.py -k expectation_in_verdict -q` |
 | T-14b | 2 | Переразметка кейсов: у каждого `expected` — проверяемая подстрока ответа · отложена: бухгалтерия замера; содержательное — T-14a| 2 | 2.7 | ⏸ | T-14a | `uv run pytest tests/test_eval_cases.py -k expectations_labeled -q` |
 | T-15 | 1 | Строка таблицы подтверждает только свой показатель: сверка показателя и словоформ, а не одного числа | 2 | 8.1 | ✅ | — | `uv run pytest tests/test_sources.py -k indicator -q` |
 | T-16 | 2 | Контекст модели не вытесняется таблицей: не больше двух абзацев от источника, остальное — корпус | 2 | 6.4 | ✅ | — | `uv run pytest tests/test_retrieval.py -k context -q` |
@@ -116,7 +116,7 @@
 | T-67 | 1 | Имена субъектов и доменные термины — данные (`knowledge/domain/`), а не код: гейт «ни одного имени в `src/`» | 3 | 9.0 | ✅ | — | `uv run pytest tests/test_no_entity_names.py -k entity_names -q` |
 | T-68 | 3 | Второй демо-проект на незнакомом домене: переносимость доказана, а не обещана | 3 | 8.0 | ✅ | T-67 | `uv run pytest tests/test_portability.py -k second_project -q` |
 | T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ✅ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
-| T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
+| T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ✅ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
 | T-71 | 2 | Дедуп и группировка отказов в документе демонстрации: `_group_repeats` вместо плоского списка; группировка по виду причины, а не по тексту | 2 | 1.8 | ⬜ | T-59 | `uv run pytest tests/test_demo_doc_generated.py -k rejection_grouping -q` |
 | T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ⬜ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |
 <!-- tasks:end -->

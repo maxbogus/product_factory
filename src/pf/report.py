@@ -497,12 +497,14 @@ class SessionReport:
 
         lines.append("## Расход")
         lines.append("")
-        lines.append("| Роль | Расход, усл. ед. | Токенов |")
-        lines.append("|---|---:|---:|")
+        lines.append("| Роль | Что даёт | Расход, усл. ед. | Токенов |")
+        lines.append("|---|---|---:|---:|")
         for role, cost in sorted(self.cost_by_role.items(), key=lambda item: -item[1]):
-            lines.append(f"| {role} | {cost:.6f} | {self.tokens.get(role, 0)} |")
-        lines.append(f"| **Итого** | **{self.total_cost_units:.6f}** | |")
+            title, purpose = _role_justification(role)
+            lines.append(f"| {title} | {purpose} | {cost:.6f} | {self.tokens.get(role, 0)} |")
+        lines.append(f"| **Итого** | | **{self.total_cost_units:.6f}** | |")
         lines.append("")
+        lines.extend(_multi_agent_boundary())
 
         if self.lexical:
             lines.append("**Лексическое покрытие.**")
@@ -943,6 +945,46 @@ def _times(count: int) -> str:
     if count % 10 in (2, 3, 4):
         return f"{count} раза"
     return f"{count} раз"
+
+
+def _role_justification(role: str) -> tuple[str, str]:
+    """Название роли и её вклад — рядом со стоимостью.
+
+    Стоимость шага без описания вклада не отвечает на вопрос, оправдан ли
+    расход: ``strategy | 0.002000`` говорит, сколько заплатили, но не за
+    что. Незнакомая роль из унаследованного журнала остаётся под своим
+    идентификатором — терять строку расхода из-за имени нельзя.
+
+    Args:
+        role: Идентификатор роли из журнала.
+
+    Returns:
+        Пара «название — что даёт».
+    """
+    from pf.roles import ROLES
+
+    known = ROLES.get(role)
+    if known is None:
+        return role, "роль не описана"
+    return known.title_ru, known.purpose
+
+
+def _multi_agent_boundary() -> list[str]:
+    """Раздел «Где multi-agent не нужен»: честная граница конвейера.
+
+    Returns:
+        Строки раздела.
+    """
+    return [
+        "## Где multi-agent не нужен",
+        "",
+        "Конвейер из ролей оправдан, когда задача распадается на стадии с "
+        "разной проверкой: факт подтверждается источником, противоречие — "
+        "осями, стратегия — основаниями. Если вопрос решается в один проход "
+        "и не требует оснований, одной модели достаточно: каждая лишняя роль "
+        "добавляет вызов, расход и точку отказа, а не качество.",
+        "",
+    ]
 
 
 def _collection_markdown(report: SessionReport) -> list[str]:

@@ -931,3 +931,53 @@ def test_report_names_contradiction_axes(tmp_path: Path, monkeypatch: pytest.Mon
     assert "## Противоречия источников" in text
     assert "ось" in text.lower()
     assert "направление" in text.lower()
+
+
+def test_component_justification(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Рядом со стоимостью — что даёт роль, а не только её имя.
+
+    Читатель видел расход по ролям и не мог понять, оправдан ли он:
+    `strategy | 0.002000 | 400` не отвечает на вопрос, зачем эта роль
+    нужна. Отчёт обязан назвать вклад каждой роли и честно сказать, где
+    конвейер из нескольких ролей не нужен.
+
+    Args:
+        tmp_path: Временный каталог журналов.
+        monkeypatch: Подмена каталога журналов.
+    """
+    analyst = StepRecord(
+        ordinal=1,
+        role="analyst",
+        phase="analyzing",
+        summary="факты",
+        cost_units=0.001,
+        prompt_tokens=300,
+        completion_tokens=100,
+    )
+    strategy = StepRecord(
+        ordinal=2,
+        role="strategy",
+        phase="strategy",
+        summary="стратегия",
+        cost_units=0.002,
+        prompt_tokens=200,
+        completion_tokens=200,
+    )
+    _session(tmp_path, monkeypatch, [analyst, strategy])
+
+    text = build_session_report("session-conclusion").as_markdown()
+
+    assert "## Расход" in text
+    section = text[text.index("## Расход") :]
+
+    # «что даёт» стоит в той же строке, что и стоимость роли
+    analyst_row = next(line for line in section.splitlines() if "Разбор источников" in line)
+    assert "что известно, что предположено" in analyst_row
+    assert "0.001000" in analyst_row
+
+    strategy_row = next(line for line in section.splitlines() if "Разработка стратегии" in line)
+    assert "что делаем и как это проверим" in strategy_row
+    assert "0.002000" in strategy_row
+
+    # граница честности: где конвейер из ролей не нужен
+    assert "## Где multi-agent не нужен" in text
