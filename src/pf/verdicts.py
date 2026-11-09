@@ -36,6 +36,12 @@ INDICATOR_DEMOTION = "indicator-demotion"
 CALC_LINE_DEMOTION = "calc-line-demotion"
 UNIQUE_GROUNDS = "unique-grounds"
 
+#: Прочтение аббревиатуры не установлено: основание не подтверждает и не
+#: опровергает, решает человек (`D-51`).
+ENTITY_AMBIGUOUS = "entity-ambiguous"
+#: Прочтения утверждения и источника не пересеклись: другая сущность.
+ENTITY_MISMATCH = "entity-mismatch"
+
 #: Виды, которыми проверка **подтверждает** основание. Они не отказы, и
 #: подписи «что чинить» у них нет: чинить нечего.
 CONFIRMING_KINDS: frozenset[str] = frozenset({"exact", "number_tolerance"})
@@ -66,6 +72,11 @@ KINDS: dict[str, Kind] = {
     "paraphrase": Kind("пересказ вместо цитаты", FIX_CHECK),
     "fabrication": Kind("цитата не найдена", FIX_PROMPT),
     "number_mismatch": Kind("значение не сошлось с источником", FIX_CHECK),
+    # Прочтения аббревиатуры (`pf.entities`): «МТС» — не одна сущность, а
+    # пучок прочтений. Чинит промпт: неоднозначную аббревиатуру надо называть
+    # со страной, иначе основание остаётся неподтверждённым (`D-51`).
+    ENTITY_AMBIGUOUS: Kind("прочтение не установлено", FIX_PROMPT),
+    ENTITY_MISMATCH: Kind("в источнике другая сущность", FIX_PROMPT),
     "language": Kind("ответ не на языке задачи", FIX_PROMPT),
     # Ссылка не годится как основание (`sources.ABSENCE_KINDS`).
     "source_not_named": Kind("фантомный источник", FIX_SCHEMA),

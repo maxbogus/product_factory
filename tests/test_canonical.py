@@ -19,9 +19,32 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from pf.canonical import canonicalize, column_semantics, parse_fields, score
 from pf.config import settings
 from pf.ground import SupportStatus, find_quote, verify_claim, verify_quote_as_external
+
+#: Корень репозитория: замеры ниже читают поставляемое хранилище знаний.
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture
+def shipped_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Смотреть на поставляемое хранилище знаний, а не на `tmp_path`.
+
+    Набор тестов уводит ``knowledge_dir`` во временный каталог (`D-29`). Замеры
+    порога и набора пар — про поведение в поставке, где страница значений «МТС»
+    лежит в ``knowledge/raw/2026-11-09/``. Без этого замер мерил бы
+    конфигурацию, которой нет: проверку без перечня прочтений.
+
+    Args:
+        monkeypatch: Подмена настроек.
+    """
+    monkeypatch.setattr(settings, "knowledge_dir", ROOT / "knowledge")
+
 
 #: Строка МТС: аббревиатура короче четырёх букв — её нет в мешке слов.
 ROW_MTS = (
@@ -221,44 +244,64 @@ def test_fields_external_keeps_status() -> None:
     assert support.status is SupportStatus.NEEDS_REVIEW
 
 
-def test_fields_threshold_is_frozen_by_measurement() -> None:
+def test_fields_threshold_is_frozen_by_measurement(shipped_knowledge: None) -> None:
     """Порог из настройки лежит между кластерами набора — и это проверяется.
 
     Порог не «поставлен на глаз»: он заморожен по замеру (`make
     tune-threshold`) и обязан отделять подмены от честных подтверждений.
     Поменяли веса полей или правило — полоса поехала, тест красный, порог
     надо перезамерить. Иначе подобранное число тихо переживёт свой замер.
+
+    Статус считается тем же правилом, что у прогона (`pf.ground.field_verdict`):
+    иначе замер мерил бы степень поддержки, а поставлял бы статус.
     """
+    from pf.ground import field_verdict
     from pf.semantic_bench import load_pairs, source_passage
 
     threshold = settings.claim_support_threshold
+    pairs = load_pairs()
     supports: dict[str, float] = {}
-    for pair in load_pairs():
+    statuses: dict[str, SupportStatus] = {}
+    for pair in pairs:
         passage = source_passage(pair.source_id, pair.paragraph)
         assert passage is not None, pair.pair_id
-        supports[pair.pair_id] = score(pair.claim, passage).support
+        result = score(pair.claim, passage)
+        supports[pair.pair_id] = result.support
+        statuses[pair.pair_id] = field_verdict(result, threshold)[0]
 
-    pairs = load_pairs()
     top_substitution = max(
         supports[pair.pair_id] for pair in pairs if pair.label.value == "out_of_place"
     )
     weakest_honest = min(
         supports[pair.pair_id]
         for pair in pairs
-        if pair.label.value == "in_place" and supports[pair.pair_id] >= threshold
+        if pair.label.value == "in_place" and statuses[pair.pair_id] is SupportStatus.CONFIRMED
     )
 
     assert top_substitution < threshold
     assert threshold <= weakest_honest
+    assert not [
+        pair.pair_id
+        for pair in pairs
+        if pair.label.value == "out_of_place" and statuses[pair.pair_id] is SupportStatus.CONFIRMED
+    ], "подмена подтверждена"
 
 
-def test_fields_pair_set_confirms_paraphrase_and_catches_substitution() -> None:
+def test_fields_pair_set_confirms_paraphrase_and_catches_substitution(
+    shipped_knowledge: None,
+) -> None:
     """Набор из 60 пар: пересказ подтверждается, подмена периода — нет.
 
     Числа заморожены по замеру (`D-39`): до слоя полей подтверждалось 6
     честных пар из 30 и утекала 1 подмена из 30. Тест держит полноту и утечку
     одновременно: порогом в одиночку одно достигается вырождением другого.
+
+    Замер переснят при появлении прочтений (`D-51`): 25 честных из 30, а не 29.
+    Четыре утверждения называют «МТС» без страны, а источник называет
+    прочтение — они перешли в «требует проверки», и это не регресс, а цена
+    честности: раньше такие основания подтверждались чужой строкой.
     """
+    from pf.ground import field_verdict
     from pf.semantic_bench import load_pairs, source_passage
 
     threshold = settings.claim_support_threshold
@@ -268,9 +311,9 @@ def test_fields_pair_set_confirms_paraphrase_and_catches_substitution() -> None:
         passage = source_passage(pair.source_id, pair.paragraph)
         assert passage is not None, pair.pair_id
         totals[pair.label.value] += 1
-        if score(pair.claim, passage).support >= threshold:
+        if field_verdict(score(pair.claim, passage), threshold)[0] is SupportStatus.CONFIRMED:
             confirmed[pair.label.value] += 1
 
-    assert confirmed["in_place"] >= 27, confirmed
-    assert confirmed["out_of_place"] <= 2, confirmed
+    assert confirmed["in_place"] >= 25, confirmed
+    assert confirmed["out_of_place"] == 0, confirmed
     assert totals == {"in_place": 30, "out_of_place": 30}

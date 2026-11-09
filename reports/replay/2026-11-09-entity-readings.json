@@ -1,0 +1,3581 @@
+{
+  "generated_at": "2026-11-09T09:38:05+00:00",
+  "commit": "c0bb466",
+  "settings": {
+    "claim_min_overlap": 0.8,
+    "metric_abs_tolerance": 0.1,
+    "metric_rel_tolerance": 0.0005
+  },
+  "sessions": {
+    "demo-v7": {
+      "session_id": "demo-v7",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 10,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 8,
+          "rejected": 5,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 13,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 8,
+          "rejected": 5,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 13,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 0,
+          "rejected": 11,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 11,
+          "conclusion_status": "неподкреплено"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 7,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 7,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "нет данных": 28,
+        "причина: фантомный источник": 14,
+        "подтверждено": 16,
+        "причина: цитата не найдена в строке": 12,
+        "причина: основание про другой показатель": 2
+      },
+      "verdicts": [
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Ключевая ставка в России продолжает расти, что может повлиять на стоимость кредитов и, соответственно, на удержание мобильного тарифа.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row6",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "collector",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row7",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Ключевая ставка в России продолжает расти, что может повлиять на стоимость кредитов и, соответственно, на удержание мобильного тарифа.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row6",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "analyst",
+          "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+          "source_id": "project/data/telecom_open_metrics.csv#row7",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row6",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Ввести гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row7",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "strategy",
+          "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row6",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-v7",
+          "role": "keeper",
+          "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row7",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 1,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 1
+            },
+            "status": "неподкреплено"
+          },
+          "keeper": {
+            "notes": 1,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "foreign_indicator": 1,
+          "number_mismatch": 1
+        }
+      }
+    },
+    "demo-v9": {
+      "session_id": "demo-v9",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 9,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 2,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 2,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 0,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "неподкреплено"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 4,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "нет данных": 16,
+        "причина: основание про другой показатель": 12,
+        "подтверждено": 4,
+        "причина: значение не сошлось с источником": 4
+      },
+      "verdicts": [
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Абонентская база МТС в России не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "collector",
+          "claim": "Удержание пользователей (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Абонентская база МТС в России не изменилась за период.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "analyst",
+          "claim": "Удержание пользователей (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "strategy",
+          "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-v9",
+          "role": "keeper",
+          "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 1,
+            "kinds": {
+              "foreign_indicator": 1,
+              "no_calculation": 1
+            },
+            "status": "неподкреплено"
+          },
+          "keeper": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "no_calculation": 2
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 1,
+        "kinds": {
+          "foreign_indicator": 1,
+          "no_calculation": 3
+        }
+      }
+    },
+    "demo-final": {
+      "session_id": "demo-final",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 9,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 8,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 8,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 2,
+          "rejected": 8,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": "неподкреплено"
+        },
+        "keeper": {
+          "confirmed": 2,
+          "rejected": 8,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "подтверждено": 20,
+        "нет данных": 20,
+        "причина: значение не сошлось с источником": 2,
+        "причина: основание про другой показатель": 10,
+        "причина: цитата не найдена в строке": 8
+      },
+      "verdicts": [
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "МТС имеет абонентскую базу в России, которая составляет 82 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Tele2 имеет абонентскую базу, которая составляет 38,9 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Виртуальные операторы имеют абонентскую базу, которая составляет 6 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Консолидированная абонентская база МТС составляет 87 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России в периоде не изменялась и составляла 78,85%.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Абонентская база МТС (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "значение 82 млн не совпадает со строкой 0 источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Абонентская база Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Абонентская база Виртуальных операторов",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Консолидированная абонентская база МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "collector",
+          "claim": "Ключевая ставка Банка России",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "имя показателя не совпало с колонкой строки: в строке показатель «абонентская база (консолидированная)», а метрика говорит о другом",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "МТС имеет абонентскую базу в России, которая составляет 82 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Tele2 имеет абонентскую базу, которая составляет 38,9 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Виртуальные операторы имеют абонентскую базу, которая составляет 6 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Консолидированная абонентская база МТС составляет 87 млн пользователей.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "значение из расчёта найдено в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России в периоде не изменялась и составляла 78,85%.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Абонентская база МТС (в России)",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "значение 82 млн не совпадает со строкой 0 источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Абонентская база Виртуальных операторов",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Консолидированная абонентская база МТС",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "имя показателя не совпало с колонкой строки: в строке показатель «абонентская база (консолидированная)», а метрика говорит о другом",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "цитата найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "цитата найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "strategy",
+          "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "цитата найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "confirmed",
+          "detail": "цитата найдена в строке таблицы",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "demo-final",
+          "role": "keeper",
+          "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "no_data",
+          "detail": "цитата не найдена в строке таблицы",
+          "kind": ""
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 1,
+              "no_calculation": 1
+            },
+            "status": "неподкреплено"
+          },
+          "keeper": {
+            "notes": 5,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 1,
+              "no_calculation": 1,
+              "number_mismatch": 3
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "foreign_indicator": 2,
+          "no_calculation": 2,
+          "number_mismatch": 3
+        }
+      }
+    },
+    "cloud-deepseek-1": {
+      "session_id": "cloud-deepseek-1",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 12,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 4,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 4,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 8,
+          "rejected": 2,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 4,
+          "rejected": 1,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 5,
+          "conclusion_status": "подкреплено частично"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 5,
+          "claims": 5,
+          "conclusion_status": "опирается на ввод пользователя"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "подтверждено": 16,
+        "нет данных": 3,
+        "причина: значение не сошлось с источником": 2,
+        "причина: цитата не найдена": 1,
+        "опора на ввод пользователя": 5
+      },
+      "verdicts": [
+        {
+          "session": "cloud-deepseek-1",
+          "role": "collector",
+          "claim": "По открытым данным абонентская база Tele2 растёт: на конец июля 38,9 млн абонентов, +12,1 % к прошлому году. То есть как минимум у одного оператора база привлечения растёт, и «рост базы» сам по себе ещё не означает рост удержания — уровень удержания из этого числа не выводится.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "collector",
+          "claim": "В отобранном абзаце зафиксировано проникновение сотовой связи более 130 % при 11,923 млн абонентов на 1 января 2026 года — рынок насыщен, прирост возможен преимущественно не за счёт новых абонентов, а за счёт удержания существующих. Страна в абзаце не названа, поэтому опора только на сам факт насыщения.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "collector",
+          "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "collector",
+          "claim": "Абонентская база МТС (консолидированная)",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена по материалу",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2 на конец июля — 38,9 млн абонентов, +12,1 % к прошлому году: рост базы привлечения сам по себе не говорит об уровне удержания.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "На 1 января 2026 года в стране 11,923 млн абонентов сотовой связи при проникновении более 130 % — рынок насыщен (страна в абзаце не названа).",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "В отобранной строке по МТС (Беларусь) указана абонентская база 5,7 за 2026 год — это другая страна и другой ряд, к удержанию в рассматриваемом тарифе не относится.",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, изменение за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, среднее за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 71.5235, а заявлено 78.33 процентов",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, медиана за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "no_data",
+          "detail": "пересчёт по входам даёт 54, а заявлено 77.56 процентов",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Ключевая ставка Банка России, размах за январь-март 2026",
+          "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Абонентская база Tele2",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Рост абонентской базы Tele2 год к году",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика пересчитана по строке источника",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "analyst",
+          "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "strategy",
+          "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+          "source_id": "project/data/telecom_open_metrics.csv",
+          "status": "no_data",
+          "detail": "цитата не найдена в источнике дословно",
+          "kind": "fabrication"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "strategy",
+          "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "strategy",
+          "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+          "source_id": "project/data/telecom_open_metrics.json",
+          "status": "confirmed",
+          "detail": "цитата найдена в источнике",
+          "kind": "exact"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "keeper",
+          "claim": "До старта пилота письменно зафиксировать определение метрики удержания (горизонты 30 и 90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "keeper",
+          "claim": "В сценарии на выходе запрещены ценовые уступки: разбор причины и решение только в рамках уже оплаченного тарифа.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "keeper",
+          "claim": "Вести сбор причин ухода по закрытому списку (цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое) со счётчиком по каждой причине.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "keeper",
+          "claim": "Не менять наполнение и правила списания для всей базы и не задействовать массовые каналы (SMS/пуш) в ходе пилота.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        },
+        {
+          "session": "cloud-deepseek-1",
+          "role": "keeper",
+          "claim": "Оценивать эффект по удержанию когорты подавших заявку через 90 дней против исторической контрольной базы; при отсутствии роста сценарий не расширять и не усиливать скидками.",
+          "source_id": "Ответ человека",
+          "status": "needs_review",
+          "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+          "kind": "user_input"
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "number_mismatch": 1,
+              "no_calculation": 1
+            },
+            "status": "подкреплено частично"
+          },
+          "keeper": {
+            "notes": 2,
+            "unsupported": 0,
+            "kinds": {
+              "no_calculation": 2
+            },
+            "status": "опирается на ввод пользователя"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "number_mismatch": 1,
+          "no_calculation": 3
+        }
+      }
+    },
+    "smoke-lexicon": {
+      "session_id": "smoke-lexicon",
+      "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+      "sources": 8,
+      "roles": {
+        "intake": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "planner": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "router": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "collector": {
+          "confirmed": 4,
+          "rejected": 6,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "analyst": {
+          "confirmed": 4,
+          "rejected": 6,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 10,
+          "conclusion_status": ""
+        },
+        "options": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "redteam": {
+          "confirmed": 0,
+          "rejected": 0,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 0,
+          "conclusion_status": ""
+        },
+        "strategy": {
+          "confirmed": 0,
+          "rejected": 4,
+          "needs_review": 2,
+          "user_input": 0,
+          "claims": 6,
+          "conclusion_status": "ждёт проверки"
+        },
+        "keeper": {
+          "confirmed": 0,
+          "rejected": 5,
+          "needs_review": 0,
+          "user_input": 0,
+          "claims": 5,
+          "conclusion_status": "неподкреплено"
+        }
+      },
+      "skipped": [],
+      "kinds": {
+        "нет данных": 21,
+        "причина: фантомный источник": 13,
+        "подтверждено": 8,
+        "причина: основание про другой показатель": 8,
+        "требует проверки": 2
+      },
+      "verdicts": [
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Удержание клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "collector",
+          "claim": "Удержание клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Ключевая ставка",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Удержание клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "analyst",
+          "claim": "Удержание клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "confirmed",
+          "detail": "метрика подтверждена пересчётом по заявленным входам",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Адаптация тарифов и улучшение сервиса",
+          "source_id": "project/data/telecom_open_metrics.csv#row0",
+          "status": "needs_review",
+          "detail": "значение посчитано, а не процитировано — оформи как метрику в metrics: с формулой и входами",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Адаптация тарифов и улучшение сервиса",
+          "source_id": "project/data/telecom_open_metrics.csv#row1",
+          "status": "needs_review",
+          "detail": "значение посчитано, а не процитировано — оформи как метрику в metrics: с формулой и входами",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Адаптация тарифов и улучшение сервиса",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Адаптация тарифов и улучшение сервиса",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Мы адаптируем тарифы и улучшим сервис для повышения удержания клиентов в рамках бюджета и сроков.",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "strategy",
+          "claim": "Мы адаптируем тарифы и улучшим сервис для повышения удержания клиентов в рамках бюджета и сроков.",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "keeper",
+          "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row3",
+          "status": "no_data",
+          "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "keeper",
+          "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+          "source_id": "project/data/telecom_open_metrics.csv#row5",
+          "status": "no_data",
+          "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+          "kind": ""
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "keeper",
+          "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+          "source_id": "project/data/central_bank_rates.csv#row0",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "keeper",
+          "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+          "source_id": "project/data/central_bank_rates.csv#row1",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        },
+        {
+          "session": "smoke-lexicon",
+          "role": "keeper",
+          "claim": "Улучшение сервиса и адаптация тарифов в рамках бюджета",
+          "source_id": "strategy/product/value_to_cost",
+          "status": "no_data",
+          "detail": "источник не найден среди материалов",
+          "kind": "source_unknown"
+        }
+      ],
+      "plan_numbers": {
+        "roles": {
+          "strategy": {
+            "notes": 1,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 1
+            },
+            "status": "ждёт проверки"
+          },
+          "keeper": {
+            "notes": 1,
+            "unsupported": 0,
+            "kinds": {
+              "foreign_indicator": 1
+            },
+            "status": "неподкреплено"
+          }
+        },
+        "unsupported": 0,
+        "kinds": {
+          "foreign_indicator": 2
+        }
+      }
+    }
+  },
+  "totals": {
+    "подтверждено": 64,
+    "опора на ввод пользователя": 5,
+    "нерелевантный источник": 0,
+    "нет данных": 88,
+    "требует проверки": 2,
+    "всего оснований": 159,
+    "величин-фактов без расчёта": 1
+  },
+  "roles": {
+    "analyst": {
+      "подтверждено": 30,
+      "отклонено": 19,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 49
+    },
+    "collector": {
+      "подтверждено": 26,
+      "отклонено": 17,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 43
+    },
+    "intake": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "keeper": {
+      "подтверждено": 2,
+      "отклонено": 24,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 5,
+      "оснований": 31
+    },
+    "options": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "planner": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "redteam": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "router": {
+      "подтверждено": 0,
+      "отклонено": 0,
+      "требует проверки": 0,
+      "опора на ввод пользователя": 0,
+      "оснований": 0
+    },
+    "strategy": {
+      "подтверждено": 6,
+      "отклонено": 28,
+      "требует проверки": 2,
+      "опора на ввод пользователя": 0,
+      "оснований": 36
+    }
+  },
+  "probes": [
+    {
+      "id": "rounded-number",
+      "title": "округление числа: 77,3 против 77,26",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "synonym",
+      "title": "словоформа: «клиентов» против «абонентов»",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "mixed-script",
+      "title": "смешанная раскладка: абонентoв с латинской o",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "brand-substitution",
+      "title": "подмена бренда: МТС вместо МегаФона",
+      "expected": "no_data",
+      "actual": "no_data",
+      "passed": true
+    },
+    {
+      "id": "row-paraphrase",
+      "title": "пересказ строки таблицы: цитата без меток колонок",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "short-quote",
+      "title": "короткая цитата: «38,9» при верном числе",
+      "expected": "confirmed",
+      "actual": "confirmed",
+      "passed": true
+    },
+    {
+      "id": "foreign-page",
+      "title": "русская цитата на английской странице",
+      "expected": "needs_review",
+      "actual": "needs_review",
+      "passed": true
+    },
+    {
+      "id": "added-negation",
+      "title": "добавленное отрицание: «не обслуживает»",
+      "expected": "no_data",
+      "actual": "no_data",
+      "passed": true
+    }
+  ],
+  "verdicts": [
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Ключевая ставка в России продолжает расти, что может повлиять на стоимость кредитов и, соответственно, на удержание мобильного тарифа.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row6",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "collector",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row7",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Ключевая ставка в России увеличилась с 7,00% до 8,00% за период.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Ключевая ставка в России продолжает расти, что может повлиять на стоимость кредитов и, соответственно, на удержание мобильного тарифа.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы МТС и Tele2 не изменились за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row6",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "analyst",
+      "claim": "Открытые метрики абонентской базы операторов связи, Виртуальные операторы",
+      "source_id": "project/data/telecom_open_metrics.csv#row7",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row6",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Ввести гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row7",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "strategy",
+      "claim": "Мы вводим гибкий тариф с возможностью персонализации, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row6",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v7",
+      "role": "keeper",
+      "claim": "Ввести гибкий тариф с возможностью персонализации для улучшения соответствия потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row7",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Абонентская база МТС в России не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "collector",
+      "claim": "Удержание пользователей (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей мобильного тарифа снизилось, что требует анализа причин.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Консолидированная абонентская база МТС не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Абонентская база МТС в России не изменилась за период.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей может быть связано с конкурентами, так как данные о снижении удержания не приведены.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 87 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "analyst",
+      "claim": "Удержание пользователей (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 0, а заявлено 82 тыс.",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "strategy",
+      "claim": "Мы вводим гибкие тарифы, чтобы лучше соответствовать потребностям клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-v9",
+      "role": "keeper",
+      "claim": "Внедрить гибкий тариф с возможностью персонализации для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "МТС имеет абонентскую базу в России, которая составляет 82 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Tele2 имеет абонентскую базу, которая составляет 38,9 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Виртуальные операторы имеют абонентскую базу, которая составляет 6 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Консолидированная абонентская база МТС составляет 87 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России в периоде не изменялась и составляла 78,85%.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Абонентская база МТС (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "значение 82 млн не совпадает со строкой 0 источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Абонентская база Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Абонентская база Виртуальных операторов",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Консолидированная абонентская база МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "collector",
+      "claim": "Ключевая ставка Банка России",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "имя показателя не совпало с колонкой строки: в строке показатель «абонентская база (консолидированная)», а метрика говорит о другом",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "МТС имеет абонентскую базу в России, которая составляет 82 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Tele2 имеет абонентскую базу, которая составляет 38,9 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Виртуальные операторы имеют абонентскую базу, которая составляет 6 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Консолидированная абонентская база МТС составляет 87 млн пользователей.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "значение из расчёта найдено в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России в периоде не изменялась и составляла 78,85%.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Открытые метрики абонентской базы операторов связи (МТС, абонентская база в России): среднее»",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Абонентская база МТС (в России)",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "значение 82 млн не совпадает со строкой 0 источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Абонентская база Виртуальных операторов",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Консолидированная абонентская база МТС",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "имя показателя не совпало с колонкой строки: в строке показатель «абонентская база (консолидированная)», а метрика говорит о другом",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "цитата найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Внедрить гибкие тарифы и персонализированные условия подписки",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "цитата найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "strategy",
+      "claim": "Мы понимаем, что текущие условия могут не соответствовать вашим ожиданиям. Мы работаем над созданием более гибких и персонализированных решений, чтобы лучше соответствовать вашим потребностям.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "цитата найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Внедрение гибких тарифов и персонализированных условий подписки направлено на повышение удержания и снижение текучести кадров.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "confirmed",
+      "detail": "цитата найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база (консолидированная)», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "demo-final",
+      "role": "keeper",
+      "claim": "Коммуникация направлена на улучшение взаимодействия с клиентами и информирование о новых условиях.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "no_data",
+      "detail": "цитата не найдена в строке таблицы",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "collector",
+      "claim": "По открытым данным абонентская база Tele2 растёт: на конец июля 38,9 млн абонентов, +12,1 % к прошлому году. То есть как минимум у одного оператора база привлечения растёт, и «рост базы» сам по себе ещё не означает рост удержания — уровень удержания из этого числа не выводится.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "collector",
+      "claim": "В отобранном абзаце зафиксировано проникновение сотовой связи более 130 % при 11,923 млн абонентов на 1 января 2026 года — рынок насыщен, прирост возможен преимущественно не за счёт новых абонентов, а за счёт удержания существующих. Страна в абзаце не названа, поэтому опора только на сам факт насыщения.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "collector",
+      "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "collector",
+      "claim": "Абонентская база МТС (консолидированная)",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена по материалу",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2 на конец июля — 38,9 млн абонентов, +12,1 % к прошлому году: рост базы привлечения сам по себе не говорит об уровне удержания.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "На 1 января 2026 года в стране 11,923 млн абонентов сотовой связи при проникновении более 130 % — рынок насыщен (страна в абзаце не названа).",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "В отобранной строке по МТС (Беларусь) указана абонентская база 5,7 за 2026 год — это другая страна и другой ряд, к удержанию в рассматриваемом тарифе не относится.",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, изменение за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, среднее за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 71.5235, а заявлено 78.33 процентов",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, медиана за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "no_data",
+      "detail": "пересчёт по входам даёт 54, а заявлено 77.56 процентов",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Ключевая ставка Банка России, размах за январь-март 2026",
+      "source_id": "project/data/cbr_key_rate_2026_q1.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Абонентская база Tele2",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Рост абонентской базы Tele2 год к году",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика пересчитана по строке источника",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "analyst",
+      "claim": "Изменение абонентской базы МТС (консолидированная) за период",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «ARPU операторов связи, рублей на абонента в месяц (ВымпелКом, ARPU мобильной связи, рублей на абонента в месяц): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "strategy",
+      "claim": "Работать только в наблюдаемой точке выхода и только разговором. В потоке заявки на расторжение вводится короткий сценарий: сначала зафиксировать причину ухода (закрытый список причин: цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое), затем — попытка решить названную причину тем, что уже входит в текущий тариф: настроить неиспользуемые возможности, восстановить ошибочно отключённую опцию, исправить некорректное списание. Цена не меняется, наполнение тарифа не расширяется, новых выгод не выдаётся. Параллельно — обязательный нулевой шаг: владелец тарифа фиксирует определение метрики (горизонт 30/90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период; без этой базы пилот не запускается, потому что его нечем будет оценить.",
+      "source_id": "project/data/telecom_open_metrics.csv",
+      "status": "no_data",
+      "detail": "цитата не найдена в источнике дословно",
+      "kind": "fabrication"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "strategy",
+      "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "strategy",
+      "claim": "Мы не будем удерживать вас ценой: назовите причину ухода — мы разберём её и попробуем решить тем, что уже входит в ваш тариф, без повышения абонентской платы и без скидки в последний момент.",
+      "source_id": "project/data/telecom_open_metrics.json",
+      "status": "confirmed",
+      "detail": "цитата найдена в источнике",
+      "kind": "exact"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "keeper",
+      "claim": "До старта пилота письменно зафиксировать определение метрики удержания (горизонты 30 и 90 дней, база — активные абоненты) и базовую линию по историческим заявкам на расторжение за сопоставимый период.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "keeper",
+      "claim": "В сценарии на выходе запрещены ценовые уступки: разбор причины и решение только в рамках уже оплаченного тарифа.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "keeper",
+      "claim": "Вести сбор причин ухода по закрытому списку (цена, покрытие/качество, наполнение не нужно, ошибка/списание, переезд, уход к другому оператору, другое) со счётчиком по каждой причине.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "keeper",
+      "claim": "Не менять наполнение и правила списания для всей базы и не задействовать массовые каналы (SMS/пуш) в ходе пилота.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "cloud-deepseek-1",
+      "role": "keeper",
+      "claim": "Оценивать эффект по удержанию когорты подавших заявку через 90 дней против исторической контрольной базы; при отсутствии роста сценарий не расширять и не усиливать скидками.",
+      "source_id": "Ответ человека",
+      "status": "needs_review",
+      "detail": "ввод пользователя (стадия не записана — единственный ввод в сессии): слова подтверждены записью; верить этим словам или нет — решение пользователя",
+      "kind": "user_input"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Удержание клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "collector",
+      "claim": "Удержание клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Ключевая ставка увеличилась на 1.5% за период, что может повлиять на стоимость кредитов и, соответственно, на удержание клиентов.",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Удержание клиентов снизилось на 1.2% за период, что указывает на ухудшение показателя.",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "агрегат совпал с расчётом агента: значение пересчитано по входам метрики «Переносы абонентских номеров (MNP) в России (Россия (ЦНИИС), заявки на перенос номера за 8 месяцев, млн): изменение за период»",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Конкуренция со стороны других операторов и виртуальных операторов может влиять на удержание клиентов.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row0 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Ключевая ставка",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник project/data/central_bank_rates.csv#row1 не найден среди материалов",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Удержание клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "analyst",
+      "claim": "Удержание клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "confirmed",
+      "detail": "метрика подтверждена пересчётом по заявленным входам",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Адаптация тарифов и улучшение сервиса",
+      "source_id": "project/data/telecom_open_metrics.csv#row0",
+      "status": "needs_review",
+      "detail": "значение посчитано, а не процитировано — оформи как метрику в metrics: с формулой и входами",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Адаптация тарифов и улучшение сервиса",
+      "source_id": "project/data/telecom_open_metrics.csv#row1",
+      "status": "needs_review",
+      "detail": "значение посчитано, а не процитировано — оформи как метрику в metrics: с формулой и входами",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Адаптация тарифов и улучшение сервиса",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Адаптация тарифов и улучшение сервиса",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Мы адаптируем тарифы и улучшим сервис для повышения удержания клиентов в рамках бюджета и сроков.",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "strategy",
+      "claim": "Мы адаптируем тарифы и улучшим сервис для повышения удержания клиентов в рамках бюджета и сроков.",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "keeper",
+      "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row3",
+      "status": "no_data",
+      "detail": "в строке показатель «абонентская база», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "keeper",
+      "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+      "source_id": "project/data/telecom_open_metrics.csv#row5",
+      "status": "no_data",
+      "detail": "в строке показатель «численность абонентов в России», а утверждение говорит о другом: число в строке есть, но подтверждает оно другой показатель",
+      "kind": ""
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "keeper",
+      "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+      "source_id": "project/data/central_bank_rates.csv#row0",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "keeper",
+      "claim": "Адаптация тарифов и улучшение сервиса для повышения удержания клиентов",
+      "source_id": "project/data/central_bank_rates.csv#row1",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    },
+    {
+      "session": "smoke-lexicon",
+      "role": "keeper",
+      "claim": "Улучшение сервиса и адаптация тарифов в рамках бюджета",
+      "source_id": "strategy/product/value_to_cost",
+      "status": "no_data",
+      "detail": "источник не найден среди материалов",
+      "kind": "source_unknown"
+    }
+  ]
+}

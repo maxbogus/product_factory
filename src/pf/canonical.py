@@ -38,6 +38,8 @@ from dataclasses import dataclass
 
 from pf.analysis import parse_number
 from pf.config import settings
+from pf.entities import KIND_AMBIGUOUS, KIND_MISMATCH, Identity
+from pf.entities import identity as entity_identity
 from pf.lexical import (
     GENERIC_WORDS,
     has_negation,
@@ -83,6 +85,10 @@ FIELD_ORDER: tuple[str, ...] = (
     "термин",
     "отрицание",
 )
+
+#: Нижняя граница доли поля: провал остаётся различимым по величине, а не
+#: превращается в ноль. Тот же пол, что у величин и терминов.
+SHARE_FLOOR = 0.02
 
 #: Поле таблицы: имя колонки и двоеточие после него. Длинные имена — первыми.
 _FIELD_LABELS: tuple[str, ...] = (
@@ -281,6 +287,11 @@ class SupportScore:
             решением больше не является.
         oov_tokens: Нераспознанные слова утверждения — в очередь распознания.
         reason: Причина отказа: называет поле, а не «не совпало».
+        entity_share: Доля прочтений утверждения, поддержанных источником.
+        entity_kind: Исход сравнения прочтений: пусто, «другая сущность» или
+            «прочтение не установлено» (`pf.entities`).
+        entity_note: Причина словами — что названо, сколько прочтений и где
+            проверить.
     """
 
     support: float
@@ -288,6 +299,10 @@ class SupportScore:
     coverage: float
     oov_tokens: tuple[str, ...]
     reason: str
+    entity_share: float = 1.0
+    entity_kind: str = ""
+    entity_note: str = ""
+    support_without_subject: float = 1.0
 
     def supported(self, threshold: float) -> bool:
         """Превратить степень в решение по настройке.
@@ -689,19 +704,37 @@ def _concepts_field(claim: CanonicalText, source: CanonicalText) -> FieldResult:
     return FieldResult(coverage, note)
 
 
-def _subject_field(claim: CanonicalText, source: CanonicalText) -> FieldResult:
+def _subject_field(
+    claim: CanonicalText,
+    source: CanonicalText,
+    identity: Identity | None = None,
+) -> FieldResult:
     """Субъект: тот ли оператор (или рынок) назван.
+
+    Сначала — прочтения аббревиатуры (`pf.entities`): «МТС Беларусь» и «МТС» —
+    разные сущности, и пересечение прочтений даёт **долю**, а не вердикт.
+    Прочтения не перечислены (нет страницы значений) — работает прежняя
+    проверка по названию, и это названо в отчёте.
 
     Args:
         claim: Поля утверждения.
         source: Поля источника.
+        identity: Исход сравнения прочтений, если он считался.
 
     Returns:
-        Доля найденных субъектов. Ноль заменяется малым числом, чтобы
+        Долю найденных субъектов. Ноль заменяется малым числом, чтобы
         провал оставался различимым по величине, а не превращался в «нет».
     """
+    if identity is not None and identity.kind == KIND_MISMATCH:
+        return FieldResult(SHARE_FLOOR, identity.note)
+    if identity is not None and identity.kind == KIND_AMBIGUOUS:
+        share = max(SHARE_FLOOR, identity.share)
+        return FieldResult(share, identity.note)
     if not claim.subjects:
-        return FieldResult(1.0, "субъект в утверждении не назван")
+        note = "субъект в утверждении не назван"
+        if identity is not None and identity.note:
+            note = f"{note}; {identity.note}"
+        return FieldResult(1.0, note)
     scope = source.declared.get("оператор") or source.raw
     clean = for_comparison(scope)
     lowered = normalize_homoglyphs(clean.lower().replace("ё", "е"))
@@ -711,7 +744,7 @@ def _subject_field(claim: CanonicalText, source: CanonicalText) -> FieldResult:
         return FieldResult(1.0, "")
     missing = [subject for subject in claim.subjects if subject not in found]
     if not found:
-        return FieldResult(0.02, f"в источнике другой: {missing[0]}")
+        return FieldResult(SHARE_FLOOR, f"в источнике другой: {missing[0]}")
     return FieldResult(len(found) / len(claim.subjects), f"не найден: {missing[0]}")
 
 
@@ -948,9 +981,17 @@ def score(
     )
     claim = canonicalize(claim_text)
     source = canonicalize(passage)
+    # Прочтения аббревиатуры: «МТС Беларусь» и «МТС» — разные сущности, и
+    # пересечение прочтений даёт долю, а не вердикт (`D-51`).
+    identity = entity_identity(
+        claim_text,
+        passage,
+        claim_row=bool(claim.declared),
+        source_row=bool(source.declared),
+    )
     fields: dict[str, FieldResult] = {
         "показатель": _concepts_field(claim, source),
-        "субъект": _subject_field(claim, source),
+        "субъект": _subject_field(claim, source, identity),
         "период": _period_field(claim, source),
         "величина": _quantity_field(
             claim,
@@ -967,9 +1008,14 @@ def score(
         ),
     }
     support = 1.0
+    support_without_subject = 1.0
     for name, result in fields.items():
         share = min(max(result.share, 1e-6), 1.0)
         support *= share ** FIELD_WEIGHTS[name]
+        if name != "субъект":
+            # Степень поддержки без поля «субъект»: по ней видно, решает ли
+            # неоднозначное прочтение или отказ вызван другим полем.
+            support_without_subject *= share ** FIELD_WEIGHTS[name]
     weak = sorted(
         (
             (FIELD_ORDER.index(name), name, result)
@@ -988,4 +1034,8 @@ def score(
         coverage=base.coverage,
         oov_tokens=tuple(base.oov_tokens),
         reason=reason,
+        entity_share=identity.share,
+        entity_kind=identity.kind,
+        entity_note=identity.note,
+        support_without_subject=support_without_subject,
     )

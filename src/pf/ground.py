@@ -25,6 +25,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from pf.config import settings
+from pf.entities import KIND_AMBIGUOUS, KIND_MISMATCH
+from pf.entities import identity as entity_identity
 from pf.lexical import (
     Overlap,
     language,
@@ -37,6 +39,7 @@ from pf.lexical import (
 from pf.lexical import (
     overlap as lexical_overlap,
 )
+from pf.verdicts import ENTITY_AMBIGUOUS, ENTITY_MISMATCH
 
 if TYPE_CHECKING:
     from pf.canonical import SupportScore
@@ -626,6 +629,93 @@ def _field_reason(result: SupportScore) -> str:
     return f"степень поддержки ниже порога: {result.explain()}"
 
 
+def _cap_by_readings(support: Support, source_text: str, claim_text: str) -> Support:
+    """Ограничить подтверждение прочтениями аббревиатуры.
+
+    Дословная цитата — сильное свидетельство, но не свидетельство того, что
+    речь о той же сущности: цитата из строки «МТС Беларусь» дословна и при
+    этом не подтверждает утверждение про «МТС» (`D-51`). Поэтому у
+    подтверждённой цитаты статус проверяется ещё и прочтениями: чужая
+    сущность — отказ, не названное прочтение — «требует проверки» со ссылкой.
+
+    Args:
+        support: Основание, подтверждённое цитатой.
+        source_text: Текст источника.
+        claim_text: Текст утверждения.
+
+    Returns:
+        Основание со статусом не выше, чем позволяют прочтения.
+    """
+    # Импорт ленивый: `pf.canonical` читает словарь и чистку.
+    from pf.canonical import parse_fields
+
+    identity = entity_identity(
+        claim_text,
+        source_text,
+        claim_row=bool(parse_fields(claim_text)),
+        source_row=bool(parse_fields(source_text)),
+    )
+    if identity.kind == KIND_MISMATCH:
+        return replace(
+            support,
+            status=SupportStatus.NO_DATA,
+            kind=ENTITY_MISMATCH,
+            detail=f"цитата дословна, но {identity.note}",
+        )
+    if identity.kind == KIND_AMBIGUOUS:
+        return replace(
+            support,
+            status=SupportStatus.NEEDS_REVIEW,
+            kind=ENTITY_AMBIGUOUS,
+            detail=f"прочтение не установлено: {identity.note}",
+        )
+    return support
+
+
+def field_verdict(result: SupportScore, threshold: float) -> tuple[SupportStatus, str, str]:
+    """Превратить степень поддержки в статус: три исхода, а не два.
+
+    Неоднозначное прочтение аббревиатуры **понижает** подтверждение: основание
+    остаётся в силе, но не подтверждает, пока человек не выберет прочтение
+    (`D-51`). Отказ оно не отменяет: если степень поддержки низка из-за другого
+    поля (единицы, периода, величины), это и есть причина, и подменять её на
+    «требует проверки» значило бы обещать проверку там, где всё решено.
+
+    Функция открыта для замера: `make replay` и набор пар считают статус тем же
+    правилом, что и прогон.
+
+    Args:
+        result: Степень поддержки по абзацу.
+        threshold: Порог, при котором степень становится подтверждением.
+
+    Returns:
+        Пару «статус, вид, пояснение».
+    """
+    ambiguous = result.entity_kind == KIND_AMBIGUOUS
+    if result.supported(threshold):
+        if ambiguous:
+            return (
+                SupportStatus.NEEDS_REVIEW,
+                ENTITY_AMBIGUOUS,
+                f"прочтение не установлено: {result.entity_note} ({result.explain()})",
+            )
+        suffix = f" · {result.entity_note}" if result.entity_note else ""
+        return (
+            SupportStatus.CONFIRMED,
+            "",
+            f"утверждение подтверждено: {result.explain()}{suffix}",
+        )
+    if ambiguous and result.support_without_subject >= threshold:
+        # Остальные поля сходятся: спор идёт только о прочтении.
+        return (
+            SupportStatus.NEEDS_REVIEW,
+            ENTITY_AMBIGUOUS,
+            f"прочтение не установлено: {result.entity_note} ({result.explain()})",
+        )
+    kind = ENTITY_MISMATCH if result.entity_kind == KIND_MISMATCH else ""
+    return (SupportStatus.NO_DATA, kind, _field_reason(result))
+
+
 def verify_claim(
     source_text: str,
     claim_text: str,
@@ -687,6 +777,9 @@ def verify_claim(
         abs_tolerance=abs_tolerance,
         rel_tolerance=rel_tolerance,
     )
+    if support.status is SupportStatus.CONFIRMED:
+        # Дословность не отвечает на вопрос «та ли сущность» (`D-51`).
+        support = _cap_by_readings(support, source_text, claim_text)
     if support.status is not SupportStatus.NO_DATA or support.kind not in QUOTE_FALLBACK_KINDS:
         return support
 
@@ -701,7 +794,7 @@ def verify_claim(
     )
     return replace(
         fields,
-        kind=support.kind,
+        kind=fields.kind or support.kind,
         detail=(
             f"цитата не годится как доказательство ({support.detail}): "
             f"проверено полями — {fields.detail}"
@@ -755,21 +848,16 @@ def _verify_fields(
     if paragraph_index is not None and 0 <= paragraph_index < len(paragraphs):
         paragraph = paragraphs[paragraph_index].strip()
         result = compare(paragraph)
-        if result.supported(threshold):
-            return Support(
-                quote=paragraph[:400],
-                source_id=source_id,
-                status=SupportStatus.CONFIRMED,
-                paragraph_index=paragraph_index,
-                detail=f"утверждение подтверждено: {result.explain()}",
-                oov=tuple(result.oov_tokens),
-            )
+        status, kind, detail = field_verdict(result, threshold)
+        quote = paragraph[:400] if status is not SupportStatus.NO_DATA else claim_text.strip()[:400]
         return Support(
-            quote=claim_text.strip()[:400],
+            quote=quote,
             source_id=source_id,
-            status=SupportStatus.NO_DATA,
-            detail=_field_reason(result),
+            status=status,
+            paragraph_index=paragraph_index,
+            detail=detail,
             oov=tuple(result.oov_tokens),
+            kind=kind,
         )
 
     # Абзац не указан — ищем, в каком абзаце утверждение подтверждается.
@@ -791,16 +879,18 @@ def _verify_fields(
         if not paragraph_numbers_ok and not shares_words(claim_text, paragraph):
             continue
         result = compare(paragraph)
+        status, kind, detail = field_verdict(result, threshold)
         if best is None or result.support > best.support:
             best, best_paragraph = result, paragraph
-        if result.supported(threshold):
+        if status is SupportStatus.CONFIRMED:
             return Support(
                 quote=paragraph.strip()[:400],
                 source_id=source_id,
-                status=SupportStatus.CONFIRMED,
+                status=status,
                 paragraph_index=index,
-                detail=f"утверждение подтверждено: {result.explain()}",
+                detail=detail,
                 oov=tuple(result.oov_tokens),
+                kind=kind,
             )
 
     if best is None:
@@ -814,12 +904,14 @@ def _verify_fields(
             ),
         )
 
+    status, kind, detail = field_verdict(best, threshold)
     return Support(
         quote=best_paragraph.strip()[:400],
         source_id=source_id,
-        status=SupportStatus.NO_DATA,
-        detail=_field_reason(best),
+        status=status,
+        detail=detail,
         oov=tuple(best.oov_tokens),
+        kind=kind,
     )
 
 

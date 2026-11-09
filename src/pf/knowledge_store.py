@@ -87,6 +87,13 @@ def write_manifest(
             "sha256": sha256_file(path) if path.is_file() else "",
             "bytes": path.stat().st_size if path.is_file() else 0,
         }
+        # Заголовок записи — только там, где он есть. Нужен странице значений:
+        # по нему видно, какая аббревиатура описана, не открывая файл. У
+        # остальных выгрузок заголовка нет, и пустой ключ в манифесте читался
+        # бы как «заголовок есть, но не записан».
+        title = str(entry.get("title", ""))
+        if title:
+            record["title"] = title
         prepared.append(record)
 
     manifest_path = directory / MANIFEST_NAME
