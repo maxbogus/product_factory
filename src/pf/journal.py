@@ -37,7 +37,10 @@ class StepRecord:
         summary: Кратко о результате шага.
         detail: Полный результат (структурированный объект).
         citations: Основания со ссылками на источники.
-        prompt_tokens: Токены в запросе.
+        rejected_details: Что и почему отброшено — текст для человека.
+        rejections: Отказы с машинным видом (`kind`): по ним считается класс,
+            а не по формулировке. Текст остаётся для чтения, вид — для счёта.
+        needs_review_details: Основания, ожидающие проверки человеком.
         completion_tokens: Токены в ответе.
         cost_units: Стоимость шага в условных единицах.
         duration_ms: Длительность шага.
@@ -51,6 +54,7 @@ class StepRecord:
     detail: dict[str, Any] = field(default_factory=dict)
     citations: list[str] = field(default_factory=list)
     rejected_details: list[str] = field(default_factory=list)
+    rejections: list[dict[str, Any]] = field(default_factory=list)
     needs_review_details: list[str] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0

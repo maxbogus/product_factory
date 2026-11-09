@@ -50,9 +50,9 @@ from typing import Any
 
 from pf.config import settings
 from pf.ground import SupportStatus, verify_claim, verify_quote
-from pf.report import rejection_kind
 from pf.roles import validate
 from pf.state import list_sessions, load
+from pf.verdicts import classify_detail, label_of
 from pf.workflow import _PHASE_BY_ROLE, Workflow
 
 #: Фаза состояния → роль. Обратная карта к ``Workflow._PHASE_BY_ROLE``.
@@ -314,12 +314,18 @@ def replay_session(session_id: str) -> dict[str, Any] | None:
                     "source_id": verdict.source_id,
                     "status": verdict.status.value,
                     "detail": verdict.detail,
+                    "kind": verdict.kind,
                 }
             )
             bucket = _bucket(verdict.status, verdict.detail)
             payload["kinds"][bucket] = payload["kinds"].get(bucket, 0) + 1
-            if verdict.status is not SupportStatus.CONFIRMED:
-                reason = f"причина: {rejection_kind(verdict.detail)}"
+            # Причина называется только у отказа: «требует проверки» — не
+            # отказ, у него своя строка исхода. Иначе одна и та же запись
+            # попадала в две строки, а «нужен взгляд человека» считалось
+            # причиной отказа (`T-59`).
+            if verdict.status is SupportStatus.NO_DATA:
+                kind = verdict.kind or classify_detail(verdict.detail)
+                reason = f"причина: {label_of(kind)}"
                 payload["kinds"][reason] = payload["kinds"].get(reason, 0) + 1
     return payload
 

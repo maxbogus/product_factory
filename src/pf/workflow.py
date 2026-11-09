@@ -62,6 +62,7 @@ from pf.sources import (
     same_material,
 )
 from pf.state import Phase, SessionState, save
+from pf.verdicts import Rejection, classify_detail
 
 if TYPE_CHECKING:
     from pf.analysis import Metric
@@ -338,6 +339,8 @@ class StepResult:
         citations: Подтверждённые ссылки на источники.
         rejected: Сколько цитат отброшено проверкой.
         rejected_details: Что и почему отброшено.
+        rejections: Отказы с машинным видом: по нему считается класс отказа,
+            а не по формулировке причины.
         needs_review: Ссылки, ожидающие проверки человеком.
         lexical: Лексическое покрытие шага (сколько слов распознано).
         cost_units: Стоимость шага.
@@ -350,6 +353,7 @@ class StepResult:
     citations: list[str] = field(default_factory=list)
     rejected: int = 0
     rejected_details: list[str] = field(default_factory=list)
+    rejections: list[dict[str, Any]] = field(default_factory=list)
     needs_review: list[str] = field(default_factory=list)
     needs_review_details: list[str] = field(default_factory=list)
     lexical: dict[str, Any] | None = None
@@ -2064,6 +2068,29 @@ class Workflow:
             criteria_notes.append(
                 "источники не собраны: проверять основания нечем — шаг выполнен без материалов"
             )
+        # Отказы уходят в журнал вместе с машинным видом. Пока его там не было,
+        # отчёт, замер и документ демонстрации называли класс по русскому
+        # тексту, и новый отказ (`indicator-demotion`) попадал в «прочее».
+        plan_texts = {note.text for note in plan_numbers.notes}
+        rejection_items: list[Rejection] = [
+            Rejection(
+                kind=verdict.kind,
+                status=verdict.status.value,
+                detail=verdict.detail,
+                claim=verdict.claim,
+            )
+            for verdict in grounding.verdicts
+            if verdict.status is not SupportStatus.CONFIRMED
+        ]
+        rejection_items.extend(
+            Rejection(kind=note.kind, status="no_data", detail=note.text)
+            for note in plan_numbers.notes
+        )
+        rejection_items.extend(
+            Rejection(kind=classify_detail(text), status="no_data", detail=text)
+            for text in criteria_notes
+            if text not in plan_texts
+        )
         if grounding.conclusion is not None:
             # Статус оснований вывода — часть того же шага: он попадает
             # в журнал вместе с выводом, а не остаётся в состоянии сессии.
@@ -2076,6 +2103,7 @@ class Workflow:
             citations=grounding.citations,
             rejected=grounding.rejected + len(criteria_notes),
             rejected_details=[*grounding.details, *criteria_notes],
+            rejections=[item.as_dict() for item in rejection_items],
             needs_review=grounding.needs_review,
             needs_review_details=grounding.needs_review_details,
             lexical=lexical,
@@ -2704,6 +2732,7 @@ class Workflow:
             detail=detail,
             citations=result.citations,
             rejected_details=result.rejected_details,
+            rejections=result.rejections,
             needs_review_details=result.needs_review_details,
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,

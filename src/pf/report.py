@@ -28,6 +28,7 @@ from pf.ground import (
 )
 from pf.journal import Journal, journal_path
 from pf.state import load
+from pf.verdicts import classify_detail, label_of
 
 #: Подпись расчёта, у которого не указана формула. Непересчитываемое
 #: число нельзя показывать так же, как проверенное.
@@ -704,47 +705,21 @@ def _grounds_markdown(conclusion: ConclusionRecord) -> list[str]:
 def rejection_kind(detail: str) -> str:
     """Класс отказа по тексту причины.
 
-    Группировка нужна, чтобы видеть, **что чинить**: промпт (значение
-    посчитано, а выдано за цитату), контекст (источник не по теме) или
-    проверку (у расчёта нет provenance). Это подпись для человека, а не
-    решение о статусе: статус ставит проверка, а не эта функция.
+    Подпись берётся из таблицы видов (`pf.verdicts`), а не из списка
+    подстрок отчёта: тот же вид, что назвала проверка, иначе считался бы
+    вторым правилом, и строки «прочее» расходились бы с замером.
+
+    Разбор текста остался потому, что журнал append-only: шаги, записанные до
+    появления машинного вида, хранят фразу. Для новых записей вид приходит
+    готовым (`StepRecord.rejections`), и эта функция не нужна.
 
     Args:
         detail: Строка отклонения из журнала.
 
     Returns:
-        Название класса отказа.
+        Название класса отказа для человека.
     """
-    text = detail.lower()
-    if "посчитано, а не процитировано" in text:
-        return "значение посчитано как цитата"
-    # «Источника нет» — не то же, что «источник не про задачу». В последнем
-    # облачном прогоне девять отказов из двенадцати были ссылкой на ввод
-    # человека, и отчёт отправлял чинить поиск и контекст вместо ответа
-    # модели.
-    if "ввод человека" in text:
-        return "ссылка на ввод человека"
-    if "не назван" in text or "не найден среди материалов" in text or "цитировать нечего" in text:
-        return "фантомный источник"
-    if "вне среза задачи" in text or "не относится к задаче" in text:
-        return "источник нерелевантен"
-    if "не совпало с колонкой" in text:
-        return "имя метрики не совпало с колонкой"
-    if "формула — тождество" in text:
-        return "формула-тождество"
-    if "критерий не относится к показателю" in text:
-        return "критерий не про показатель"
-    if "источники не собраны" in text:
-        return "источники не собраны"
-    if "не имеет структуры" in text:
-        return "у расчёта нет provenance"
-    if "не совпадает со строкой" in text or "пересчёт по входам даёт" in text:
-        return "значение не сошлось с источником"
-    if "не найдена в строке" in text:
-        return "цитата не найдена в строке"
-    if "цитата не найдена" in text:
-        return "цитата не найдена"
-    return "прочее"
+    return label_of(classify_detail(detail))
 
 
 def _collect_metrics(records: list[Any]) -> list[MetricRecord]:
@@ -1355,6 +1330,35 @@ def _collect_collection(records: list[Any]) -> dict[str, Any]:
     }
 
 
+def _record_rejection_kinds(record: Any) -> dict[str, int]:
+    """Классы отказов одного шага: записанный вид сильнее разбора текста.
+
+    Вид приходит из проверки (`Support.kind`, `ABSENCE_KINDS`,
+    `PlanNumberNote.kind`) и лежит в журнале рядом с текстом. Пока его не
+    было, класс зависел от формулировки: новый отказ попадал в «прочее».
+
+    Args:
+        record: Запись шага из журнала.
+
+    Returns:
+        Счёт по подписям классов.
+    """
+    kinds: dict[str, int] = {}
+    recorded = [
+        item for item in getattr(record, "rejections", None) or [] if isinstance(item, dict)
+    ]
+    if recorded:
+        for item in recorded:
+            kind = str(item.get("kind") or "")
+            label = label_of(kind) if kind else rejection_kind(str(item.get("detail") or ""))
+            kinds[label] = kinds.get(label, 0) + 1
+        return kinds
+    for line in getattr(record, "rejected_details", None) or []:
+        label = rejection_kind(str(line))
+        kinds[label] = kinds.get(label, 0) + 1
+    return kinds
+
+
 def build_session_report(session_id: str) -> SessionReport:
     """Собрать отчёт по сессии из журнала шагов.
 
@@ -1391,9 +1395,8 @@ def build_session_report(session_id: str) -> SessionReport:
         rejected += len(record.rejected_details)
         rejected_details.extend(record.rejected_details)
         needs_review_details.extend(record.needs_review_details)
-        for line in record.rejected_details:
-            kind = rejection_kind(line)
-            rejection_kinds[kind] = rejection_kinds.get(kind, 0) + 1
+        for kind, count in _record_rejection_kinds(record).items():
+            rejection_kinds[kind] = rejection_kinds.get(kind, 0) + count
         detail = record.detail if isinstance(record.detail, dict) else {}
         lexical = detail.get("lexical")
         if isinstance(lexical, dict):
