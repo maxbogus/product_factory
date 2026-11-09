@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pf import domain
 from pf.hypotheses import Verdict
 
 
@@ -164,10 +165,20 @@ _BASIS_KIND_ALIASES: dict[str, str] = {
     "assumption": "гипотеза",
 }
 
-#: Бренды операторов связи. В ключевом сообщении они недопустимы:
-#: коммуникация продукта обращается к аудитории своего продукта, а не
+
+#: Бренды конкурентов берутся из домена проекта (`pf.domain`), а не из кода:
+#: второй проект на другом домене задаёт свои. В ключевом сообщении они
+#: недопустимы — коммуникация обращается к аудитории своего продукта, а не
 #: конкурента. В контексте рынка (`barrier`, анализ) они допустимы.
-COMPETITOR_BRANDS: tuple[str, ...] = ("мтс", "билайн", "теле2", "tele2", "ростелеком")
+def competitor_brands() -> tuple[str, ...]:
+    """Написания чужих брендов, недопустимых в ключевом сообщении.
+
+    Returns:
+        Канонические имена и написания субъектов с признаком ``competitor``,
+        в нижнем регистре: сравнение идёт с текстом сообщения.
+    """
+    spellings = (word for subject in domain.competitors() for word in subject.spellings)
+    return tuple(word.lower() for word in spellings)
 
 
 class SourceRef(BaseModel):
@@ -908,8 +919,8 @@ class CommunicationStrategy(BaseModel):
 
         Коммуникация обращается к аудитории нашего продукта. Если в
         сообщении назван конкурент, это не наша коммуникация: в
-        демонстрации так вышло «МТС предлагает прозрачные тарифы» для
-        задачи Фабрики Мегафона. Ловим кодом, а не просьбой модели.
+        демонстрации так вышло «Конкурент предлагает прозрачные тарифы»
+        для задачи нашего продукта. Ловим кодом, а не просьбой модели.
 
         В `barrier` конкурент упоминать можно: это контекст рынка,
         а не обращение к аудитории.
@@ -917,7 +928,7 @@ class CommunicationStrategy(BaseModel):
         Raises:
             ValueError: В сообщении назван чужой бренд.
         """
-        named = [brand for brand in COMPETITOR_BRANDS if brand in self.key_message.lower()]
+        named = [brand for brand in competitor_brands() if brand in self.key_message.lower()]
         if named:
             raise ValueError(
                 "ключевое сообщение называет чужой бренд "

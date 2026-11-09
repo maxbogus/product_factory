@@ -302,14 +302,23 @@ def _d14_message_cannot_name_competitor() -> str:
     """Ключевое сообщение не должно называть чужой бренд.
 
     Коммуникация продукта обращается к аудитории своего продукта. В
-    демонстрации так вышло «МТС предлагает прозрачные тарифы» для задачи
-    Фабрики Мегафона — схема обязана это ловить.
+    демонстрации так вышло «Конкурент предлагает прозрачные тарифы» для
+    задачи нашего продукта — схема обязана это ловить.
+
+    Имя берётся из домена (`pf.domain`), а не пишется здесь: иначе кейс
+    проверял бы один домен, а правило действует на любом.
     """
+    from pf import domain
+
+    competitors = domain.competitors()
+    if not competitors:
+        return "домен не называет чужих брендов: кейс неприменим"
+    brand = competitors[0].canonical
     try:
         CommunicationStrategy(
             audience="Клиенты",
             barrier="Рынок привык к скрытым подпискам",
-            key_message="МТС предлагает прозрачные тарифы",
+            key_message=f"{brand} предлагает прозрачные тарифы",
             proof="Информирование о подписках",
         )
     except Exception as exc:  # noqa: BLE001 — текст ошибки и есть результат
@@ -440,6 +449,7 @@ def _d15_conclusion_cites_existing_source() -> str:
     файла с таким именем в материалах нет, — и это нигде не проявлялось:
     у шага стратегии было ноль отклонённых оснований.
     """
+    from pf import domain
     from pf.corpus import Article
     from pf.schemas import (
         CommunicationStrategy,
@@ -451,11 +461,12 @@ def _d15_conclusion_cites_existing_source() -> str:
     from pf.sources import SourceBundle
     from pf.workflow import Workflow
 
+    named = domain.ours() or domain.subjects()[0]
     article = Article(
         source_id="project/data/base.csv",
         title="base.csv",
         section="project",
-        content="оператор: МТС показатель: абонентская база значение: 87",
+        content=f"оператор: {named.canonical} показатель: абонентская база значение: 87",
     )
     bundle = SourceBundle(passages=[], articles=[article], query="удержание абонентов")
     strategy = Strategy(
@@ -524,18 +535,23 @@ def _d17_synonym_is_not_fabrication() -> str:
 def _d18_exact_term_substitution_rejected() -> str:
     """Подмена точного термина отклоняется.
 
-    Бренд, аббревиатура и число — точные термины: «МТС» не заменяется
-    «МегаФоном» даже при почти совпадающем окружении.
+    Бренд, аббревиатура и число — точные термины: одно имя не заменяется
+    другим даже при почти совпадающем окружении.
 
     Returns:
         Текст результата: статус и пояснение.
     """
+    from pf import domain
     from pf.ground import verify_claim
 
-    source = "«МегаФон» — российская телекоммуникационная компания."
+    named = domain.ours()
+    competitors = domain.competitors()
+    if named is None or not competitors:
+        return "домен не называет наш бренд или конкурента: кейс неприменим"
+    source = f"«{named.canonical}» — российская телекоммуникационная компания."
     support = verify_claim(
         source,
-        "МТС — российская телекоммуникационная компания",
+        f"{competitors[0].canonical} — российская телекоммуникационная компания",
         "test/s",
         paragraph_index=0,
     )
@@ -551,8 +567,16 @@ def _d19_foreign_source_needs_review() -> str:
     Returns:
         Текст результата: статус и пояснение.
     """
-    source = "Megafon served 77.26 million subscribers in June 2024."
-    support = verify_quote(source, "МегаФон обслужил 77,26 миллиона абонентов", "web/Новости")
+    from pf import domain
+
+    named = domain.ours()
+    if named is None:
+        return "домен не называет нашего бренда: кейс неприменим"
+    latin = next((alias for alias in named.aliases if alias.isascii()), named.canonical)
+    source = f"{latin} served 77.26 million subscribers in June 2024."
+    support = verify_quote(
+        source, f"{named.canonical} обслужил 77,26 миллиона абонентов", "web/Новости"
+    )
     return f"{support.status.title_ru}: {support.detail}"
 
 
@@ -609,15 +633,17 @@ def _d31_review_on_changed_data() -> str:
     """
     import tempfile
 
+    from pf import domain
     from pf.journal import Journal, StepRecord
     from pf.review import DataStatus, review_session
 
+    named = domain.subjects()[0].canonical
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         data = root / "project" / "data"
         data.mkdir(parents=True)
         path = data / "metrics.csv"
-        path.write_text("оператор,значение\nМТС,87\n", encoding="utf-8")
+        path.write_text(f"оператор,значение\n{named},87\n", encoding="utf-8")
         path.with_name(path.name + ".meta.json").write_text(
             json.dumps(
                 {

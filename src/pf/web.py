@@ -35,8 +35,8 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import httpx
 
+from pf import domain
 from pf.config import settings
-from pf.corpus import DOMAIN_TERMS
 from pf.ground import SupportStatus, mark_external, verify_quote
 
 #: Заголовок запроса к Википедии: без указания контакта — ответ 403.
@@ -46,19 +46,14 @@ USER_AGENT = "product-factory-strategist/0.1 (contact@example.org)"
 def allowed_domains() -> frozenset[str]:
     """Домены, с которых разрешено брать страницы.
 
+    Складываются две вещи: политика выборки (общие издания, настройки) и
+    сайты субъектов домена (`knowledge/domain/entities.yaml`). Второе — данные
+    проекта: у другого домена другие бренды, и правка `src/` не нужна.
+
     Returns:
         Список доменов без ``www.``.
     """
-    return settings.allowed_domains
-
-
-#: Разделы Википедии, из которых берутся статьи телеком-тематики.
-TELECOM_CATEGORIES: tuple[str, ...] = (
-    "Категория:Сотовая связь",
-    "Категория:Мобильные ТелеСистемы",
-    "Категория:Тарифная политика",
-    "Категория:Операторы беспроводной связи",
-)
+    return settings.allowed_domains | domain.web_domains()
 
 
 @dataclass(frozen=True, slots=True)
@@ -516,70 +511,21 @@ _STOP_WORDS = frozenset(
 )
 
 
-#: Слова, которые однозначно указывают на предметную область. Слово
+#: Основы слов, которые однозначно указывают на предметную область. Слово
 #: «оператор» само по себе ничего не значит — оператор дронов тоже
-#: оператор. А вот «отток» или «абонент» — про нашу тему.
-_STRONG_TERMS = frozenset(
-    {
-        "отток",
-        "оттока",
-        "абонент",
-        "абонента",
-        "абонентов",
-        "абонентский",
-        "удержание",
-        "удержания",
-        "тариф",
-        "тарифы",
-        "тарифов",
-        "телеком",
-        "телекоммуникация",
-        "связь",
-        "мобильный",
-        "мобильная",
-        "мобильных",
-        "оператор",
-        "оператора",
-        "операторов",
-        "подписка",
-        "подписки",
-        "мегафон",
-        "мтс",
-        "билайн",
-        "ростелеком",
-        "телефония",
-        "интернет",
-        "роуминг",
-        "трафик",
-        "симкар",
-        "сим-карта",
-    }
-)
+#: оператор. А вот «отток» или «абонент» — про нашу тему. Сам список —
+#: данные домена (`knowledge/domain/entities.yaml`, раздел `search`):
+#: у отбора выдачи своя настройка, отобранная замером.
+def _strong_stems() -> frozenset[str]:
+    """Основы сильных доменных слов для отбора выдачи.
 
-#: Основы тех же слов — сравнение идёт по основе, чтобы «отток»,
-#: «оттока» и «оттоком» считались одним словом.
-_STRONG_STEMS = frozenset(
-    {
-        "симкар",
-        "мобильн",
-        "абонент",
-        "отток",
-        "удержан",
-        "тариф",
-        "телеком",
-        "телефон",
-        "подписк",
-        "роуминг",
-        "трафик",
-        "мегафон",
-        "мтс",
-        "билайн",
-        "ростелеком",
-        "оператор",
-        "связ",
-        "интернет",
-    }
-)
+    Сравнение идёт по основе, чтобы «отток», «оттока» и «оттоком»
+    считались одним словом.
+
+    Returns:
+        Множество основ из домена проекта.
+    """
+    return domain.search_stems()
 
 
 def _stem(word: str) -> str:
@@ -639,7 +585,7 @@ def _matches_terms(text: str, terms: set[str]) -> bool:
         Текст подходит по теме.
     """
     stems = {_stem(word) for word in re.findall(r"[а-яёa-z]{3,}", text.lower())}
-    strong = {term for term in terms if _stem(term) in _STRONG_STEMS}
+    strong = {term for term in terms if _stem(term) in _strong_stems()}
     if strong & stems:
         return True
     return len(terms & stems) >= 2
@@ -663,7 +609,9 @@ def search_rss_feeds(query: str, limit: int = 5) -> list[SearchHit]:
         return []
     hits: list[SearchHit] = []
     seen: set[str] = set()
-    for domain, feed_url in RSS_FEEDS:
+    # Не `domain`: это имя модуля домена, и затенить его значило бы
+    # потерять домен внутри цикла.
+    for feed_host, feed_url in RSS_FEEDS:
         if len(hits) >= limit:
             break
         try:
@@ -691,7 +639,7 @@ def search_rss_feeds(query: str, limit: int = 5) -> list[SearchHit]:
                     url=link,
                     title=title,
                     snippet=summary,
-                    provider=f"rss:{domain}",
+                    provider=f"rss:{feed_host}",
                 )
             )
             if len(hits) >= limit:
@@ -808,7 +756,7 @@ def search_trends(query: str, limit: int = 5) -> list[SearchHit]:
     # идёт по словам запроса **и** по доменным терминам: так канал
     # отвечает на вопрос «тема сейчас в тренде?» хотя бы для
     # предметной области агента.
-    domain_terms = _stem_set(DOMAIN_TERMS)
+    domain_terms = _stem_set(domain.domain_terms())
     hits: list[SearchHit] = []
     for item in root.findall("./channel/item"):
         title = _strip_tags(item.findtext("title") or "")

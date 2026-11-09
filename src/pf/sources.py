@@ -19,9 +19,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from pf import domain
 from pf.config import settings
 from pf.corpus import (
-    DOMAIN_TERMS,
     Article,
     Corpus,
     domain_lemmas,
@@ -934,9 +934,9 @@ def _aggregate_by_name(
     находила — и оба основания вывода отклонялись при верных данных.
 
     Агрегат ищется **по имени**, а не по совпадению числа: имя расчёта
-    состоит из показателя и вида сводки («Абонентская база МТС: среднее»),
-    и оба куска должны быть названы в основании. Затем значение сверяется
-    со значением расчёта и пересчитывается по его входам.
+    состоит из показателя и вида сводки («Абонентская база оператора А:
+    среднее»), и оба куска должны быть названы в основании. Затем значение
+    сверяется со значением расчёта и пересчитывается по его входам.
 
     Args:
         metrics: Расчёты агента по материалам.
@@ -1725,8 +1725,9 @@ def score_passages(
         if hits == 0:
             continue
         # Доменные слова запроса весят больше общего словаря.
+        domain_words = domain.domain_terms()
         weighted_hits = sum(
-            2.0 if word in DOMAIN_TERMS else 1.0 for word in words if word in query_terms
+            2.0 if word in domain_words else 1.0 for word in words if word in query_terms
         )
         # Релевантность — доля совпавших слов, с поправкой на длину абзаца:
         # короткий абзац с двумя совпадениями информативнее длинного с двумя.
@@ -1876,7 +1877,7 @@ def _score_material(
     полям (показатель, субъект, остальное содержание), а не по тексту
     строки целиком. Провенанс в оценку не входит. Иначе порядок строк
     задавала их длина, то есть длина URL, и в окно попадали строки о
-    другом показателе — «МТС Беларусь 2026» и «доля на рынке
+    другом показателе — «Дочерняя компания 2026» и «доля на рынке
     спутникового ТВ».
 
     Материал не по теме (рецепты при запросе про отток) не проходит
@@ -1913,6 +1914,7 @@ def _score_material(
     same_domain = bool(strong_in_material) and bool(domain_in_query)
 
     rows_by_index = {index: row for index, row in enumerate(material.rows)}
+    domain_words = domain.domain_terms()
 
     scored: list[tuple[float, int, str]] = []
     for passage in material.passages:
@@ -1930,7 +1932,7 @@ def _score_material(
         if hits == 0 and not same_domain:
             continue
         weighted = sum(
-            2.0 if word in DOMAIN_TERMS else 1.0 for word in words if word in query_terms
+            2.0 if word in domain_words else 1.0 for word in words if word in query_terms
         )
         if hits == 0:
             # Совпадение по предметной области: вес даёт сам факт, что

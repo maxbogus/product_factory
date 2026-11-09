@@ -24,6 +24,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
+from pf import domain
 from pf.config import settings
 
 #: Минимальная длина абзаца, пригодного для цитирования. То же значение,
@@ -241,7 +242,11 @@ def fetch_pages(
     Returns:
         Список разобранных страниц без пустых.
     """
-    domains = allowed_domains if allowed_domains is not None else settings.allowed_domains
+    domains = (
+        allowed_domains
+        if allowed_domains is not None
+        else settings.allowed_domains | domain.web_domains()
+    )
     pages: list[FetchedPage] = []
     for hit in hits:
         if len(pages) >= limit:

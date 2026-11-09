@@ -151,6 +151,12 @@ class Settings(BaseSettings):
     max_constraints_chars: int = 600
 
     # ── Лексикон и распознание незнакомых слов ──────────────────────────────
+    #: Каталог словаря домена: субъекты, термины, шаблоны заголовков.
+    #: Отдельная настройка, а не ``knowledge_dir``: домен — данные проекта по
+    #: ссылке, а не накопленное хранилище. Тесты уводят ``knowledge_dir`` в
+    #: ``tmp_path`` (`D-29`), и домен, лежащий там, исчез бы во всех проверках.
+    domain_dir: Path = Path("knowledge/domain")
+
     #: Каталог словаря близости и очереди распознания.
     lexicon_dir: Path = Path("knowledge/lexicon")
 
@@ -205,13 +211,13 @@ class Settings(BaseSettings):
     #: Домены, с которых разрешено брать страницы. Пустой список — брать
     #: можно отовсюду (кроме правил сайта в robots.txt). Домены пишутся
     #: без ``www.`` — сравнение идёт по нормализованному имени.
+    #: Здесь — политика выборки: общие издания. Сайты брендов принадлежат
+    #: домену проекта (`knowledge/domain/entities.yaml`) и складываются с этим
+    #: списком в `pf.web.allowed_domains`.
     allowed_domains: frozenset[str] = frozenset(
         {
             "ru.wikipedia.org",
             "eprussia.ru",
-            "megafon.ru",
-            "mts.ru",
-            "beeline.ru",
             "tass.ru",
             "rbc.ru",
             "vedomosti.ru",

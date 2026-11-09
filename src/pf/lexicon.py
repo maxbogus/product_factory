@@ -33,6 +33,8 @@ import yaml
 from pf import synonyms as synonyms_module
 from pf.config import settings
 from pf.corpus import tokenize
+from pf.domain import subject_groups
+from pf.domain import version as domain_stamp
 from pf.lexical import TokenStatus, normalize_homoglyphs, recognize
 
 #: Имя файла словаря.
@@ -205,6 +207,10 @@ def _groups_from_entries(entries: list[LexiconEntry]) -> dict[str, str]:
         ValueError: Слово попало в две группы — канонизация неоднозначна.
     """
     groups = list(synonyms_module.BUILTIN_GROUPS)
+    # Написания субъектов — из домена проекта: «МТС» и «MTS» это один
+    # субъект, и разбирать их как разные понятия значило бы подтверждать
+    # чужое имя (правило — в `pf.domain`).
+    groups.extend(subject_groups())
     for entry in entries:
         if entry.status != APPROVED:
             # Предложенная моделью запись в проверке не участвует: иначе
@@ -215,12 +221,14 @@ def _groups_from_entries(entries: list[LexiconEntry]) -> dict[str, str]:
 
 
 @lru_cache(maxsize=8)
-def _groups_for(path: str, stamp: float) -> dict[str, str]:
-    """Собрать отображение синонимов и закэшировать по версии файла.
+def _groups_for(path: str, stamp: float, domain_stamp: int) -> dict[str, str]:
+    """Собрать отображение синонимов и закэшировать по версии файлов.
 
     Args:
         path: Путь к файлу словаря.
-        stamp: Время изменения файла — ключ кэша.
+        stamp: Время изменения файла словаря — часть ключа кэша.
+        domain_stamp: Версия домена: написания субъектов приходят оттуда,
+            и правка домена должна сбрасывать этот кэш тоже.
 
     Returns:
         Словарь «лемма → каноническая лемма».
@@ -229,7 +237,7 @@ def _groups_for(path: str, stamp: float) -> dict[str, str]:
 
 
 def groups() -> dict[str, str]:
-    """Отображение синонимов с учётом файла словаря.
+    """Отображение синонимов с учётом файла словаря и домена.
 
     Кэш привязан к пути и времени изменения: правка словаря человеком
     подхватывается без перезапуска процесса.
@@ -239,7 +247,7 @@ def groups() -> dict[str, str]:
     """
     path = synonyms_path()
     stamp = path.stat().st_mtime_ns if path.is_file() else 0
-    return _groups_for(str(path), stamp)
+    return _groups_for(str(path), stamp, domain_stamp())
 
 
 def token_resolution(token: str) -> Any:

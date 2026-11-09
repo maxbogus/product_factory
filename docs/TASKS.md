@@ -113,7 +113,7 @@
 | T-62 | 1 | Расчёт даёт система: модель ссылается на готовый агрегат, а не складывает сама | 2 | 6.0 | ⬜ | T-59 | `uv run pytest tests/test_success_criteria.py -k aggregate_anchor -q` |
 | T-63 | 1 | Артефакты из одного пути: `pf report --recheck`, провенанс в шапке документа, документ и код не расходятся | 2 | 9.0 | ✅ | T-59 | `uv run pytest tests/test_artifacts_agree.py -k recheck -q` |
 | T-65 | 1 | Противоречия источников по осям: скил и хук (не агент), ось названа, раздел отчёта | 2 | 7.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k contradiction_axes -q` |
-| T-67 | 1 | Имена субъектов и доменные термины — данные (`knowledge/domain/`), а не код: гейт «ни одного имени в `src/`» | 3 | 9.0 | ⬜ | — | `uv run pytest tests/test_no_entity_names.py -k no_names_in_code -q` |
+| T-67 | 1 | Имена субъектов и доменные термины — данные (`knowledge/domain/`), а не код: гейт «ни одного имени в `src/`» | 3 | 9.0 | ✅ | — | `uv run pytest tests/test_no_entity_names.py -k entity_names -q` |
 | T-68 | 3 | Второй демо-проект на незнакомом домене: переносимость доказана, а не обещана | 3 | 8.0 | ⬜ | T-67 | `uv run pytest tests/test_portability.py -k second_project -q` |
 | T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ⬜ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
 | T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |

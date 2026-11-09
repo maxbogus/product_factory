@@ -55,6 +55,11 @@ doctor: ## Проверить, что всё готово к работе
 	  $(UV) run python -c "from pf.materials import load_materials; \
 	  m = load_materials(); \
 	  print(f'{len(m)} файлов' if m else 'нет (каталог project/ пуст)')"
+	@echo -n "Домен:       "; \
+	  $(UV) run python -c "from pf import domain; s = domain.summary(); \
+	  print('{} субъектов, {} терминов — {} ({})'.format( \
+	  s["subjects"], s["terms"], s["source"], s["domain"] or "без имени"))" \
+	  || { echo "НЕ ЧИТАЕТСЯ — проверьте knowledge/domain/entities.yaml"; exit 1; }
 	@echo -n "MCP:         "; \
 	  if [ -n "$$(PF_MCP_DIR=$${PF_MCP_DIR:-../mcp-servers} ls ../mcp-servers 2>/dev/null)" ]; then \
 	    echo "серверы найдены — список: pf mcp"; \

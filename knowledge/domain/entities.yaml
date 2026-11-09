@@ -1,0 +1,225 @@
+# Домен проекта: субъекты, термины и шаблоны заголовков.
+#
+# Как читать:
+#   subjects.canonical — каноническое имя, как оно пишется в утверждении;
+#   subjects.aliases   — другие написания того же имени (латиница, разговорное);
+#   subjects.kind      — operator (компания) | category (категория рынка);
+#   subjects.ours      — наш бренд: коммуникация идёт от его имени;
+#   subjects.competitor — имя чужого бренда, недопустимое в ключевом сообщении;
+#   terms[].word       — словоформа домена;
+#   terms[].strong/clean/domain — в каких наборах участвует словоформа:
+#       strong — без неё совпадение доменного слова считается случайным;
+#       clean  — отобрана замером как не встречающаяся в чужих областях;
+#       domain — участвует во взвешивании выдачи;
+#   search.strong_terms/stems — слова и основы отбора новостей по теме;
+#   patterns.operator  — текст называет оператора связи;
+#   patterns.company   — заголовок называет компанию, а не банк/смартфон.
+#
+# ВАЖНО: имя субъекта живёт здесь, а не в src/. Гейт
+# tests/test_no_entity_names.py падает, если имя из этого файла появится в
+# исполняемом литерале модуля или докстринге. Второй проект на другом домене
+# задаёт свой файл (PF_DOMAIN_DIR) и правит src/ ноль раз.
+#
+# Термины продублированы с «search» намеренно: у отбора выдачи свой список,
+# отобранный замером, и выводить его из доменных терминов значило бы менять
+# поведение поиска под видом переноса словаря.
+version: 1
+metadata:
+  description: 'Домен проекта: субъекты, термины домена и шаблоны заголовков'
+  domain: telecom
+  updated: '2026-11-09'
+  subjects: 10
+  terms: 39
+subjects:
+- canonical: виртуальные операторы
+  kind: category
+- canonical: сотовая связь
+  kind: category
+- canonical: МТС Беларусь
+  kind: operator
+  country: Беларусь
+- canonical: МТС
+  kind: operator
+  aliases:
+  - MTS
+  competitor: true
+- canonical: МегаФон
+  kind: operator
+  aliases:
+  - Megafon
+  ours: true
+- canonical: Tele2
+  kind: operator
+  aliases:
+  - теле2
+  competitor: true
+- canonical: ВымпелКом
+  kind: operator
+- canonical: Билайн
+  kind: operator
+  competitor: true
+- canonical: Ростелеком
+  kind: operator
+  competitor: true
+- canonical: Yota
+  kind: operator
+terms:
+- word: мобильная
+  strong: true
+  domain: true
+- word: провайдер
+  strong: true
+  clean: true
+- word: тарифный
+  strong: true
+  clean: true
+  domain: true
+- word: абонент
+  strong: true
+  clean: true
+  domain: true
+- word: роуминг
+  strong: true
+  clean: true
+  domain: true
+- word: мобильный
+  strong: true
+  domain: true
+- word: абонентов
+  strong: true
+  clean: true
+  domain: true
+- word: сотовая
+  strong: true
+  clean: true
+  domain: true
+- word: связь
+  strong: true
+  domain: true
+- word: телекоммуникация
+  strong: true
+  clean: true
+  domain: true
+- word: интернет
+  strong: true
+  domain: true
+- word: тарифы
+  strong: true
+  clean: true
+  domain: true
+- word: абонентский
+  strong: true
+  clean: true
+  domain: true
+- word: мобильных
+  strong: true
+- word: пакеты
+  strong: true
+  clean: true
+  domain: true
+- word: пакет
+  strong: true
+  domain: true
+- word: тариф
+  strong: true
+  domain: true
+- word: телеком
+  strong: true
+  clean: true
+  domain: true
+- word: сотово
+  strong: true
+  clean: true
+- word: сотовый
+  strong: true
+  clean: true
+  domain: true
+- word: симкарты
+  strong: true
+  clean: true
+- word: трафик
+  strong: true
+  clean: true
+  domain: true
+- word: симкар
+  strong: true
+  clean: true
+  domain: true
+- word: абонентская
+  clean: true
+- word: операторский
+  domain: true
+- word: операторов
+  domain: true
+- word: тарификация
+  domain: true
+- word: отток
+  domain: true
+- word: операций
+  domain: true
+- word: подписка
+  domain: true
+- word: контрактный
+  domain: true
+- word: удержание
+  domain: true
+- word: контракт
+  domain: true
+- word: подписки
+  domain: true
+- word: массовый
+  domain: true
+- word: корпоративный
+  domain: true
+- word: стоимость
+  domain: true
+- word: операция
+  domain: true
+- word: оператор
+  domain: true
+search:
+  # Основы слов, по которым отбирается новость или тренд: сравнение идёт
+  # по основе, чтобы «отток», «оттока» и «оттоком» считались одним словом.
+  strong_stems:
+  - абонент
+  - билайн
+  - интернет
+  - мегафон
+  - мобильн
+  - мтс
+  - оператор
+  - отток
+  - подписк
+  - ростелеком
+  - роуминг
+  - связ
+  - симкар
+  - тариф
+  - телеком
+  - телефон
+  - трафик
+  - удержан
+# Домены, которые разрешено скачивать, если они принадлежат субъектам домена
+# (сайты брендов). Общие издания перечислены в настройках: они не часть
+# домена, а часть политики выборки.
+web:
+  allowed_domains:
+  - megafon.ru
+  - mts.ru
+  - beeline.ru
+patterns:
+  operator:
+  - мегафон
+  - мтс
+  - билайн
+  - tele2
+  - теле2
+  - ростелеком
+  - телеком
+  company:
+  - мегафон
+  - мтс
+  - билайн
+  - tele2
+  - теле2
+  - ростелеком
