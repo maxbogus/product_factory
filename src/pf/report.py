@@ -229,6 +229,8 @@ class SessionReport:
     duplicate_steps: list[str] = field(default_factory=list)
     #: Опоры на ввод пользователя по всем шагам (стадия и слова).
     user_input_grounds: list[str] = field(default_factory=list)
+    #: Нарушения ограничений задачи: направление против запрета (`T-06b`).
+    constraints: list[str] = field(default_factory=list)
 
     @property
     def collection_candidates(self) -> int:
@@ -452,6 +454,16 @@ class SessionReport:
             lines.append("**Противоречия в фактах.**")
             lines.append("")
             for item in self.contradictions:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        if self.constraints:
+            # Направление, нарушающее запрет из постановки задачи, делает
+            # стратегию непригодной. Это отдельная строка, а не отказ
+            # основания: чинится не источник, а выбранная линия (`T-06b`).
+            lines.append("**Ограничения задачи нарушены.**")
+            lines.append("")
+            for item in self.constraints:
                 lines.append(f"- {item}")
             lines.append("")
 
@@ -1473,6 +1485,7 @@ def build_session_report(session_id: str) -> SessionReport:
     rejection_kinds: dict[str, int] = {}
     routing_notes: list[str] = []
     contradictions: list[str] = []
+    constraints: list[str] = []
     fact_check: dict[str, Any] | None = None
     total_cost = 0.0
     metrics = _collect_metrics(records)
@@ -1506,6 +1519,12 @@ def build_session_report(session_id: str) -> SessionReport:
         routing = detail.get("routing")
         if isinstance(routing, dict) and routing.get("note"):
             routing_notes.append(str(routing["note"]))
+        constraint_check = detail.get("constraints")
+        if isinstance(constraint_check, dict):
+            for reason in constraint_check.get("violations") or []:
+                text = str(reason).strip()
+                if text and text not in constraints:
+                    constraints.append(text)
         window = detail.get("context")
         if isinstance(window, dict):
             context_steps += 1
@@ -1598,6 +1617,7 @@ def build_session_report(session_id: str) -> SessionReport:
         duplicate_steps=duplicate_steps,
         needs_review_details=needs_review_details,
         user_input_grounds=user_input_grounds,
+        constraints=constraints,
         lexical=(
             {
                 "total": lexical_total,

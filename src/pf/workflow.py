@@ -1074,6 +1074,41 @@ class Workflow:
         return notes
 
     @staticmethod
+    def _check_constraints(data: Any, state: SessionState) -> dict[str, Any]:
+        """Сверить выбранное направление с запретами из постановки задачи.
+
+        Ограничение — часть постановки задачи. Направление, которое его
+        нарушает, делает стратегию непригодной, а выглядит она при этом
+        связно. До `T-06` ограничения только подставлялись в промпт: в
+        прогоне до `demo-v9` выбранным направлением стало «снизить цену»
+        при запрете «цену снижать нельзя».
+
+        Args:
+            data: Результат роли стратегии.
+            state: Состояние сессии — ограничения лежат в постановке задачи.
+
+        Returns:
+            Разбор для журнала: сколько ограничений проверено и какие
+            нарушения названы. Пустой словарь, если проверять нечего.
+        """
+        from pf.constraints import check_direction, parse_constraints
+
+        frame = state.results.get(Phase.INTAKE.value, {})
+        if not isinstance(frame, dict):
+            return {}
+        constraints = parse_constraints(frame.get("constraints") or [])
+        product = getattr(data, "product", None)
+        direction = str(getattr(product, "chosen_direction", "") or "")
+        violations = check_direction(direction, constraints)
+        if not constraints and not violations:
+            return {}
+        return {
+            "checked": len(constraints),
+            "direction": direction,
+            "violations": [violation.reason for violation in violations],
+        }
+
+    @staticmethod
     def _magnitudes(text: str) -> list[tuple[float, str]]:
         """Числа текста, заявленные как величина.
 
@@ -2284,6 +2319,12 @@ class Workflow:
         criteria_notes: list[str] = []
         if phase is Phase.STRATEGY:
             criteria_notes.extend(self._check_success_criteria(data))
+            # Ограничения задачи проверяются кодом, а не доверием к промпту:
+            # направление, которое их нарушает, — отказ с причиной в журнале
+            # и отчёте (`T-06b`).
+            constraint_check = self._check_constraints(data, state)
+            if constraint_check:
+                state.results["constraint_check"] = constraint_check
         criteria_notes.extend(note.text for note in plan_numbers.notes)
         if bundle is None and phase in (Phase.ANALYZING, Phase.STRATEGY):
             # Роутер может повести вперёд, перескочив сбор источников.
@@ -2951,6 +2992,11 @@ class Workflow:
             conclusion = state.results.pop("conclusion_check", None)
             if isinstance(conclusion, dict):
                 detail["conclusion_check"] = conclusion
+            # Нарушения ограничений задачи — тоже часть шага: отчёт называет
+            # их отдельной строкой, а не выводит из прозы (`T-06b`).
+            constraint_check = state.results.pop("constraint_check", None)
+            if isinstance(constraint_check, dict):
+                detail["constraints"] = constraint_check
         if result.lexical:
             # Покрытие — часть шага: по нему видно, что именно расширять
             # в словаре, и виден эффект от пополнения.

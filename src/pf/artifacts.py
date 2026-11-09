@@ -511,6 +511,14 @@ def _render(report: SessionReport, records: list[StepRecord], origin: Provenance
         for note in report.routing_notes:
             lines.append(f"- {note}")
         lines.append("")
+    if report.constraints:
+        # Направление против запрета из постановки задачи — отказ с причиной,
+        # а не отказ основания: чинится выбранная линия (`T-06b`).
+        lines.append("**Ограничения задачи нарушены.**")
+        lines.append("")
+        for item in report.constraints:
+            lines.append(f"- {item}")
+        lines.append("")
     lines.append("---")
     lines.append("")
 

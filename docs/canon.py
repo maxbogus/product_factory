@@ -33,13 +33,13 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # ── Числа ────────────────────────────────────────────────────────────────────
 #: Детерминированные тесты: ``pytest -m "not slow"``.
-TESTS_DETERMINISTIC = 797
+TESTS_DETERMINISTIC = 800
 
 #: Тесты с живой моделью: ``pytest -m slow``.
 TESTS_LIVE = 4
 
 #: Кейсов в eval-наборе (``eval/cases/scenarios.jsonl``).
-EVAL_CASES = 22
+EVAL_CASES = 23
 
 #: BDD-сценариев в ``tests/features/*.feature``.
 SCENARIOS_BDD = 12

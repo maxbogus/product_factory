@@ -680,6 +680,21 @@ def _d31_review_on_changed_data() -> str:
     return f"{verdict}: {state}; шагов затронуто: {len(result.affected_steps)}"
 
 
+def _d21_constraint_violated() -> str:
+    """Направление против запрета из постановки задачи — нарушение.
+
+    Возвращает причину отказа, а не «подтверждено»: направление, которое
+    выполняет запрещённое действие, делает стратегию непригодной.
+    """
+    from pf.constraints import check_direction, parse_constraints
+
+    constraints = parse_constraints(["цену снижать нельзя"])
+    violations = check_direction("Снизить цену на тарифы", constraints)
+    if violations:
+        return violations[0].reason
+    return "нарушения не найдено"
+
+
 _HANDLERS = {
     "D-01-facts-have-sources": _d01_fact_without_source,
     "D-02-fabricated-quote": _d02_fabricated_quote,
@@ -701,6 +716,7 @@ _HANDLERS = {
     "D-18-exact-term-substitution": _d18_exact_term_substitution_rejected,
     "D-19-foreign-source-needs-review": _d19_foreign_source_needs_review,
     "D-20-unknown-word-goes-to-queue": _d20_unknown_word_goes_to_queue,
+    "D-21-constraint-violated": _d21_constraint_violated,
     "D-22-hypothesis-verdict": _d22_hypothesis_verdict,
     "D-31-review-on-changed-data": _d31_review_on_changed_data,
 }

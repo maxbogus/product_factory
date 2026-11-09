@@ -57,7 +57,7 @@
 | T-04 | 1 | Числа в документах совпадают с каноном | 1 | 8.1 | ✅ | T-00 | `make docs-check` |
 | T-05 | 1 | Согласованность заявлений: README-цикл, `demo/BRIEF.md` про веб, оговорка про `--extra documents`, `.env.example` ↔ умолчания | 2 | 4.1 | ✅ | T-04 | `uv run pytest tests/test_documents_consistency.py -q` |
 | T-06a | 2 | Ограничения задачи как модель: что нельзя (цена, канал, сегмент) и валидатор направления; карточка — `docs/tasks/T-06.md` | 2 | 8.0 | ✅ | — | `uv run pytest tests/test_constraints.py -k constraint_model -q` |
-| T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 7.5 | ⬜ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
+| T-06b | 1 | Нарушение ограничения называет отчёт отдельной строкой; реестр `constraint-check` переходит в `implemented` | 1 | 7.5 | ✅ | T-06a | `uv run pytest tests/test_constraints.py -k direction_respects_constraints -q` |
 | T-07 | 2 | Вердикт гипотез: `supported` / `refuted` / `unknown` в схеме и отчёте | 3 | 4.9 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k verdict -q` |
 | T-08 | 2 | Добор оснований по непроверенным гипотезам и пробелам; ранжирование кандидатов по близости — здесь, после `T-37` | 2 | 4.2 | ✅ | T-07 | `uv run pytest tests/test_hypotheses.py -k collection -q` |
 | T-09 | 2 | `knowledge/raw` в контексте как «требует проверки»; пропуск PDF/DOCX виден | 2 | 6.8 | ✅ | — | `uv run pytest tests/test_materials.py -k knowledge_store -q`; пропуск `.pdf`/`.docx` виден в выводе `pf materials` |
@@ -117,6 +117,8 @@
 | T-68 | 3 | Второй демо-проект на незнакомом домене: переносимость доказана, а не обещана | 3 | 8.0 | ⬜ | T-67 | `uv run pytest tests/test_portability.py -k second_project -q` |
 | T-69 | 1 | Модель по роли: дешёвая на извлечение, средняя на план и противоречия, сильная на синтез; экономия видна | 2 | 6.5 | ⬜ | — | `uv run pytest tests/test_role_models.py -k role_model -q` |
 | T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ⬜ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
+| T-71 | 2 | Дедуп и группировка отказов в документе демонстрации: `_group_repeats` вместо плоского списка; группировка по виду причины, а не по тексту | 2 | 1.8 | ⬜ | T-59 | `uv run pytest tests/test_demo_doc_generated.py -k rejection_grouping -q` |
+| T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ⬜ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

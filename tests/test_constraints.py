@@ -14,6 +14,50 @@
 from __future__ import annotations
 
 from pf.constraints import ConstraintKind, check_direction, parse_constraints
+from pf.report import SessionReport
+from pf.schemas import CommunicationStrategy, ProductStrategy, Strategy, VerificationPlan
+from pf.state import Phase, SessionState
+from pf.workflow import Workflow
+
+
+def _strategy(direction: str) -> Strategy:
+    """Стратегия с выбранным направлением и заполненными обязательными блоками.
+
+    Args:
+        direction: Выбранное направление.
+
+    Returns:
+        Заполненная стратегия.
+    """
+    return Strategy(
+        product=ProductStrategy(audience="клиенты тарифа", chosen_direction=direction),
+        communication=CommunicationStrategy(
+            audience="клиенты тарифа",
+            barrier="цена выше альтернатив",
+            key_message="мы держим цену под контролем",
+        ),
+        verification=VerificationPlan(
+            expected_change="удержание вырастет на 2 п.п.",
+            compare_against="уровень прошлого квартала",
+            observation_period="3 месяца",
+            adverse_effects=["маржа снизится"],
+            success_criteria=["Рост удержания клиентов"],
+        ),
+    )
+
+
+def _state(*constraints: str) -> SessionState:
+    """Состояние сессии с ограничениями в постановке задачи.
+
+    Args:
+        constraints: Ограничения задачи.
+
+    Returns:
+        Состояние на фазе входа с заполненным кадром задачи.
+    """
+    state = SessionState(session_id="s", phase=Phase.INTAKE)
+    state.results[Phase.INTAKE.value] = {"constraints": list(constraints)}
+    return state
 
 
 def test_constraint_model_parses_prohibition() -> None:
@@ -71,3 +115,37 @@ def test_constraint_model_ignores_non_action_constraint() -> None:
     constraints = parse_constraints(["Сроки анализа ограничены до конца месяца"])
 
     assert check_direction("Запустить новую линейку тарифов", constraints) == []
+
+
+def test_direction_respects_constraints() -> None:
+    """Направление против запрета — названное нарушение, а не тихий пропуск."""
+    state = _state("цену снижать нельзя")
+
+    check = Workflow._check_constraints(_strategy("Снизить цену на тарифы"), state)
+
+    assert check["checked"] == 1
+    assert check["violations"]
+    assert "цену снижать нельзя" in check["violations"][0]
+
+
+def test_direction_respects_constraints_when_formulation_changes() -> None:
+    """Запрет «не менять цену» не блокирует изменение формы тарифа."""
+    state = _state("цену менять нельзя")
+
+    check = Workflow._check_constraints(_strategy("Сделать тариф гибким"), state)
+
+    assert check["checked"] == 1
+    assert check["violations"] == []
+
+
+def test_direction_respects_constraints_named_in_report() -> None:
+    """Нарушение называет отчёт отдельной строкой."""
+    report = SessionReport(
+        session_id="s",
+        constraints=[
+            "направление «Снизить цену» выполняет действие, которое ограничение "
+            "«цену снижать нельзя» запрещает"
+        ],
+    )
+
+    assert "Ограничения задачи нарушены" in report.as_markdown()
