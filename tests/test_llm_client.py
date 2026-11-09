@@ -104,7 +104,8 @@ def test_cloud_max_tokens_is_raised() -> None:
 
     На локальном лимите (``PF_MAX_TOKENS=2400``) JSON стратегии обрывался,
     и прогон на облаке падал на «JSON не закрыт». Локальная модель
-    остаётся на значении из настроек — ей этого хватает.
+    остаётся на значении из настроек — ей этого хватает. Облачный лимит
+    равен ``CLOUD_MAX_TOKENS``: 8192 не хватило роли ``keeper`` (сессия 31).
     """
     local = Settings(llm_provider="ollama", max_tokens=2400)
     assert local.effective_max_tokens == 2400
@@ -115,7 +116,7 @@ def test_cloud_max_tokens_is_raised() -> None:
         llm_model="deepseek-flash",
         llm_api_key="test-key",
     )
-    assert cloud.effective_max_tokens >= 8000
+    assert cloud.effective_max_tokens >= 12288
 
 
 def test_ollama_payload_has_num_ctx(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,4 +230,4 @@ def test_openai_payload_uses_effective_max_tokens(monkeypatch: pytest.MonkeyPatc
     )
     client.complete("система", "задача")
 
-    assert captured["max_tokens"] >= 8000
+    assert captured["max_tokens"] >= 12288

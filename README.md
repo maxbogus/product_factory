@@ -411,7 +411,7 @@ uv run --with torch --with transformers --with sentence-transformers \
 ## Разработка
 
 ```bash
-make test        # 843 тестов, без обращения к модели
+make test        # 845 тестов, без обращения к модели
 make test-slow   # живые тесты с моделью
 make eval        # eval-сценарии: правила поведения агента
 make bench       # замеры: агент против обычного чата

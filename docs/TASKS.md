@@ -119,6 +119,8 @@
 | T-70 | 2 | Оправдание компонента рядом со стоимостью: роль → что даёт → сколько стоит; раздел «где multi-agent не нужен» | 2 | 5.0 | ✅ | T-59 | `uv run pytest tests/test_report_conclusion.py -k component_justification -q` |
 | T-71 | 2 | Дедуп и группировка отказов в документе демонстрации: `_group_repeats` вместо плоского списка; группировка по виду причины, а не по тексту | 2 | 1.8 | ✅ | T-59 | `uv run pytest tests/test_demo_doc_generated.py -k rejection_grouping -q` |
 | T-72 | 2 | Сводка «сигнал/шум» в шапке отчёта и документа: сколько подтверждено фактом, сколько — мнение модели, что не подтверждено | 2 | 2.55 | ✅ | T-63 | `uv run pytest tests/test_report_conclusion.py -k signal_summary -q` |
+| T-73 | 1 | Синтез на `mistral-nemo:12b`, локальный лимит ответа 4096, облачный 12288 | 1 | 4.5 | ✅ | — | `uv run pytest tests/test_llm_client.py tests/test_documents_consistency.py -k "max_tokens or env_example_matches_defaults" -q` |
+| T-74 | 1 | Повтор роли называет причину: недостающие поля по имени и просьба сократить обрезанный JSON; карточка — `docs/tasks/T-74.md` | 3 | 3.4 | ✅ | — | `uv run pytest tests/test_transitions.py -k repair_hint -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

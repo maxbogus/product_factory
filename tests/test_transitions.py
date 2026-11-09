@@ -445,6 +445,50 @@ def test_repair_prompt_without_special_hint() -> None:
     assert "Не выдумывай цитату" not in prompt
 
 
+def test_repair_hint_names_missing_strategy_fields() -> None:
+    """Повтор называет недостающие поля стратегии, а не повторяет ошибку.
+
+    Малая модель трижды не отдала `communication` и `verification`: сырой
+    текст pydantic-ошибки модели ничего не говорит, и она повторяет тот же
+    ответ. Подсказка обязана перечислить пропущенные поля по имени.
+    """
+    from pydantic import ValidationError
+
+    from pf.schemas import Strategy
+
+    try:
+        Strategy.model_validate({})
+    except ValidationError as exc:
+        error = str(exc)
+    else:  # pragma: no cover - схема обязана требовать поля
+        raise AssertionError("Strategy без полей прошла проверку — тест не о том")
+
+    prompt = Workflow._repair_prompt("ЗАДАЧА", error)
+
+    # Фраза есть только в подсказке: в сыром тексте pydantic её нет.
+    assert "не хватает обязательных полей" in prompt
+    assert "`communication`" in prompt
+    assert "`verification`" in prompt
+
+
+def test_repair_hint_shortens_truncated_json() -> None:
+    """Обрезанный JSON: повтор просит сократить ответ.
+
+    Ошибка `extract_json` уже говорит «JSON не закрыт», но модель не знает,
+    что делать. Без просьбы сократить она повторяет такую же длину.
+    """
+    error = (
+        "не удалось разобрать JSON: ответ модели обрезан по длине — "
+        "JSON не закрыт. Увеличьте PF_MAX_TOKENS или попросите модель "
+        "отвечать кратче."
+    )
+
+    prompt = Workflow._repair_prompt("ЗАДАЧА", error)
+
+    # «Сократи ответ» — только из подсказки, в сыром тексте её нет.
+    assert "Сократи ответ" in prompt
+
+
 def test_state_survives_process_restart() -> None:
     """Работа продолжается после перерыва: состояние читается с диска."""
     workflow = _workflow()
