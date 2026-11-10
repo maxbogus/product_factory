@@ -60,9 +60,15 @@ def _state(phase: Phase = Phase.ROUTING) -> SessionState:
 
 
 def test_router_choice_is_respected() -> None:
-    """Роутер выбрал роль — работа идёт к ней."""
+    """Роутер выбрал роль — работа идёт к ней.
+
+    Сбор уже выполнен (``collecting`` есть в результатах): иначе маршрут
+    вперёд через невыполненный сбор отклоняется — это отдельный гейт
+    ``test_skip_collecting_rejected``.
+    """
     workflow = _workflow({})
     state = _state()
+    state.results["collecting"] = {"facts": []}
     result = _result(NextStep(role="options", reason="нужны варианты"))
 
     assert workflow.route_next(state, result) is Phase.OPTIONS
@@ -111,11 +117,13 @@ def test_non_router_result_keeps_order() -> None:
 def test_router_can_ask_human() -> None:
     """Роутер вправе попросить человека о существенном выборе."""
     workflow = _workflow({})
+    state = _state()
+    state.results["collecting"] = {"facts": []}
     result = _result(
         NextStep(role="options", reason="выбор неоднозначен", need_human=True, question="А или Б?")
     )
 
-    assert workflow.route_next(_state(), result) is Phase.OPTIONS
+    assert workflow.route_next(state, result) is Phase.OPTIONS
     assert result.data.need_human is True
     assert result.data.question == "А или Б?"
 
@@ -183,3 +191,20 @@ def test_second_replan_is_corrected() -> None:
 
     assert workflow.route_next(state, result) is Phase.OPTIONS
     assert "повторный возврат" in state.results["routing_note"]
+
+
+def test_skip_collecting_rejected() -> None:
+    """Маршрут вперёд через невыполненный сбор отклоняется.
+
+    В сессии 31 роутер из фазы маршрутизации назвал «анализ», хотя сбор
+    источников ещё не выполнялся: ``route_next`` принял маршрут «вперёд»,
+    анализ пошёл без материалов и упал. Гейт нужен не только на «назад»,
+    но и на пропуск обязательной фазы.
+    """
+    workflow = _workflow({})
+    state = _state()  # ROUTING, сбор не выполнялся
+    result = _result(NextStep(role="analyst", reason="можно сразу анализировать"))
+
+    assert workflow.route_next(state, result) is Phase.COLLECTING
+    assert state.results["routing_decision"]["accepted"] is False
+    assert "сбор" in state.results["routing_note"].lower()

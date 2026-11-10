@@ -399,3 +399,114 @@ def test_collection_reaches_report(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert "Добор оснований" in markdown
     assert "основаниями не считаются" in markdown
     assert "test/Отток#p0" in markdown
+
+
+def test_early_gap_declared_when_nothing_confirmed() -> None:
+    """Разбор без подтверждённых оснований объявляет «данных нет».
+
+    На вопросе вне данных проверка отклоняет каждое утверждение по
+    отдельности, и набегает 10–22 отказа одного и того же смысла:
+    «подтвердить нечем». Пробел объявляется один раз — вместо потока
+    причин читатель видит один факт: данных нет (`T-81`).
+    """
+    from pf.hypotheses import EARLY_GAP_TEXT, early_gap
+
+    assert early_gap(facts=12, confirmed=0) == EARLY_GAP_TEXT
+    assert early_gap(facts=12, confirmed=3) is None
+    assert early_gap(facts=0, confirmed=0) is None
+
+
+def test_early_gap_keeps_review_and_user_input() -> None:
+    """Материал, ждущий проверки, — не «данных нет».
+
+    «Требует проверки» и опора на ввод человека — это опоры, а не
+    отсутствие данных. Если такие есть, пробел не объявляется: решает
+    человек, а не проверка (`D-49`).
+    """
+    from pf.hypotheses import early_gap
+
+    assert early_gap(facts=5, confirmed=0, needs_review=1) is None
+    assert early_gap(facts=5, confirmed=0, user_input=1) is None
+
+
+def test_early_gap_collapses_rejections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Шаг разбора сворачивает поток отказов в один пробел.
+
+    Двенадцать утверждений с выдуманными ссылками отклоняются все.
+    Раньше шаг писал двенадцать строк «подтвердить нечем»; теперь он
+    называет один пробел и одну причину с разбивкой по видам (`T-81`).
+    """
+    import json
+
+    from pf.config import settings
+    from pf.llm import LLMResponse, LLMUsage
+    from pf.sources import Passage, SourceBundle
+    from pf.state import Phase, SessionState
+    from pf.workflow import Workflow
+
+    class _Client:
+        """Модель, которая отвечает разбором с выдуманными ссылками."""
+
+        def complete(self, system: str, user: str, *, model: str = "") -> LLMResponse:
+            answer = {
+                "facts": [
+                    {
+                        "kind": "факт",
+                        "text": f"Утверждение {index}",
+                        "sources": [
+                            {
+                                "source_id": "phantom/Нет",
+                                "paragraph": 0,
+                                "quote": "цитата, которой нет",
+                            }
+                        ],
+                    }
+                    for index in range(12)
+                ],
+                "hypotheses": [],
+                "forecasts": [],
+                "gaps": [],
+            }
+            return LLMResponse(
+                content=json.dumps(answer, ensure_ascii=False),
+                usage=LLMUsage(prompt_tokens=10, completion_tokens=10),
+            )
+
+    monkeypatch.setattr(settings, "state_dir", tmp_path / "state")
+    monkeypatch.setattr(settings, "journal_dir", tmp_path / "journal")
+
+    passage = Passage(
+        source_id="telecom/Мегафон (компания)",
+        title="Мегафон (компания)",
+        section="telecom",
+        paragraph_index=0,
+        text="Ввела специальный тариф «Транзитный».",
+        relevance=1.0,
+    )
+    article = type(
+        "A",
+        (),
+        {
+            "source_id": passage.source_id,
+            "title": passage.title,
+            "section": passage.section,
+            "content": passage.text,
+        },
+    )()
+    bundle = SourceBundle(passages=[passage], articles=[article], query="удержание")
+
+    workflow = Workflow(client=_Client(), config=settings)  # type: ignore[arg-type]
+    # Добор по пробелу здесь не проверяется, а он поднимает весь корпус
+    # (десятки секунд). Для этого теста важна только свёртка отказов.
+    monkeypatch.setattr(Workflow, "_plan_collection", lambda *args, **kwargs: None)
+    state = SessionState(session_id="early-gap", phase=Phase.ANALYZING, question="вопрос")
+    state.results["collecting"] = {"facts": []}
+
+    result = workflow.run_step(state, bundle)
+
+    from pf.hypotheses import EARLY_GAP_TEXT
+
+    assert EARLY_GAP_TEXT in result.data.gaps
+    assert result.rejected == 1
+    assert len(result.rejected_details) == 1
+    assert EARLY_GAP_TEXT in result.rejected_details[0]

@@ -122,12 +122,12 @@
 | T-73 | 1 | Синтез на `mistral-nemo:12b`, локальный лимит ответа 4096, облачный 12288 | 1 | 4.5 | ✅ | — | `uv run pytest tests/test_llm_client.py tests/test_documents_consistency.py -k "max_tokens or env_example_matches_defaults" -q` |
 | T-74 | 1 | Повтор роли называет причину: недостающие поля по имени и просьба сократить обрезанный JSON; карточка — `docs/tasks/T-74.md` | 3 | 3.4 | ✅ | — | `uv run pytest tests/test_transitions.py -k repair_hint -q` |
 | T-75 | 2 | Свип модели, окна и бюджета контекста: матрица кандидатов × окно × бюджет, ≥3 прогона на клетку, харнесс с продолжением и OOM-изоляцией, заморозка в D-66 | 3 | 4.5 | ✅ | — | `uv run pytest tests/test_role_sweep.py -k sweep_decision -q` |
-| T-76 | 1 | Гейт `route_next`: маршрут вперёд через невыполненную `collecting` отклоняется | 2 | 2.7 | ⬜ | — | `uv run pytest tests/test_routing.py -k skip_collecting_rejected -q` |
+| T-76 | 1 | Гейт `route_next`: маршрут вперёд через невыполненную `collecting` отклоняется | 2 | 2.7 | ✅ | — | `uv run pytest tests/test_routing.py -k skip_collecting_rejected -q` |
 | T-77 | 2 | Анти-фантомы: в промпт роли — явный список `source_id`; стратегия обязана нести `evidence`/`promise_grounding` | 2 | 6.0 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k evidence_required -q` |
 | T-78 | 3 | Пересобрать `demo/RESULT.md` из лучшего прогона (`make demo-doc SESSION=…`) | 1 | 4.5 | ⬜ | — | `uv run pytest tests/test_demo_doc_generated.py -q` |
 | T-79 | 4 | `make bench` на `qwen3:8b` и DeepSeek: агент против обычного чата | 1 | 3.4 | ⬜ | — | `make bench MODELS="qwen3:8b deepseek-flash"` |
 | T-80 | 3 | Обогатить `project/` открытыми данными под слабые вопросы (eSIM, MVNO, тарифы, ставка) | 3 | 3.5 | ⬜ | — | `uv run pytest tests/test_demo_data.py -q` |
-| T-81 | 2 | Раннее объявление пробела: без релевантных источников сразу «данных нет», без 10–22 отказов | 2 | 2.0 | ⬜ | — | `uv run pytest tests/test_hypotheses.py -k early_gap -q` |
+| T-81 | 2 | Раннее объявление пробела: без релевантных источников сразу «данных нет», без 10–22 отказов | 2 | 2.0 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k early_gap -q` |
 | T-82 | 2 | `needs_review` отдельным разделом отчёта и документа — не читается как подтверждение | 1 | 3.6 | ⬜ | — | `uv run pytest tests/test_report_conclusion.py -k needs_review_section -q` |
 | T-83 | 4 | Тонкий фронт FastAPI + SSE: вопрос → лента фаз → форма ответа → итог | 5 | 1.0 | ⬜ | — | `uv run pytest tests/test_api.py -k question_form -q` |
 | T-84 | 4 | Подключить frontier-search (`src/pf/policy.py` готов): поиск по пробелам в рабочем процессе | 3 | 0.9 | ⬜ | — | `uv run pytest tests/test_policy.py -k frontier_connected -q` |

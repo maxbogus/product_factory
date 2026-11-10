@@ -61,7 +61,14 @@ from pf.sources import (
     same_material,
 )
 from pf.state import Phase, SessionState, human_inputs, phase_of, save
-from pf.verdicts import COMMITMENT_TEMPLATE, MISSING_EVIDENCE, Rejection, classify_detail
+from pf.verdicts import (
+    COMMITMENT_TEMPLATE,
+    MISSING_EVIDENCE,
+    NO_RELEVANT_SOURCES,
+    Rejection,
+    classify_detail,
+    label_of,
+)
 
 if TYPE_CHECKING:
     from pf.analysis import Metric
@@ -2309,6 +2316,23 @@ class Workflow:
         if target is Phase.PLANNING and order.index(state.phase) > order.index(Phase.PLANNING):
             return self._route_to_planning(state, data, default)
 
+        # Маршрут вперёд может перескочить обязательный сбор источников: в
+        # сессии 31 роутер назвал «анализ» из фазы маршрутизации, анализ
+        # пошёл без материалов и упал. Сбор выполнен, только если его шаг
+        # записан в результатах; иначе маршрут исправляется на «сбор».
+        skips_collecting = (
+            order.index(state.phase) < order.index(Phase.COLLECTING)
+            and order.index(target) > order.index(Phase.COLLECTING)
+            and Phase.COLLECTING.value not in state.results
+        )
+        if skips_collecting:
+            note = (
+                f"маршрут «{data.role}» вперёд через невыполненный сбор — "
+                f"исправлено, идём по порядку: {Phase.COLLECTING.title_ru}"
+            )
+            self._remember_routing(state, data.role, Phase.COLLECTING, accepted=False, note=note)
+            return Phase.COLLECTING
+
         if order.index(target) <= order.index(state.phase):
             note = (
                 f"маршрут «{data.role}» ведёт назад — исправлено, "
@@ -2504,6 +2528,38 @@ class Workflow:
             Rejection(kind=COMMITMENT_TEMPLATE, status="no_data", detail=text)
             for text in template_notes
         )
+        # Ранний пробел (`T-81`): разбор вернул факты, но ни одна ссылка не
+        # подтвердилась и ничего не ждёт проверки — значит, релевантных
+        # источников по вопросу нет. Пробел называется один раз, а поток
+        # отказов сворачивается в одну строку с разбивкой по видам: иначе на
+        # вопросе вне данных в журнале и документе стоит 10–22 отказа одного
+        # и того же смысла.
+        rejected_total = grounding.rejected + len(criteria_notes) + len(template_notes)
+        rejected_detail_lines = [*grounding.details, *criteria_notes, *template_notes]
+        early_gap_text: str | None = None
+        if phase is Phase.ANALYZING and bundle is not None:
+            from pf.hypotheses import early_gap
+
+            early_gap_text = early_gap(
+                facts=len(getattr(data, "facts", None) or []),
+                confirmed=len(grounding.citations),
+                needs_review=len(grounding.needs_review),
+                user_input=len(grounding.user_input_grounds),
+            )
+        if early_gap_text:
+            data.gaps = [*list(getattr(data, "gaps", None) or []), early_gap_text]
+            if rejection_items:
+                counts: dict[str, int] = {}
+                for item in rejection_items:
+                    label = label_of(item.kind) if item.kind else "прочее"
+                    counts[label] = counts.get(label, 0) + 1
+                breakdown = ", ".join(f"{label} — {count}" for label, count in counts.items())
+                summary = f"{early_gap_text} — отклонено {len(rejection_items)} ({breakdown})"
+                rejection_items = [
+                    Rejection(kind=NO_RELEVANT_SOURCES, status="no_data", detail=summary)
+                ]
+                rejected_total = 1
+                rejected_detail_lines = [summary]
         if grounding.conclusion is not None:
             # Статус оснований вывода — часть того же шага: он попадает
             # в журнал вместе с выводом, а не остаётся в состоянии сессии.
@@ -2518,8 +2574,8 @@ class Workflow:
             phase=phase,
             data=data,
             citations=grounding.citations,
-            rejected=grounding.rejected + len(criteria_notes) + len(template_notes),
-            rejected_details=[*grounding.details, *criteria_notes, *template_notes],
+            rejected=rejected_total,
+            rejected_details=rejected_detail_lines,
             rejections=[item.as_dict() for item in rejection_items],
             needs_review=grounding.needs_review,
             needs_review_details=grounding.needs_review_details,
