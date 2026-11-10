@@ -1,0 +1,350 @@
+{
+  "meta": {
+    "generated_at": "2026-11-10T01:49:43+00:00",
+    "question": "Почему падает удержание у мобильного тарифа и что с этим делать?",
+    "models": [
+      "qwen3:8b",
+      "mistral-nemo:12b"
+    ],
+    "num_ctx": [
+      12288,
+      8192,
+      16384
+    ],
+    "context": [
+      5
+    ],
+    "repeats": 3
+  },
+  "cells": [
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 12288,
+      "context_passages": 5,
+      "repeat": 0,
+      "status": "ok",
+      "grounding_rate": 0.809524,
+      "phantom": 0,
+      "duration_sec": 277.976,
+      "processor": "100% GPU",
+      "conclusion_status": "подкреплено частично",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 146.566
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 20.748
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 79.783
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 8192,
+      "context_passages": 5,
+      "repeat": 0,
+      "status": "ok",
+      "grounding_rate": 0.8,
+      "phantom": 0,
+      "duration_sec": 236.48,
+      "processor": "100% GPU",
+      "conclusion_status": "неподкреплено",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 106.377
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 18.321
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 81.654
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 16384,
+      "context_passages": 5,
+      "repeat": 0,
+      "status": "ok",
+      "grounding_rate": 0.9,
+      "phantom": 0,
+      "duration_sec": 300.007,
+      "processor": "100% GPU",
+      "conclusion_status": "неподкреплено",
+      "tiers": {
+        "extraction": {
+          "roles": 6,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 167.527
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 21.115
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 78.853
+        }
+      }
+    },
+    {
+      "model": "mistral-nemo:12b",
+      "num_ctx": 12288,
+      "context_passages": 5,
+      "repeat": 0,
+      "status": "failed",
+      "grounding_rate": 0.0,
+      "phantom": 0,
+      "duration_sec": 476.497,
+      "processor": "25% CPU / 75% GPU",
+      "conclusion_status": "",
+      "tiers": {
+        "extraction": {
+          "roles": 3,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 67.974
+        },
+        "planning": {
+          "roles": 1,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 17.036
+        },
+        "synthesis": {
+          "roles": 0,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 0.0
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 12288,
+      "context_passages": 5,
+      "repeat": 1,
+      "status": "ok",
+      "grounding_rate": 0.451613,
+      "phantom": 0,
+      "duration_sec": 364.47,
+      "processor": "100% GPU",
+      "conclusion_status": "неподкреплено",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 163.673
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 20.092
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 83.901
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 8192,
+      "context_passages": 5,
+      "repeat": 1,
+      "status": "ok",
+      "grounding_rate": 0.75,
+      "phantom": 0,
+      "duration_sec": 322.874,
+      "processor": "100% GPU",
+      "conclusion_status": "подкреплено частично",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 137.994
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 23.774
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 75.37
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 16384,
+      "context_passages": 5,
+      "repeat": 1,
+      "status": "failed",
+      "grounding_rate": 0.0,
+      "phantom": 0,
+      "duration_sec": 409.25,
+      "processor": "100% GPU",
+      "conclusion_status": "",
+      "tiers": {
+        "extraction": {
+          "roles": 2,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 10.035
+        },
+        "planning": {
+          "roles": 1,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 7.804
+        },
+        "synthesis": {
+          "roles": 0,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 0.0
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 12288,
+      "context_passages": 5,
+      "repeat": 2,
+      "status": "ok",
+      "grounding_rate": 0.692308,
+      "phantom": 0,
+      "duration_sec": 245.098,
+      "processor": "100% GPU",
+      "conclusion_status": "подкреплено",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 107.568
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 21.629
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 85.631
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 8192,
+      "context_passages": 5,
+      "repeat": 2,
+      "status": "failed",
+      "grounding_rate": 1.0,
+      "phantom": 0,
+      "duration_sec": 428.815,
+      "processor": "100% GPU",
+      "conclusion_status": "",
+      "tiers": {
+        "extraction": {
+          "roles": 4,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 131.96
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 19.762
+        },
+        "synthesis": {
+          "roles": 1,
+          "schema_ok": false,
+          "truncation_steps": 0,
+          "duration_sec": 19.5
+        }
+      }
+    },
+    {
+      "model": "qwen3:8b",
+      "num_ctx": 16384,
+      "context_passages": 5,
+      "repeat": 2,
+      "status": "ok",
+      "grounding_rate": 0.625,
+      "phantom": 0,
+      "duration_sec": 236.764,
+      "processor": "100% GPU",
+      "conclusion_status": "подкреплено частично",
+      "tiers": {
+        "extraction": {
+          "roles": 5,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 110.011
+        },
+        "planning": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 21.329
+        },
+        "synthesis": {
+          "roles": 2,
+          "schema_ok": true,
+          "truncation_steps": 0,
+          "duration_sec": 74.957
+        }
+      }
+    }
+  ],
+  "frozen": {
+    "window": 12288,
+    "context_passages": 5,
+    "tiers": {
+      "extraction": "qwen3:8b",
+      "planning": "qwen3:8b",
+      "synthesis": "qwen3:8b"
+    }
+  }
+}

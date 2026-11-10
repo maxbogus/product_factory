@@ -2814,12 +2814,12 @@ class Workflow:
             # потом получит аналитик. Внешние источники идут отдельным
             # блоком: их статус — «требует проверки», и смешивать их с
             # локальными основаниями нельзя.
-            context = self._materials(bundle, state)
+            context = self._materials(bundle, state, self.config.context_passages)
             return "collector", {"query": query}, context
 
         if phase is Phase.ANALYZING:
             collector = state.results.get(Phase.COLLECTING.value, {})
-            context = self._materials(bundle, state)
+            context = self._materials(bundle, state, self.config.context_passages)
             return "analyst", {"collected": collector}, context
 
         if phase is Phase.OPTIONS:
@@ -2837,7 +2837,7 @@ class Workflow:
             redteam = state.results.get(Phase.REDTEAM.value, {})
             analysis = state.results.get(Phase.ANALYZING.value, {})
             frame = state.results.get(Phase.INTAKE.value, {})
-            context = self._materials(bundle, state)
+            context = self._materials(bundle, state, self.config.context_passages)
             return (
                 "strategy",
                 {
@@ -2867,17 +2867,28 @@ class Workflow:
     CONTEXT_PASSAGES = 5
 
     @classmethod
-    def _bundle_context(cls, bundle: SourceBundle | None) -> str:
+    def _bundle_context(cls, bundle: SourceBundle | None, limit: int | None = None) -> str:
         """Собрать контекст из источников.
 
         Список доступных источников идёт перед абзацами: модель должна
         знать не только то, что попало в окно, но и то, на что вообще можно
         сослаться. Ссылка на источник вне списка — пробел в сборе, а не
         основание, и проверка оснований это подтверждает.
+
+        Args:
+            bundle: Локальные источники.
+            limit: Сколько абзацев взять. ``None`` — константа
+                ``CONTEXT_PASSAGES``; рабочий процесс передаёт бюджет из
+                настроек (``PF_CONTEXT_PASSAGES``), чтобы его можно было
+                замерить, а не менять правкой кода.
+
+        Returns:
+            Текст материалов либо пустая строка.
         """
         if bundle is None:
             return ""
-        return bundle.context(limit=cls.CONTEXT_PASSAGES, include_sources=True)
+        used = cls.CONTEXT_PASSAGES if limit is None else limit
+        return bundle.context(limit=used, include_sources=True)
 
     @staticmethod
     def _web_context(state: SessionState) -> str:
@@ -2999,7 +3010,12 @@ class Workflow:
         return "\n\n".join(blocks)
 
     @classmethod
-    def _materials(cls, bundle: SourceBundle | None, state: SessionState) -> str:
+    def _materials(
+        cls,
+        bundle: SourceBundle | None,
+        state: SessionState,
+        limit: int | None = None,
+    ) -> str:
         """Собрать все материалы для роли: локальные и внешние.
 
         Разделены намеренно: подтверждённые основания приходят из
@@ -3010,11 +3026,13 @@ class Workflow:
         Args:
             bundle: Локальные источники.
             state: Состояние сессии.
+            limit: Бюджет абзацев на роль. ``None`` — константа
+                ``CONTEXT_PASSAGES``.
 
         Returns:
             Текст материалов.
         """
-        local = cls._bundle_context(bundle)
+        local = cls._bundle_context(bundle, limit)
         web = cls._web_context(state)
         computed = cls._computed_metrics(state)
         parts = []

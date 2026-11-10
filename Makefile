@@ -10,7 +10,7 @@ PYTHON ?= python3
 .PHONY: help setup doctor run demo test test-slow eval lint format format-check \
         typecheck ci sources log cost clean wiki-index bench mcp web materials knowledge \
         lexicon lexicon-oov contracts-check scenarios-check demo-doc replay \
-        semantic-bench tune-threshold \
+        semantic-bench tune-threshold grid-sweep \
         translate \
         canon tasks-check docs-check next-task
 
@@ -158,6 +158,9 @@ wiki-index: ## Показать статистику корпуса
 
 bench: ## Замеры: агент против обычного чата (make bench MODELS="qwen3:8b")
 	@$(UV) run python scripts/bench.py $(if $(MODELS),--models $(MODELS),) $(if $(REPEATS),--repeats $(REPEATS),)
+
+grid-sweep: ## Свип модели × окно × бюджет контекста (make grid-sweep CONTEXT="3 5 8")
+	@$(UV) run python scripts/grid_sweep.py $(if $(MODELS),--models $(MODELS),) $(if $(NUM_CTX),--num-ctx $(NUM_CTX),) $(if $(CONTEXT),--context $(CONTEXT),) $(if $(REPEATS),--repeats $(REPEATS),)
 
 replay: ## A/B проверки оснований по сохранённым журналам (make replay SESSIONS="demo-v7 demo-v9")
 	@$(UV) run python scripts/replay_verification.py $(if $(SESSIONS),--sessions $(SESSIONS),)
