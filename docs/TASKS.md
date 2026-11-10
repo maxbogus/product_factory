@@ -131,7 +131,7 @@
 | T-82 | 2 | `needs_review` отдельным разделом отчёта и документа — не читается как подтверждение | 1 | 3.6 | ⬜ | — | `uv run pytest tests/test_report_conclusion.py -k needs_review_section -q` |
 | T-83 | 4 | Тонкий фронт FastAPI + SSE: вопрос → лента фаз → форма ответа → итог | 5 | 1.0 | ⬜ | — | `uv run pytest tests/test_api.py -k question_form -q` |
 | T-84 | 4 | Подключить frontier-search (`src/pf/policy.py` готов): поиск по пробелам в рабочем процессе | 3 | 0.9 | ⬜ | — | `uv run pytest tests/test_policy.py -k frontier_connected -q` |
-| T-85 | 4 | Экспертный тематический справочник (`domain-reference`): правило из `planned` в `implemented` | 5 | 1.2 | ⬜ | — | `uv run pytest tests/test_domain_reference.py -q` |
+| T-85 | 4 | Экспертный тематический справочник (`domain-reference`): правило из `planned` в `implemented` | 5 | 1.2 | ✅ | — | `uv run pytest tests/test_domain_reference.py -q` |
 <!-- tasks:end -->
 
 Статусы: `⬜` не начата, `🔄` в работе, `✅` закрыта, `⏸` приостановлена

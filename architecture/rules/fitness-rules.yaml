@@ -72,14 +72,10 @@ rules:
     description: Тематический справочник не пополняет подтверждённые основания по делу
     severity: high
     stop_criterion: S2
-    status: planned
+    status: active
     check: domain_reference_marked
     marking: СПРАВОЧНИК
     required_note: не факт о кейсе
-    planned_reason: >
-      Справочника нет (см. implementation-status.yaml: domain-reference).
-      Пока блока «СПРАВОЧНИК» в контексте не существует, проверять нечего.
-      Правило станет active вместе со справочником.
     rationale: >
       Справочник отвечает на вопрос «как это обычно бывает», а не «что
       было у нас». Смешивать эти вещи — подмена источника: знание о

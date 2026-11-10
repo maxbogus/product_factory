@@ -183,10 +183,14 @@ methods:
 
   - id: domain-reference
     title: Тематический справочник со своим статусом
-    status: not_implemented
-    reason: >
-      Справочника нет. Без него модель опирается на приоритеты из весов,
-      а не на явный проверяемый источник знания о применимости.
+    status: implemented
+    module: src/pf/reference.py
+    test: tests/test_domain_reference.py
+    note: >
+      Справочник лежит данными (`knowledge/domain/reference.yaml`) и идёт в
+      контекст отдельным блоком «СПРАВОЧНИК». Дословная цитата из него
+      проверяется, но статус — «требует проверки»: знание о применимости не
+      выдаётся за факт о кейсе (`T-85`).
 
   - id: expert-role
     title: Экспертная роль после критики

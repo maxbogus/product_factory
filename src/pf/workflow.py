@@ -33,8 +33,10 @@ from pf.ground import (
     citation_key,
     conclusion_status,
     ground_buckets,
+    mark_external,
     split_source_id,
     tally_grounds,
+    verify_quote,
     verify_quote_as_external,
 )
 from pf.hypotheses import CollectionPlan, plan_collection, verdict_of
@@ -65,6 +67,7 @@ from pf.verdicts import (
     COMMITMENT_TEMPLATE,
     MISSING_EVIDENCE,
     NO_RELEVANT_SOURCES,
+    REFERENCE,
     Rejection,
     classify_detail,
     label_of,
@@ -610,6 +613,11 @@ _PHASE_BY_ROLE: dict[str, Phase] = {
     "strategy": Phase.STRATEGY,
     "keeper": Phase.KEEPER,
 }
+
+#: Заголовок блока справочника. Знание о применимости — не факт о кейсе:
+#: статус «требует проверки», и это названо прямо (правило
+#: `domain-reference-is-not-case-fact`, `T-85`).
+REFERENCE_RULE = "СПРАВОЧНИК (знание о применимости, не факт о кейсе; статус: требует проверки):"
 
 
 class Workflow:
@@ -1888,6 +1896,8 @@ class Workflow:
         if bundle is None:
             return GroundingResult()
 
+        from pf import reference
+
         confirmed: list[str] = []
         rejected = 0
         details: list[str] = []
@@ -1991,6 +2001,59 @@ class Workflow:
                 else:
                     rejected += 1
                     details.append(f"{_named_source(named)}: {external_support.detail}")
+                    if is_conclusion:
+                        conclusion_verdicts.append((key, SupportStatus.NO_DATA))
+                continue
+
+            # Тематический справочник — отдельный канал: знание о
+            # применимости, а не факт о кейсе. Дословность проверяется, но
+            # статус не поднимается выше «требует проверки»: правило
+            # `domain-reference-is-not-case-fact` (`T-85`).
+            if reference.is_reference(named):
+                reference_text = reference.text_of(named)
+                if reference_text:
+                    reference_support = mark_external(
+                        verify_quote(reference_text, quote, named),
+                        reason=(
+                            "справочник: знание о применимости, не факт о кейсе "
+                            "— требует проверки человеком"
+                        ),
+                    )
+                    verdicts.append(
+                        ClaimVerdict(
+                            claim=text,
+                            source_id=named,
+                            status=reference_support.status,
+                            detail=reference_support.detail,
+                            is_conclusion=is_conclusion,
+                            kind=REFERENCE,
+                        )
+                    )
+                    if reference_support.status is SupportStatus.NEEDS_REVIEW:
+                        needs_review.append(reference_support.citation)
+                        needs_review_details.append(
+                            f"{_named_source(named)}: {reference_support.detail}"
+                        )
+                        if is_conclusion:
+                            conclusion_verdicts.append((key, SupportStatus.NEEDS_REVIEW))
+                    else:
+                        rejected += 1
+                        details.append(f"{_named_source(named)}: {reference_support.detail}")
+                        if is_conclusion:
+                            conclusion_verdicts.append((key, SupportStatus.NO_DATA))
+                else:
+                    rejected += 1
+                    details.append(f"{_named_source(named)}: понятие справочника не найдено")
+                    verdicts.append(
+                        ClaimVerdict(
+                            claim=text,
+                            source_id=named,
+                            status=SupportStatus.NO_DATA,
+                            detail="понятие справочника не найдено",
+                            is_conclusion=is_conclusion,
+                            kind=REFERENCE,
+                        )
+                    )
                     if is_conclusion:
                         conclusion_verdicts.append((key, SupportStatus.NO_DATA))
                 continue
@@ -2875,25 +2938,33 @@ class Workflow:
 
         if phase is Phase.ANALYZING:
             collector = state.results.get(Phase.COLLECTING.value, {})
-            context = self._materials(bundle, state, self.config.context_passages)
+            context = self._append_reference(
+                self._materials(bundle, state, self.config.context_passages)
+            )
             return "analyst", {"collected": collector}, context
 
         if phase is Phase.OPTIONS:
             analysis = state.results.get(Phase.ANALYZING.value, {})
             frame = state.results.get(Phase.INTAKE.value, {})
-            return "options", {"task": frame, "analysis": analysis}, ""
+            return "options", {"task": frame, "analysis": analysis}, self._reference_context()
 
         if phase is Phase.REDTEAM:
             options = state.results.get(Phase.OPTIONS.value, {})
             analysis = state.results.get(Phase.ANALYZING.value, {})
-            return "redteam", {"variants": options, "analysis": analysis}, ""
+            return (
+                "redteam",
+                {"variants": options, "analysis": analysis},
+                self._reference_context(),
+            )
 
         if phase is Phase.STRATEGY:
             options = state.results.get(Phase.OPTIONS.value, {})
             redteam = state.results.get(Phase.REDTEAM.value, {})
             analysis = state.results.get(Phase.ANALYZING.value, {})
             frame = state.results.get(Phase.INTAKE.value, {})
-            context = self._materials(bundle, state, self.config.context_passages)
+            context = self._append_reference(
+                self._materials(bundle, state, self.config.context_passages)
+            )
             return (
                 "strategy",
                 {
@@ -2912,7 +2983,11 @@ class Workflow:
             # источников нужен и здесь: без него keeper называет source_id,
             # которого не видел ни он, ни контекст стратегии (`T-77`).
             context = bundle.sources_header() if bundle is not None else ""
-            return "keeper", {"strategy": strategy, "redteam": redteam}, context
+            return (
+                "keeper",
+                {"strategy": strategy, "redteam": redteam},
+                self._append_reference(context),
+            )
 
         raise ValueError(f"для фазы «{phase.value}» нет роли")
 
@@ -2962,6 +3037,39 @@ class Workflow:
         """
         context = state.results.get("web_context")
         return context if isinstance(context, str) else ""
+
+    @classmethod
+    def _reference_context(cls) -> str:
+        """Блок «СПРАВОЧНИК»: знание о применимости, отдельное от оснований.
+
+        Справочник не пополняет подтверждённые основания: он отвечает на
+        вопрос «как это обычно бывает», а не «что было у нас». Поэтому блок
+        помечен «не факт о кейсе» и идёт отдельно от материалов (`T-85`).
+
+        Returns:
+            Текст блока либо пустая строка, если справочника нет.
+        """
+        from pf import reference
+
+        lines = reference.as_lines()
+        if not lines:
+            return ""
+        return "\n".join([REFERENCE_RULE, *lines])
+
+    @classmethod
+    def _append_reference(cls, context: str) -> str:
+        """Дописать справочник к контексту роли.
+
+        Args:
+            context: Контекст роли (материалы или пустая строка).
+
+        Returns:
+            Контекст со справочником либо без изменений.
+        """
+        block = cls._reference_context()
+        if not block:
+            return context
+        return f"{context}\n\n{block}" if context else block
 
     @staticmethod
     def _computed_metric_records() -> list[Metric]:
