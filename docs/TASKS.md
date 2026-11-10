@@ -126,7 +126,7 @@
 | T-77 | 2 | Анти-фантомы: в промпт роли — явный список `source_id`; стратегия обязана нести `evidence`/`promise_grounding` | 2 | 6.0 | ✅ | — | `uv run pytest tests/test_conclusion_grounding.py -k evidence_required -q` |
 | T-78 | 3 | Пересобрать `demo/RESULT.md` из лучшего прогона (`make demo-doc SESSION=…`) | 1 | 4.5 | ⬜ | — | `uv run pytest tests/test_demo_doc_generated.py -q` |
 | T-79 | 4 | `make bench` на `qwen3:8b` и DeepSeek: агент против обычного чата | 1 | 3.4 | ⬜ | — | `make bench MODELS="qwen3:8b deepseek-flash"` |
-| T-80 | 3 | Обогатить `project/` открытыми данными под слабые вопросы (eSIM, MVNO, тарифы, ставка) | 3 | 3.5 | ⬜ | — | `uv run pytest tests/test_demo_data.py -q` |
+| T-80 | 3 | Обогатить `project/` открытыми данными под слабые вопросы (eSIM, MVNO, тарифы, ставка) | 3 | 3.5 | ✅ | — | `uv run pytest tests/test_demo_data.py -q` |
 | T-81 | 2 | Раннее объявление пробела: без релевантных источников сразу «данных нет», без 10–22 отказов | 2 | 2.0 | ✅ | — | `uv run pytest tests/test_hypotheses.py -k early_gap -q` |
 | T-82 | 2 | `needs_review` отдельным разделом отчёта и документа — не читается как подтверждение | 1 | 3.6 | ⬜ | — | `uv run pytest tests/test_report_conclusion.py -k needs_review_section -q` |
 | T-83 | 4 | Тонкий фронт FastAPI + SSE: вопрос → лента фаз → форма ответа → итог | 5 | 1.0 | ⬜ | — | `uv run pytest tests/test_api.py -k question_form -q` |

@@ -46,6 +46,10 @@ KNOWLEDGE_RAW = ROOT / "knowledge" / "raw"
 #: Файлы, добавленные задачей T-11. Проверяются по контракту расчёта.
 NEW_FILES = ("telecom_arpu.csv", "mnp_stats.csv")
 
+#: Файлы, добавленные задачей T-80 под слабые вопросы (eSIM, MVNO, тарифы).
+#: Открытый ряд World Bank: размер рынка и проникновение мобильной связи.
+WEAK_QUESTION_FILES = ("telecom_market_open.csv",)
+
 #: Формат даты получения материала.
 RETRIEVED = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -243,3 +247,67 @@ def test_demo_data_document_is_readable_or_named() -> None:
     else:
         reasons = " ".join(skipped.values())
         assert "uv sync --extra documents" in reasons, f"пропуск документа не объяснён: {skipped}"
+
+
+def test_demo_data_weak_question_series(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Под слабые вопросы добавлен открытый ряд, и из него считается изменение.
+
+    Вопросы про eSIM, MVNO и ценность тарифа упирались в «неподкреплено»:
+    в материалах не было даже размера рынка и проникновения. Добавлен
+    открытый ряд World Bank. Проверяется не «файл лежит», а контракт
+    расчёта: колонка значения, период, ряд из двух точек одного формата,
+    и изменение, подтверждённое пересчётом (`T-80`).
+    """
+    from pf.analysis import PERIOD_COLUMNS
+    from pf.ground import SupportStatus
+    from pf.materials import load_materials
+    from pf.sources import verify_metric
+    from pf.workflow import Workflow
+
+    for name in WEAK_QUESTION_FILES:
+        path = PROJECT_DATA / name
+        assert path.is_file(), f"нет файла данных {name}"
+        meta = _sidecar(path)
+        assert "worldbank" in str(meta.get("url", "")).lower(), (
+            f"{name}: источник не назван (ожидался World Bank)"
+        )
+
+        rows = _rows(path)
+        assert rows, f"{name} пуст"
+        columns = list(rows[0].keys())
+        assert _value_column(columns), f"в {name} нет колонки значения"
+        assert any(column.strip().lower() in PERIOD_COLUMNS for column in columns), (
+            f"в {name} нет колонки периода: ряд во времени не построить"
+        )
+
+        series: dict[tuple[str, str], list[str]] = {}
+        for row in rows:
+            key = (row.get("оператор", ""), row.get("показатель", ""))
+            series.setdefault(key, []).append(row.get("период", ""))
+        assert any(len(periods) >= 2 for periods in series.values()), (
+            f"в {name} нет ни одного ряда из двух точек: изменение не посчитать"
+        )
+        for key, periods in series.items():
+            kinds = {bool(YEAR.match(period)) for period in periods}
+            assert len(kinds) == 1, f"в {name} ряд {key} смешивает форматы периода {periods}"
+
+    monkeypatch.setattr("pf.config.settings.project_dir", ROOT / "project")
+    monkeypatch.setattr("pf.config.settings.include_knowledge_raw", False)
+
+    metrics = Workflow._computed_metric_records()
+    changes = [
+        metric
+        for metric in metrics
+        if "изменение" in metric.name.lower() and "Мобильная связь" in metric.name
+    ]
+    assert changes, (
+        "из нового ряда не посчитано изменение: данные есть, а расчёта нет. "
+        f"Посчитано: {[metric.name for metric in metrics][:8]}"
+    )
+    materials = load_materials(ROOT / "project", include_knowledge=False)
+    support = verify_metric(changes[0], materials)
+    assert support.status is SupportStatus.CONFIRMED, (
+        f"расчёт {changes[0].name} не подтверждён пересчётом: {support.detail}"
+    )
